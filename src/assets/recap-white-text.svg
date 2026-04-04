@@ -1,0 +1,17 @@
+<svg viewBox="0 0 800 200" xmlns="http://www.w3.org/2000/svg">
+  <text x="50%" y="45%" text-anchor="middle"
+        font-family="Poppins, Arial, sans-serif"
+        font-size="56"
+        font-weight="600"
+        fill="#ffffff">
+    recap buddies
+  </text>
+
+  <text x="50%" y="75%" text-anchor="middle"
+        font-family="Poppins, Arial, sans-serif"
+        font-size="18"
+        letter-spacing="6"
+        fill="#ffffff">
+    Camera Rental and Creatives
+  </text>
+</svg>
