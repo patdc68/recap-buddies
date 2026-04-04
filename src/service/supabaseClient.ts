@@ -47,7 +47,8 @@ export interface RbSelfieVerificationInst {
   instruction_desc: string;
 }
  
-export type RentalStatus = 'submitted' | 'in-review' | 'completed';
+// ✅ Added 'renting' status
+export type RentalStatus = 'submitted' | 'in-review' | 'renting' | 'completed';
 export type LocUsage = 'domestic' | 'international';
  
 export interface RbRentalForm {

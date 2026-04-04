@@ -35,7 +35,10 @@ import HomeIcon from '@mui/icons-material/Home';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import SendIcon from '@mui/icons-material/Send';
+import DashboardIcon from '@mui/icons-material/Dashboard';
+import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
 import dayjs, { Dayjs } from 'dayjs';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import type { RbItem, RbBranch, RbRenter, LocUsage } from '../service/supabaseClient';
 import PageLayout from '../components/PageLayout';
@@ -490,17 +493,19 @@ const StepReview: React.FC<StepReviewProps> = ({ form, items, branches, purposeP
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 const RenterForm: React.FC = () => {
-  // All hooks at the top — never after a conditional return (Rules of Hooks)
-  const [activeStep, setActiveStep]         = useState(0);
-  const [form, setForm]                     = useState<RentalForm>(INIT_FORM);
-  const [errors, setErrors]                 = useState<RentalFormErrors>({});
-  const [items, setItems]                   = useState<RbItem[]>([]);
-  const [branches, setBranches]             = useState<RbBranch[]>([]);
-  const [purposeFile, setPurposeFile]         = useState<FileUploadResult | null>(null);
-  const [renter, setRenter]                 = useState<RbRenter | null>(null);
-  const [submitting, setSubmitting]         = useState(false);
-  const [submitError, setSubmitError]       = useState('');
-  const [done, setDone]                     = useState(false);
+  const navigate = useNavigate();
+
+  const [activeStep, setActiveStep]     = useState(0);
+  const [form, setForm]                 = useState<RentalForm>(INIT_FORM);
+  const [errors, setErrors]             = useState<RentalFormErrors>({});
+  const [items, setItems]               = useState<RbItem[]>([]);
+  const [branches, setBranches]         = useState<RbBranch[]>([]);
+  const [purposeFile, setPurposeFile]   = useState<FileUploadResult | null>(null);
+  const [renter, setRenter]             = useState<RbRenter | null>(null);
+  const [submitting, setSubmitting]     = useState(false);
+  const [submitError, setSubmitError]   = useState('');
+  const [done, setDone]                 = useState(false);
+  const [countdown, setCountdown]       = useState(5);
 
   useEffect(() => {
     Promise.all([
@@ -519,7 +524,16 @@ const RenterForm: React.FC = () => {
     });
   }, []);
 
-  // ── Handlers ──────────────────────────────────────────────────────────────────
+  // ── Countdown redirect after success ─────────────────────────────────────
+
+  useEffect(() => {
+    if (!done) return;
+    if (countdown <= 0) { navigate('/dashboard'); return; }
+    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
+    return () => clearTimeout(t);
+  }, [done, countdown, navigate]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
 
   const onText =
     (field: keyof RentalForm) =>
@@ -540,9 +554,7 @@ const RenterForm: React.FC = () => {
     setErrors((err) => ({ ...err, loc_usage: undefined }));
   };
 
-
-
-  // ── Validation ────────────────────────────────────────────────────────────────
+  // ── Validation ────────────────────────────────────────────────────────────
 
   const validate = (): boolean => {
     const e: RentalFormErrors = {};
@@ -568,7 +580,7 @@ const RenterForm: React.FC = () => {
   const handleNext = () => { if (validate()) setActiveStep((s) => s + 1); };
   const handleBack = () => setActiveStep((s) => s - 1);
 
-  // ── Submit ────────────────────────────────────────────────────────────────────
+  // ── Submit ────────────────────────────────────────────────────────────────
 
   const handleSubmit = async () => {
     setSubmitting(true);
@@ -589,7 +601,7 @@ const RenterForm: React.FC = () => {
       setSubmitError('Saving rental form…');
       const { error } = await supabase.from('RB_RENTAL_FORM').insert({
         cam_name_id_fk:            form.cam_name_id_fk,
-        rental_id_fk:              renter?.id ?? null,
+        renter_id_fk:              renter?.id ?? null,
         loc_usage:                 form.loc_usage || null,
         proof_of_purpose_of_rental,
         discount_code:             form.discount_code  || null,
@@ -621,27 +633,105 @@ const RenterForm: React.FC = () => {
 
   const progress = (activeStep / STEPS.length) * 100;
 
-  // ── Success screen ────────────────────────────────────────────────────────────
+  // ── Success screen ────────────────────────────────────────────────────────
 
   if (done) {
     return (
       <PageLayout renter={renter ? { fname: renter.renter_fname, lname: renter.renter_lname } : null}>
-        <Box sx={{ textAlign: 'center', py: 8 }}>
-          <CheckCircleIcon sx={{ fontSize: 72, color: '#69DB7C', mb: 2 }} />
-          <Typography variant="h3" sx={{ color: '#1A1008', mb: 1 }}>Rental Form Submitted!</Typography>
-          <Typography variant="body1" sx={{ color: '#7A6040', mb: 2 }}>
+        <Box
+          sx={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            textAlign: 'center',
+            py: 8,
+            px: 2,
+          }}
+        >
+          {/* Animated check */}
+          <Box
+            sx={{
+              width: 88,
+              height: 88,
+              borderRadius: '50%',
+              background: 'rgba(105,219,124,0.12)',
+              border: '2px solid rgba(105,219,124,0.35)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              mb: 3,
+            }}
+          >
+            <CheckCircleIcon sx={{ fontSize: 52, color: '#69DB7C' }} />
+          </Box>
+
+          <Typography variant="h3" sx={{ color: '#1A1008', mb: 1 }}>
+            Rental Submitted!
+          </Typography>
+          <Typography variant="body1" sx={{ color: '#7A6040', mb: 0.5, maxWidth: 420 }}>
             Your rental request is now under review. Our team will reach out to you shortly.
           </Typography>
+
+          {/* Status badge */}
           <Chip
-            label="Status: Under Review"
-            sx={{ background: 'rgba(255,212,59,0.1)', color: '#FFD43B', border: '1px solid rgba(255,212,59,0.25)', fontFamily: '"Sora", sans-serif' }}
+            label="Status: Submitted"
+            sx={{
+              mt: 1.5,
+              mb: 4,
+              background: 'rgba(255,212,59,0.10)',
+              color: '#B8860B',
+              border: '1px solid rgba(255,212,59,0.30)',
+              fontFamily: '"Sora", sans-serif',
+              fontWeight: 600,
+            }}
           />
+
+          {/* Action buttons */}
+          <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', justifyContent: 'center', mb: 4 }}>
+            <Button
+              variant="contained"
+              size="large"
+              startIcon={<DashboardIcon />}
+              onClick={() => navigate('/dashboard')}
+              sx={{ minWidth: 200 }}
+            >
+              Go to Dashboard
+            </Button>
+            <Button
+              variant="outlined"
+              size="large"
+              startIcon={<AddCircleOutlineIcon />}
+              onClick={() => {
+                setDone(false);
+                setActiveStep(0);
+                setForm(INIT_FORM);
+                setPurposeFile(null);
+                setCountdown(5);
+              }}
+              sx={{ minWidth: 200 }}
+            >
+              Submit Another
+            </Button>
+          </Box>
+
+          {/* Countdown */}
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+            <CircularProgress
+              size={16}
+              sx={{ color: '#C9973A' }}
+              variant="determinate"
+              value={((5 - countdown) / 5) * 100}
+            />
+            <Typography sx={{ color: '#B8A080', fontSize: '0.8rem', fontFamily: '"Sora", sans-serif' }}>
+              Redirecting to dashboard in {countdown}s…
+            </Typography>
+          </Box>
         </Box>
       </PageLayout>
     );
   }
 
-  // ── Main render ───────────────────────────────────────────────────────────────
+  // ── Main render ───────────────────────────────────────────────────────────
 
   return (
     <PageLayout renter={renter ? { fname: renter.renter_fname, lname: renter.renter_lname } : null}>
@@ -706,8 +796,13 @@ const RenterForm: React.FC = () => {
           />
         )}
         {activeStep === 3 && <StepDelivery form={form} setForm={setForm} branches={branches} errors={errors} />}
-        {activeStep === 4 && <StepReview form={form} items={items} branches={branches} purposePreview={purposeFile?.fileType === 'image' ? purposeFile.previewUrl : null}
-          purposeFileName={purposeFile?.fileType === 'pdf' ? purposeFile.fileName : null} />}
+        {activeStep === 4 && (
+          <StepReview
+            form={form} items={items} branches={branches}
+            purposePreview={purposeFile?.fileType === 'image' ? purposeFile.previewUrl : null}
+            purposeFileName={purposeFile?.fileType === 'pdf' ? purposeFile.fileName : null}
+          />
+        )}
 
         {submitError && (
           <Alert
@@ -721,8 +816,14 @@ const RenterForm: React.FC = () => {
 
       {/* Navigation */}
       <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-        <Button variant="outlined" startIcon={<ArrowBackIcon />} onClick={handleBack} disabled={activeStep === 0 || submitting} sx={{ minWidth: 120 }}>
-          Back
+        <Button
+          variant="outlined"
+          startIcon={<ArrowBackIcon />}
+          onClick={activeStep === 0 ? () => navigate('/dashboard') : handleBack}
+          disabled={submitting}
+          sx={{ minWidth: 120 }}
+        >
+          {activeStep === 0 ? 'Dashboard' : 'Back'}
         </Button>
         {activeStep < STEPS.length - 1 ? (
           <Button variant="contained" endIcon={<ArrowForwardIcon />} onClick={handleNext} sx={{ minWidth: 160 }}>Continue</Button>
