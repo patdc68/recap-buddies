@@ -2,41 +2,36 @@ import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
-import theme from '../src/theme/Theme';
-import RenterRegistration from '../src/registration/RenterRegistration';
-import RenterForm from '../src/registration/RenterForm';
-import LoginPage from '../src/registration/Loginpage';
-import Dashboard from '../src/registration/Dashboard';
-import ProtectedRoute from '../src/components/ProtectedRoute';
+import theme from './theme/Theme';
+import RenterRegistration from './registration/RenterRegistration';
+import RenterForm         from './registration/RenterForm';
+import LoginPage          from './registration/LoginPage';
+import Dashboard          from './registration/Dashboard';
+import AdminLogin         from './admin/AdminLogin';
+import AdminRegistration  from './admin/AdminRegistration';
+import AdminDashboard     from './admin/AdminDashBoard';
+import ProtectedRoute     from './components/ProtectedRoute';
+import AdminProtectedRoute from './components/AdminProtectedRoute';
 
 const App: React.FC = () => (
   <ThemeProvider theme={theme}>
     <CssBaseline />
     <BrowserRouter>
       <Routes>
-        {/* Public routes */}
+        {/* ── Public / renter ── */}
         <Route path="/login"              element={<LoginPage />} />
         <Route path="/renterRegistration" element={<RenterRegistration />} />
 
-        {/* Protected routes — redirect to /login if not authed */}
-        <Route
-          path="/dashboard"
-          element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
-          }
-        />
-        <Route
-          path="/renterForm"
-          element={
-            <ProtectedRoute>
-              <RenterForm />
-            </ProtectedRoute>
-          }
-        />
+        {/* ── Protected renter ── */}
+        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+        <Route path="/renterForm" element={<ProtectedRoute><RenterForm /></ProtectedRoute>} />
 
-        {/* Catch-all */}
+        {/* ── Admin / staff ── */}
+        <Route path="/admin/login"      element={<AdminLogin />} />
+        <Route path="/admin/register"   element={<AdminRegistration />} />
+        <Route path="/admin/dashboard"  element={<AdminProtectedRoute><AdminDashboard /></AdminProtectedRoute>} />
+
+        {/* ── Catch-all ── */}
         <Route path="*" element={<Navigate to="/login" replace />} />
       </Routes>
     </BrowserRouter>
