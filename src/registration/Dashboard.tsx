@@ -1,20 +1,24 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, Paper, Chip, Button, CircularProgress,
-  Alert, Divider, Tabs, Tab, Avatar,
+  Alert, Divider, Tabs, Tab, Avatar, Dialog, DialogTitle,
+  DialogContent, DialogActions,
 } from '@mui/material';
-import CameraAltIcon        from '@mui/icons-material/CameraAlt';
-import CalendarTodayIcon    from '@mui/icons-material/CalendarToday';
-import LocationOnIcon       from '@mui/icons-material/LocationOn';
-import AddCircleOutlineIcon from '@mui/icons-material/AddCircleOutline';
-import LogoutIcon           from '@mui/icons-material/Logout';
-import HourglassTopIcon     from '@mui/icons-material/HourglassTop';
+import CameraAltIcon          from '@mui/icons-material/CameraAlt';
+import CalendarTodayIcon      from '@mui/icons-material/CalendarToday';
+import LocationOnIcon         from '@mui/icons-material/LocationOn';
+import AddCircleOutlineIcon   from '@mui/icons-material/AddCircleOutline';
+import LogoutIcon             from '@mui/icons-material/Logout';
+import HourglassTopIcon       from '@mui/icons-material/HourglassTop';
 import CheckCircleOutlineIcon from '@mui/icons-material/CheckCircleOutline';
-import PendingIcon          from '@mui/icons-material/Pending';
-import StorefrontIcon       from '@mui/icons-material/Storefront';
-import LocalShippingIcon    from '@mui/icons-material/LocalShipping';
-import CameraIcon           from '@mui/icons-material/Camera';
-import GpsFixedIcon         from '@mui/icons-material/GpsFixed';
+import PendingIcon            from '@mui/icons-material/Pending';
+import StorefrontIcon         from '@mui/icons-material/Storefront';
+import LocalShippingIcon      from '@mui/icons-material/LocalShipping';
+import CameraIcon             from '@mui/icons-material/Camera';
+import CancelIcon             from '@mui/icons-material/Cancel';
+import BlockIcon              from '@mui/icons-material/Block';
+import GpsFixedIcon           from '@mui/icons-material/GpsFixed';
+import WarningAmberIcon       from '@mui/icons-material/WarningAmber';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
@@ -23,9 +27,7 @@ import PageLayout from '../components/PageLayout';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface EnrichedItem extends RbItem {
-  device?: RbDevice;
-}
+interface EnrichedItem extends RbItem { device?: RbDevice; }
 
 interface EnrichedRental extends RbRentalForm {
   item?:         EnrichedItem;
@@ -33,7 +35,7 @@ interface EnrichedRental extends RbRentalForm {
   returnBranch?: RbBranch;
 }
 
-// ─── Status config ────────────────────────────────────────────────────────────
+// ─── Status config — all 6 statuses ──────────────────────────────────────────
 
 const STATUS_CONFIG: Record<RentalStatus, { label: string; bg: string; color: string; border: string; icon: React.ReactNode }> = {
   submitted: {
@@ -56,13 +58,66 @@ const STATUS_CONFIG: Record<RentalStatus, { label: string; bg: string; color: st
     bg: 'rgba(105,219,124,0.10)', color: '#2E7D32', border: 'rgba(105,219,124,0.30)',
     icon: <CheckCircleOutlineIcon sx={{ fontSize: 14 }} />,
   },
+  canceled: {
+    label: 'Canceled',
+    bg: 'rgba(120,120,120,0.10)', color: '#555555', border: 'rgba(120,120,120,0.25)',
+    icon: <CancelIcon sx={{ fontSize: 14 }} />,
+  },
+  declined: {
+    label: 'Declined',
+    bg: 'rgba(211,47,47,0.08)', color: '#B71C1C', border: 'rgba(211,47,47,0.25)',
+    icon: <BlockIcon sx={{ fontSize: 14 }} />,
+  },
 };
 
-const isOngoing = (status: RentalStatus) => status !== 'completed';
+// ongoing = anything that isn't a terminal state
+const isOngoing = (s: RentalStatus) =>
+  s !== 'completed' && s !== 'canceled' && s !== 'declined';
+
+// ─── Cancel Confirm Dialog ────────────────────────────────────────────────────
+
+const CancelDialog: React.FC<{
+  open: boolean;
+  onClose: () => void;
+  onConfirm: () => void;
+  canceling: boolean;
+}> = ({ open, onClose, onConfirm, canceling }) => (
+  <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth
+    PaperProps={{ sx: { borderRadius: 3, border: '1px solid rgba(201,151,58,0.18)' } }}>
+    <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
+      <WarningAmberIcon sx={{ color: '#B71C1C' }} />
+      <Typography sx={{ fontFamily: '"Playfair Display", serif', fontWeight: 700, color: '#1A1008' }}>
+        Cancel Rental?
+      </Typography>
+    </DialogTitle>
+    <DialogContent>
+      <Typography sx={{ color: '#7A6040', fontSize: '0.88rem' }}>
+        This will cancel your rental request. This action cannot be undone.
+      </Typography>
+    </DialogContent>
+    <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
+      <Button onClick={onClose} variant="outlined" size="small" disabled={canceling}>Keep It</Button>
+      <Button
+        onClick={onConfirm} variant="contained" size="small" color="error"
+        disabled={canceling}
+        startIcon={canceling ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <CancelIcon />}
+        sx={{ background: '#B71C1C', '&:hover': { background: '#8B0000' } }}
+      >
+        {canceling ? 'Canceling…' : 'Yes, Cancel'}
+      </Button>
+    </DialogActions>
+  </Dialog>
+);
 
 // ─── Rental Card ──────────────────────────────────────────────────────────────
 
-const RentalCard: React.FC<{ rental: EnrichedRental }> = ({ rental }) => {
+const RentalCard: React.FC<{
+  rental: EnrichedRental;
+  onCanceled: (id: string) => void;
+}> = ({ rental, onCanceled }) => {
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [canceling, setCanceling]     = useState(false);
+
   const status = STATUS_CONFIG[rental.status] ?? STATUS_CONFIG.submitted;
   const start  = dayjs(rental.rent_date_start).format('MMM D, YYYY');
   const end    = dayjs(rental.rent_date_end).format('MMM D, YYYY');
@@ -73,109 +128,133 @@ const RentalCard: React.FC<{ rental: EnrichedRental }> = ({ rental }) => {
   const isDeliveryPickup = !rental.hub_pick_up_addr && !!rental.delivery_addr;
   const isDeliveryReturn = !rental.hub_return_addr  && !!rental.return_addr;
 
-  // Camera display
   const cameraName = rental.item?.device?.cam_name ?? '—';
   const codeName   = rental.item?.code_name ?? '—';
   const deviceImg  = rental.item?.device?.device_img ?? null;
   const hasGps     = rental.item?.gps_installed ?? false;
 
+  // Only submitted / in-review can be canceled by the renter
+  const canCancel = rental.status === 'submitted' || rental.status === 'in-review';
+
+  const handleConfirmCancel = async () => {
+    setCanceling(true);
+    const { error } = await supabase
+      .from('RB_RENTAL_FORM')
+      .update({ status: 'canceled' })
+      .eq('id', rental.id);
+    setCanceling(false);
+    setConfirmOpen(false);
+    if (!error) onCanceled(rental.id);
+  };
+
   return (
-    <Paper
-      elevation={0}
-      sx={{
-        border: '1px solid rgba(201,151,58,0.15)', borderRadius: 3, overflow: 'hidden',
-        transition: 'box-shadow 0.2s, transform 0.2s',
-        '&:hover': { boxShadow: '0 6px 28px rgba(201,151,58,0.13)', transform: 'translateY(-2px)' },
-      }}
-    >
-      {/* Header */}
-      <Box sx={{ px: 3, py: 2, background: 'linear-gradient(90deg, rgba(201,151,58,0.08), rgba(201,151,58,0.02))', borderBottom: '1px solid rgba(201,151,58,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          {/* Device image thumbnail */}
-          {deviceImg
-            ? <img src={deviceImg} alt={cameraName} style={{ width: 44, height: 34, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(201,151,58,0.2)', flexShrink: 0 }} />
-            : <Box sx={{ width: 44, height: 34, borderRadius: 1.5, background: 'rgba(201,151,58,0.10)', border: '1px solid rgba(201,151,58,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                <CameraAltIcon sx={{ fontSize: 18, color: '#C9973A' }} />
-              </Box>}
-          <Box>
-            <Typography sx={{ fontWeight: 700, color: '#1A1008', fontSize: '0.95rem', lineHeight: 1.2 }}>
-              {cameraName}
-            </Typography>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-              <Typography sx={{ fontSize: '0.72rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif' }}>
-                {codeName}
-              </Typography>
-              {hasGps && <GpsFixedIcon sx={{ fontSize: 11, color: '#2E7D32' }} />}
-            </Box>
-          </Box>
-        </Box>
-
-        <Chip
-          icon={status.icon as React.ReactElement}
-          label={status.label}
-          size="small"
-          sx={{ background: status.bg, color: status.color, border: `1px solid ${status.border}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.72rem', '& .MuiChip-icon': { color: status.color } }}
-        />
-      </Box>
-
-      {/* Body */}
-      <Box sx={{ px: 3, py: 2, display: 'flex', flexWrap: 'wrap', gap: 2.5 }}>
-        {/* Dates */}
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 160 }}>
-          <CalendarTodayIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} />
-          <Box>
-            <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Rental Period</Typography>
-            <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500 }}>{start} – {end}</Typography>
-            <Typography sx={{ fontSize: '0.75rem', color: '#7A6040' }}>{days} day{days !== 1 ? 's' : ''}</Typography>
-          </Box>
-        </Box>
-
-        <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(201,151,58,0.12)', display: { xs: 'none', sm: 'block' } }} />
-
-        {/* Pick-up */}
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 140 }}>
-          {isDeliveryPickup ? <LocalShippingIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} /> : <StorefrontIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} />}
-          <Box>
-            <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Pick-up</Typography>
-            <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500 }}>{pickupLabel}</Typography>
-            <Typography sx={{ fontSize: '0.72rem', color: '#7A6040' }}>{isDeliveryPickup ? 'Door delivery' : 'Hub pick-up'}</Typography>
-          </Box>
-        </Box>
-
-        <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(201,151,58,0.12)', display: { xs: 'none', sm: 'block' } }} />
-
-        {/* Return */}
-        <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 140 }}>
-          {isDeliveryReturn ? <LocalShippingIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} /> : <StorefrontIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} />}
-          <Box>
-            <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Return</Typography>
-            <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500 }}>{returnLabel}</Typography>
-            <Typography sx={{ fontSize: '0.72rem', color: '#7A6040' }}>{isDeliveryReturn ? 'Door return' : 'Hub return'}</Typography>
-          </Box>
-        </Box>
-
-        {/* Location */}
-        {rental.loc_usage && (
-          <>
-            <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(201,151,58,0.12)', display: { xs: 'none', sm: 'block' } }} />
-            <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-              <LocationOnIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} />
-              <Box>
-                <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Usage</Typography>
-                <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500, textTransform: 'capitalize' }}>{rental.loc_usage}</Typography>
+    <>
+      <Paper
+        elevation={0}
+        sx={{
+          border: '1px solid rgba(201,151,58,0.15)', borderRadius: 3, overflow: 'hidden',
+          transition: 'box-shadow 0.2s, transform 0.2s',
+          '&:hover': { boxShadow: '0 6px 28px rgba(201,151,58,0.13)', transform: 'translateY(-2px)' },
+          opacity: (rental.status === 'canceled' || rental.status === 'declined') ? 0.7 : 1,
+        }}
+      >
+        {/* Header */}
+        <Box sx={{ px: 3, py: 2, background: 'linear-gradient(90deg, rgba(201,151,58,0.08), rgba(201,151,58,0.02))', borderBottom: '1px solid rgba(201,151,58,0.10)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1 }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+            {deviceImg
+              ? <img src={deviceImg} alt={cameraName} style={{ width: 44, height: 34, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(201,151,58,0.2)', flexShrink: 0 }} />
+              : <Box sx={{ width: 44, height: 34, borderRadius: 1.5, background: 'rgba(201,151,58,0.10)', border: '1px solid rgba(201,151,58,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  <CameraAltIcon sx={{ fontSize: 18, color: '#C9973A' }} />
+                </Box>}
+            <Box>
+              <Typography sx={{ fontWeight: 700, color: '#1A1008', fontSize: '0.95rem', lineHeight: 1.2 }}>{cameraName}</Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+                <Typography sx={{ fontSize: '0.72rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif' }}>{codeName}</Typography>
+                {hasGps && <GpsFixedIcon sx={{ fontSize: 11, color: '#2E7D32' }} />}
               </Box>
             </Box>
-          </>
-        )}
-      </Box>
+          </Box>
 
-      {/* Footer */}
-      <Box sx={{ px: 3, py: 1, borderTop: '1px solid rgba(201,151,58,0.08)', background: 'rgba(201,151,58,0.02)' }}>
-        <Typography sx={{ fontSize: '0.72rem', color: '#B8A080', fontFamily: '"Sora", sans-serif' }}>
-          Submitted {dayjs(rental.created_at).format('MMMM D, YYYY [at] h:mm A')}
-        </Typography>
-      </Box>
-    </Paper>
+          <Chip
+            icon={status.icon as React.ReactElement}
+            label={status.label}
+            size="small"
+            sx={{ background: status.bg, color: status.color, border: `1px solid ${status.border}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.72rem', '& .MuiChip-icon': { color: status.color } }}
+          />
+        </Box>
+
+        {/* Body */}
+        <Box sx={{ px: 3, py: 2, display: 'flex', flexWrap: 'wrap', gap: 2.5 }}>
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 160 }}>
+            <CalendarTodayIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} />
+            <Box>
+              <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Rental Period</Typography>
+              <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500 }}>{start} – {end}</Typography>
+              <Typography sx={{ fontSize: '0.75rem', color: '#7A6040' }}>{days} day{days !== 1 ? 's' : ''}</Typography>
+            </Box>
+          </Box>
+
+          <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(201,151,58,0.12)', display: { xs: 'none', sm: 'block' } }} />
+
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 140 }}>
+            {isDeliveryPickup ? <LocalShippingIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} /> : <StorefrontIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} />}
+            <Box>
+              <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Pick-up</Typography>
+              <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500 }}>{pickupLabel}</Typography>
+              <Typography sx={{ fontSize: '0.72rem', color: '#7A6040' }}>{isDeliveryPickup ? 'Door delivery' : 'Hub pick-up'}</Typography>
+            </Box>
+          </Box>
+
+          <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(201,151,58,0.12)', display: { xs: 'none', sm: 'block' } }} />
+
+          <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 140 }}>
+            {isDeliveryReturn ? <LocalShippingIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} /> : <StorefrontIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} />}
+            <Box>
+              <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Return</Typography>
+              <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500 }}>{returnLabel}</Typography>
+              <Typography sx={{ fontSize: '0.72rem', color: '#7A6040' }}>{isDeliveryReturn ? 'Door return' : 'Hub return'}</Typography>
+            </Box>
+          </Box>
+
+          {rental.loc_usage && (
+            <>
+              <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(201,151,58,0.12)', display: { xs: 'none', sm: 'block' } }} />
+              <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+                <LocationOnIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} />
+                <Box>
+                  <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Usage</Typography>
+                  <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500, textTransform: 'capitalize' }}>{rental.loc_usage}</Typography>
+                </Box>
+              </Box>
+            </>
+          )}
+        </Box>
+
+        {/* Footer */}
+        <Box sx={{ px: 3, py: 1, borderTop: '1px solid rgba(201,151,58,0.08)', background: 'rgba(201,151,58,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+          <Typography sx={{ fontSize: '0.72rem', color: '#B8A080', fontFamily: '"Sora", sans-serif' }}>
+            Submitted {dayjs(rental.created_at).format('MMMM D, YYYY [at] h:mm A')}
+          </Typography>
+          {canCancel && (
+            <Button
+              size="small" variant="outlined"
+              startIcon={<CancelIcon sx={{ fontSize: '0.85rem' }} />}
+              onClick={() => setConfirmOpen(true)}
+              sx={{ fontSize: '0.72rem', py: 0.25, px: 1.25, minWidth: 0, borderColor: 'rgba(211,47,47,0.35)', color: '#B71C1C', '&:hover': { background: 'rgba(211,47,47,0.05)', borderColor: '#B71C1C' } }}
+            >
+              Cancel
+            </Button>
+          )}
+        </Box>
+      </Paper>
+
+      <CancelDialog
+        open={confirmOpen}
+        onClose={() => setConfirmOpen(false)}
+        onConfirm={handleConfirmCancel}
+        canceling={canceling}
+      />
+    </>
   );
 };
 
@@ -188,9 +267,7 @@ const EmptyState: React.FC<{ onBook: () => void }> = ({ onBook }) => (
     <Typography variant="body2" sx={{ color: '#7A6040', mb: 3, maxWidth: 320, mx: 'auto' }}>
       You haven't submitted any rental requests. Start by booking a camera for your next project.
     </Typography>
-    <Button variant="contained" startIcon={<AddCircleOutlineIcon />} onClick={onBook}>
-      Book a Camera
-    </Button>
+    <Button variant="contained" startIcon={<AddCircleOutlineIcon />} onClick={onBook}>Book a Camera</Button>
   </Box>
 );
 
@@ -217,27 +294,20 @@ const Dashboard: React.FC = () => {
         if (!renterData) { navigate('/login'); return; }
         setRenter(renterData as RbRenter);
 
-        // Fetch rentals newest-first
         const { data: rentalData } = await supabase
           .from('RB_RENTAL_FORM')
           .select('*')
           .eq('renter_id_fk', renterData.id)
           .order('created_at', { ascending: false });
 
-        if (!rentalData || rentalData.length === 0) {
-          setRentals([]);
-          setLoading(false);
-          return;
-        }
+        if (!rentalData || rentalData.length === 0) { setRentals([]); setLoading(false); return; }
 
-        // Collect FK sets
         const itemIds   = [...new Set(rentalData.map((r: RbRentalForm) => r.cam_name_id_fk).filter(Boolean))] as string[];
         const branchIds = [...new Set([
           ...rentalData.map((r: RbRentalForm) => r.hub_pick_up_addr),
           ...rentalData.map((r: RbRentalForm) => r.hub_return_addr),
         ].filter(Boolean))] as string[];
 
-        // Parallel fetch items (with device join) + branches
         const [{ data: itemsRaw }, { data: branchesRaw }] = await Promise.all([
           itemIds.length
             ? supabase.from('RB_ITEM').select('*, device:RB_DEVICES(id, cam_name, device_img)').in('id', itemIds)
@@ -264,7 +334,6 @@ const Dashboard: React.FC = () => {
         setLoading(false);
       }
     };
-
     fetchData();
   }, [navigate]);
 
@@ -274,13 +343,20 @@ const Dashboard: React.FC = () => {
     navigate('/login');
   };
 
-  const filtered       = rentals.filter((r) => {
+  // Optimistic cancel — flip status locally so UI updates immediately
+  const handleCanceled = (id: string) => {
+    setRentals((prev) =>
+      prev.map((r) => r.id === id ? { ...r, status: 'canceled' as RentalStatus } : r)
+    );
+  };
+
+  const filtered = rentals.filter((r) => {
     if (tab === 'ongoing')   return isOngoing(r.status);
-    if (tab === 'completed') return r.status === 'completed';
+    if (tab === 'completed') return !isOngoing(r.status);
     return true;
   });
   const ongoingCount   = rentals.filter((r) => isOngoing(r.status)).length;
-  const completedCount = rentals.filter((r) => r.status === 'completed').length;
+  const completedCount = rentals.filter((r) => !isOngoing(r.status)).length;
 
   if (loading) {
     return (
@@ -332,12 +408,8 @@ const Dashboard: React.FC = () => {
           { label: 'Completed',     value: completedCount, color: '#2E7D32' },
         ].map((stat) => (
           <Paper key={stat.label} elevation={0} sx={{ flex: '1 1 120px', p: 2.5, border: '1px solid rgba(201,151,58,0.13)', borderRadius: 3, textAlign: 'center', background: '#fff' }}>
-            <Typography sx={{ fontSize: '2rem', fontWeight: 700, color: stat.color, fontFamily: '"Sora", sans-serif', lineHeight: 1, mb: 0.5 }}>
-              {stat.value}
-            </Typography>
-            <Typography sx={{ fontSize: '0.75rem', color: '#7A6040', fontFamily: '"Sora", sans-serif' }}>
-              {stat.label}
-            </Typography>
+            <Typography sx={{ fontSize: '2rem', fontWeight: 700, color: stat.color, fontFamily: '"Sora", sans-serif', lineHeight: 1, mb: 0.5 }}>{stat.value}</Typography>
+            <Typography sx={{ fontSize: '0.75rem', color: '#7A6040', fontFamily: '"Sora", sans-serif' }}>{stat.label}</Typography>
           </Paper>
         ))}
       </Box>
@@ -354,7 +426,7 @@ const Dashboard: React.FC = () => {
         >
           <Tab value="all"       label={`All (${rentals.length})`} />
           <Tab value="ongoing"   label={`Ongoing (${ongoingCount})`} />
-          <Tab value="completed" label={`Completed (${completedCount})`} />
+          <Tab value="completed" label={`Ended (${completedCount})`} />
         </Tabs>
       </Box>
 
@@ -365,7 +437,9 @@ const Dashboard: React.FC = () => {
           : <Alert severity="info" sx={{ background: 'rgba(107,142,107,0.06)', border: '1px solid rgba(107,142,107,0.2)', color: '#4A6A4A' }}>No rentals in this category.</Alert>
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
-          {filtered.map((rental) => <RentalCard key={rental.id} rental={rental} />)}
+          {filtered.map((rental) => (
+            <RentalCard key={rental.id} rental={rental} onCanceled={handleCanceled} />
+          ))}
         </Box>
       )}
 

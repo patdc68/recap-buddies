@@ -41,8 +41,10 @@ export interface RbDevice {
 
 export type ItemStatus =
   | 'Available'
+  | 'In Review'
   | 'For Delivery'
   | 'Delivered'
+  | 'Renting'
   | 'For Return'
   | 'For Refund'
   | 'For Penalty';
@@ -58,6 +60,7 @@ export interface RbItem {
   status: ItemStatus;
   gps_installed: boolean;
   current_condition: ItemCondition;
+  rent_price: number | null;
   created_by: string;
   created_at: string;
   // joined via Supabase FK:
@@ -92,13 +95,13 @@ export interface RbSelfieVerificationInst {
 
 // ─── Rental Form ──────────────────────────────────────────────────────────────
 
-export type RentalStatus = 'submitted' | 'in-review' | 'renting' | 'completed';
+export type RentalStatus = 'submitted' | 'in-review' | 'renting' | 'completed' | 'canceled' | 'declined';
 export type LocUsage     = 'domestic' | 'international';
 
 export interface RbRentalForm {
   id: string;
   cam_name_id_fk: string;            // FK → RB_ITEM.id
-  rental_id_fk: string;              // FK → RB_RENTER.id
+  renter_id_fk: string;              // FK → RB_RENTER.id
   branch_id_fk: string | null;       // FK → RB_BRANCHES.id (auto-set from item's branch)
   loc_usage: LocUsage;
   proof_of_purpose_of_rental: string | null;
