@@ -93,7 +93,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
       byCamera[camKey].totalDays += rentalDays;
       byCamera[camKey].revenue += revenue;
 
-      const branchId = r.branch_id_fk ?? 'unassigned';
+      const branchId = r.branch_id_fk ?? r.item?.branch_id ?? 'unassigned';
       branchRentals[branchId] = (branchRentals[branchId] ?? 0) + 1;
     });
 
