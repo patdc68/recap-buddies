@@ -44,7 +44,6 @@ import PhoneIcon              from '@mui/icons-material/Phone';
 import VerifiedUserIcon       from '@mui/icons-material/VerifiedUser';
 import OpenInNewIcon          from '@mui/icons-material/OpenInNew';
 import DeleteIcon             from '@mui/icons-material/Delete';
-import AttachMoneyIcon        from '@mui/icons-material/AttachMoney';
 import FilterListIcon         from '@mui/icons-material/FilterList';
 
 dayjs.extend(isBetween);
@@ -131,6 +130,12 @@ const InfoBox: React.FC<{ label: string; children: React.ReactNode }> = ({ label
   </Box>
 );
 
+const getRentalDayCount = (startDate: string, endDate: string) => {
+  const start = dayjs(startDate).startOf('day');
+  const end = dayjs(endDate).startOf('day');
+  return Math.max(end.diff(start, 'day'), 1);
+};
+
 // ─── Rental Detail Dialog ─────────────────────────────────────────────────────
 
 interface RentalDetailDialogProps {
@@ -214,7 +219,8 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
           {[
             { label: 'Start Date', val: dayjs(rental.rent_date_start).format('MMM D, YYYY') },
             { label: 'End Date',   val: dayjs(rental.rent_date_end).format('MMM D, YYYY') },
-            { label: 'Duration',   val: `${dayjs(rental.rent_date_end).diff(dayjs(rental.rent_date_start), 'day')} days` },
+            { label: 'Actual Returned', val: rental.actual_return_date ? dayjs(rental.actual_return_date).format('MMM D, YYYY') : 'Not returned yet' },
+            { label: 'Duration',   val: `${getRentalDayCount(rental.rent_date_start, rental.rent_date_end)} days` },
           ].map((d) => (
             <Box key={d.label} sx={{ flex: 1, p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
               <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.25 }}>{d.label}</Typography>
@@ -400,108 +406,14 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
   );
 };
 
-// ─── Analytics Dialog (chart bar click) ──────────────────────────────────────
-
-interface AnalyticsDialogProps {
-  title: string;
-  rentals: EnrichedRental[];
-  branches: RbBranch[];
-  open: boolean;
-  onClose: () => void;
-}
-
-const AnalyticsDialog: React.FC<AnalyticsDialogProps> = ({ title, rentals, branches, open, onClose }) => {
-  // Revenue per branch (rent_price from item)
-  const branchRevenue: Record<string, { name: string; revenue: number; count: number; topCam: string }> = {};
-  rentals.forEach((r) => {
-    const bid  = r.branch_id_fk ?? 'unassigned';
-    const name = branches.find((b) => b.id === bid)?.location_name ?? 'Unassigned';
-    const price = (r.item as EnrichedItem & { rent_price?: number | null })?.rent_price ?? 0;
-    if (!branchRevenue[bid]) branchRevenue[bid] = { name, revenue: 0, count: 0, topCam: '' };
-    branchRevenue[bid].revenue += price;
-    branchRevenue[bid].count  += 1;
-  });
-
-  // Most rented camera per branch
-  branches.forEach((b) => {
-    const br = rentals.filter((r) => r.branch_id_fk === b.id);
-    const camCount: Record<string, number> = {};
-    br.forEach((r) => {
-      const name = r.item?.device?.cam_name ?? '—';
-      camCount[name] = (camCount[name] ?? 0) + 1;
-    });
-    const top = Object.entries(camCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
-    if (branchRevenue[b.id]) branchRevenue[b.id].topCam = top;
-  });
-
-  const branchRows = Object.values(branchRevenue).sort((a, b) => b.revenue - a.revenue);
-  const totalRevenue = branchRows.reduce((s, r) => s + r.revenue, 0);
-
-  // Most rented camera overall
-  const camCount: Record<string, number> = {};
-  rentals.forEach((r) => {
-    const name = r.item?.device?.cam_name ?? '—';
-    camCount[name] = (camCount[name] ?? 0) + 1;
-  });
-  const topCamOverall = Object.entries(camCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
-      PaperProps={{ sx: { background: CREAM, border: `1px solid ${BORDER}`, borderRadius: 3 } }}>
-      <DialogTitle sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        Analytics — {title}
-        <IconButton onClick={onClose} size="small" sx={{ color: MUTED }}><CloseIcon fontSize="small" /></IconButton>
-      </DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
-
-        {/* Summary row */}
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-          {[
-            { label: 'Total Rentals',    value: rentals.length.toString(), color: AMBER },
-            { label: 'Overall Revenue',  value: `₱${totalRevenue.toLocaleString()}`, color: '#2E7D32' },
-            { label: 'Top Camera (All)', value: topCamOverall, color: '#1565C0' },
-          ].map((s) => (
-            <Box key={s.label} sx={{ flex: '1 1 140px', p: 2, borderRadius: 2, background: CARD_BG, border: `1px solid ${BORDER}`, textAlign: 'center' }}>
-              <Typography sx={{ color: s.color, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '1.15rem', lineHeight: 1.2 }}>{s.value}</Typography>
-              <Typography sx={{ color: MUTED, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif', mt: 0.25 }}>{s.label}</Typography>
-            </Box>
-          ))}
-        </Box>
-
-        {/* Per-branch table */}
-        <Box>
-          <Typography sx={{ color: AMBER_DARK, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, mb: 1 }}>By Branch</Typography>
-          <Paper elevation={0} sx={{ border: `1px solid ${BORDER}`, borderRadius: 2, overflow: 'hidden' }}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px 1fr', px: 2, py: 1, background: 'rgba(201,151,58,0.05)', borderBottom: `1px solid ${BORDER}` }}>
-              {['Branch', 'Rentals', 'Revenue', 'Top Camera'].map((h) => (
-                <Typography key={h} sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700 }}>{h}</Typography>
-              ))}
-            </Box>
-            {branchRows.length === 0
-              ? <Box sx={{ p: 3, textAlign: 'center' }}><Typography sx={{ color: MUTED, fontSize: '0.82rem' }}>No data</Typography></Box>
-              : branchRows.map((b, i) => (
-                  <Box key={b.name} sx={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px 1fr', px: 2, py: 1.5, alignItems: 'center', borderBottom: i < branchRows.length - 1 ? `1px solid ${BORDER}` : 'none', background: i % 2 === 0 ? CARD_BG : 'rgba(201,151,58,0.015)' }}>
-                    <Typography sx={{ color: ESPRESSO, fontWeight: 600, fontSize: '0.85rem' }}>{b.name}</Typography>
-                    <Typography sx={{ color: MUTED, fontSize: '0.82rem' }}>{b.count}</Typography>
-                    <Typography sx={{ color: '#2E7D32', fontWeight: 600, fontSize: '0.85rem' }}>₱{b.revenue.toLocaleString()}</Typography>
-                    <Typography sx={{ color: AMBER_DARK, fontSize: '0.82rem' }}>{b.topCam}</Typography>
-                  </Box>
-                ))}
-          </Paper>
-        </Box>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB 0 — OVERVIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const OverviewTab: React.FC<{ rentals: EnrichedRental[]; branches: RbBranch[]; onSave: (id: string, status: string) => Promise<void> }> = ({ rentals, branches, onSave }) => {
+const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, status: string) => Promise<void> }> = ({ rentals, onSave }) => {
   const today = dayjs();
+  const navigate = useNavigate();
   const [listDialog, setListDialog]         = useState<{ title: string; items: EnrichedRental[] } | null>(null);
-  const [analyticsDialog, setAnalyticsDialog] = useState<{ title: string; items: EnrichedRental[] } | null>(null);
 
   const upcomingDates = [...new Set(
     rentals
@@ -640,7 +552,7 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; branches: RbBranch[]; o
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
             <TrendingUpIcon sx={{ color: AMBER, fontSize: 18 }} />
             <Typography sx={{ color: ESPRESSO, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '0.88rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Rentals This Year</Typography>
-            <Typography sx={{ color: MUTED, fontSize: '0.72rem', ml: 'auto' }}>Click a bar for branch analytics</Typography>
+            <Typography sx={{ color: MUTED, fontSize: '0.72rem', ml: 'auto' }}>Click a bar to open monthly analytics</Typography>
           </Box>
           <ResponsiveContainer width="100%" height={200}>
             <BarChart data={monthlyData} barSize={28}>
@@ -660,7 +572,8 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; branches: RbBranch[]; o
                 onClick={(entry) => {
                   const payload = (entry as unknown as { payload?: { rentals?: EnrichedRental[]; month?: string } })?.payload;
                   if (payload?.rentals && payload.rentals.length > 0) {
-                    setAnalyticsDialog({ title: `${payload.month} ${today.year()}`, items: payload.rentals });
+                    const monthIndex = MONTHS.findIndex((m) => m === payload.month);
+                    navigate(`/admin/analytics?year=${today.year()}&month=${monthIndex + 1}`);
                   }
                 }}
               >
@@ -704,12 +617,6 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; branches: RbBranch[]; o
         <RentalListDialog
           title={listDialog.title} rentals={listDialog.items}
           open={!!listDialog} onClose={() => setListDialog(null)} onSave={onSave}
-        />
-      )}
-      {analyticsDialog && (
-        <AnalyticsDialog
-          title={analyticsDialog.title} rentals={analyticsDialog.items} branches={branches}
-          open={!!analyticsDialog} onClose={() => setAnalyticsDialog(null)}
         />
       )}
     </Box>
@@ -1531,7 +1438,7 @@ const AdminDashboard: React.FC = () => {
     <Box sx={{ minHeight: '100vh', background: '#F5EFE4' }}>
       <TopBar rbUser={rbUser} tab={tab} onTab={setTab} onLogout={handleLogout} />
       <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1400, mx: 'auto' }}>
-        {tab === 0 && <OverviewTab  rentals={rentals} branches={branches} onSave={handleSaveStatus} />}
+        {tab === 0 && <OverviewTab  rentals={rentals} onSave={handleSaveStatus} />}
         {tab === 1 && <CalendarTab  rentals={rentals} items={items} onSave={handleSaveStatus} />}
         {tab === 2 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
       </Box>

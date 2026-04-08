@@ -11,6 +11,7 @@ import AdminLogin              from './admin/AdminLogin';
 import AdminRegistration       from './admin/AdminRegistration';
 import AdminDashboard          from './admin/AdminDashBoard';
 import RenterVerificationPage  from './admin/RenterVerificationPage';
+import AdminRevenueAnalyticsPage from './admin/AdminRevenueAnalyticsPage';
 import ProtectedRoute          from './components/ProtectedRoute';
 import AdminProtectedRoute     from './components/AdminProtectedRoute';
 
@@ -31,6 +32,7 @@ const App: React.FC = () => (
         <Route path="/admin/login"     element={<AdminLogin />} />
         <Route path="/admin/register"  element={<AdminRegistration />} />
         <Route path="/admin/dashboard" element={<AdminProtectedRoute><AdminDashboard /></AdminProtectedRoute>} />
+        <Route path="/admin/analytics" element={<AdminProtectedRoute><AdminRevenueAnalyticsPage /></AdminProtectedRoute>} />
         <Route path="/admin/verify/:rentalId" element={<AdminProtectedRoute><RenterVerificationPage /></AdminProtectedRoute>} />
 
         {/* ── Catch-all ── */}
