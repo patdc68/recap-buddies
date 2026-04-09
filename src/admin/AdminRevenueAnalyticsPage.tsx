@@ -47,7 +47,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
 
     const [{ data: branchesRaw }, { data: itemsRaw }, { data: rentalsRaw }] = await Promise.all([
       supabase.from('RB_BRANCHES').select('*'),
-      supabase.from('RB_ITEM').select('*, device:RB_DEVICES(id,cam_name,device_img), branch_id'),
+      supabase.from('RB_ITEM').select('*, device:RB_DEVICES(id,cam_name,device_img), branch_id_fk'),
       supabase.from('RB_RENTAL_FORM').select('*'),
     ]);
 
@@ -93,7 +93,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
       byCamera[camKey].totalDays += rentalDays;
       byCamera[camKey].revenue += revenue;
 
-      const branchId = r.branch_id_fk ?? r.item?.branch_id ?? 'unassigned';
+      const branchId = r.item?.branch_id_fk ?? 'unassigned';
       branchRentals[branchId] = (branchRentals[branchId] ?? 0) + 1;
     });
 

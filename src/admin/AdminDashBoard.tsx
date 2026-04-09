@@ -884,6 +884,7 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
   const [serialNo, setSerialNo]   = useState('');
   const [rentPrice, setRentPrice] = useState('');
   const [branchId, setBranchId]   = useState('');
+  const [rentPrice, setRentPrice] = useState('');
   const [gps, setGps]             = useState(false);
   const [saving, setSaving]       = useState(false);
   const [errors, setErrors]       = useState<Record<string, string>>({});
@@ -902,7 +903,7 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
     if (!validate()) return;
     setSaving(true); setSubmitErr('');
     try {
-      const { error } = await supabase.from('RB_ITEM').insert({ device_id_fk: deviceId, code_name: codeName, serial_no: serialNo, rent_price: rentPrice ? Number(rentPrice) : null, branch_id_fk: branchId || null, gps_installed: gps, current_condition: 'working', status: 'Available', created_by: createdBy });
+          const { error } = await supabase.from('RB_ITEM').insert({ device_id_fk: deviceId, code_name: codeName, serial_no: serialNo, rent_price: rentPrice ? Number(rentPrice) : null, branch_id_fk: branchId || null, gps_installed: gps, current_condition: 'working', status: 'Available', created_by: createdBy });
       if (error) throw new Error(error.message);
       onSaved(); onClose();
       setDeviceId(''); setCodeName(''); setSerialNo(''); setRentPrice(''); setBranchId(''); setGps(false);
@@ -942,7 +943,7 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
             </Box>
           ))}
         </Box>
-        <Box>
+                <Box>
           <input
             type="number"
             min="0"
