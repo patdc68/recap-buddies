@@ -17,7 +17,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import type {
   RbUser, RbBranch, RbDevice, RbItem, RbRenter,
-  RbRentalForm, ItemStatus, ItemCondition,
+  RbRentalForm, ItemStatus, ItemCondition, RentalStatus,
 } from '../service/supabaseClient';
 
 import DashboardIcon          from '@mui/icons-material/Dashboard';
@@ -44,7 +44,6 @@ import PhoneIcon              from '@mui/icons-material/Phone';
 import VerifiedUserIcon       from '@mui/icons-material/VerifiedUser';
 import OpenInNewIcon          from '@mui/icons-material/OpenInNew';
 import DeleteIcon             from '@mui/icons-material/Delete';
-import AttachMoneyIcon        from '@mui/icons-material/AttachMoney';
 import FilterListIcon         from '@mui/icons-material/FilterList';
 
 dayjs.extend(isBetween);
@@ -83,10 +82,27 @@ const ITEM_STATUS_COLORS: Record<ItemStatus, { bg: string; color: string; border
 const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
   submitted:   { label: 'Submitted',  color: '#B8860B', bg: 'rgba(255,212,59,0.10)',  border: 'rgba(255,212,59,0.30)'  },
   'in-review': { label: 'In Review',  color: '#1565C0', bg: 'rgba(100,149,237,0.10)', border: 'rgba(100,149,237,0.30)' },
+  'for-delivery': { label: 'For Delivery', color: '#1565C0', bg: 'rgba(100,149,237,0.12)', border: 'rgba(100,149,237,0.35)' },
+  delivered:      { label: 'Delivered',    color: '#1A237E', bg: 'rgba(100,149,237,0.08)', border: 'rgba(100,149,237,0.25)' },
   renting:     { label: 'Renting',    color: '#7A4F00', bg: 'rgba(201,151,58,0.12)',  border: 'rgba(201,151,58,0.40)'  },
+  'for-return':   { label: 'For Return',   color: '#E65100', bg: 'rgba(255,165,0,0.12)', border: 'rgba(255,165,0,0.35)' },
+  'for-refund':   { label: 'For Refund',   color: '#6A1B9A', bg: 'rgba(156,39,176,0.10)', border: 'rgba(156,39,176,0.30)' },
+  'for-penalty':  { label: 'For Penalty',  color: '#B71C1C', bg: 'rgba(211,47,47,0.10)', border: 'rgba(211,47,47,0.30)' },
   completed:   { label: 'Completed',  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)', border: 'rgba(105,219,124,0.30)' },
   canceled:    { label: 'Canceled',   color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
   declined:    { label: 'Declined',   color: '#B71C1C', bg: 'rgba(211,47,47,0.08)',   border: 'rgba(211,47,47,0.25)'   },
+};
+
+const RENTAL_TO_ITEM_STATUS: Partial<Record<string, ItemStatus>> = {
+  submitted: 'In Review',
+  'in-review': 'In Review',
+  'for-delivery': 'For Delivery',
+  delivered: 'Delivered',
+  renting: 'Renting',
+  'for-return': 'For Return',
+  'for-refund': 'For Refund',
+  'for-penalty': 'For Penalty',
+  completed: 'Available',
 };
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -114,6 +130,12 @@ const InfoBox: React.FC<{ label: string; children: React.ReactNode }> = ({ label
   </Box>
 );
 
+const getRentalDayCount = (startDate: string, endDate: string) => {
+  const start = dayjs(startDate).startOf('day');
+  const end = dayjs(endDate).startOf('day');
+  return Math.max(end.diff(start, 'day'), 1);
+};
+
 // ─── Rental Detail Dialog ─────────────────────────────────────────────────────
 
 interface RentalDetailDialogProps {
@@ -124,7 +146,7 @@ interface RentalDetailDialogProps {
 }
 
 const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, onClose, onSave }) => {
-  const [status, setStatus] = useState(rental?.status ?? 'submitted');
+  const [status, setStatus] = useState<RentalStatus>(rental?.status ?? 'submitted');
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
   
@@ -197,7 +219,8 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
           {[
             { label: 'Start Date', val: dayjs(rental.rent_date_start).format('MMM D, YYYY') },
             { label: 'End Date',   val: dayjs(rental.rent_date_end).format('MMM D, YYYY') },
-            { label: 'Duration',   val: `${dayjs(rental.rent_date_end).diff(dayjs(rental.rent_date_start), 'day')} days` },
+            { label: 'Actual Returned', val: rental.actual_return_date ? dayjs(rental.actual_return_date).format('MMM D, YYYY') : 'Not returned yet' },
+            { label: 'Duration',   val: `${getRentalDayCount(rental.rent_date_start, rental.rent_date_end)} days` },
           ].map((d) => (
             <Box key={d.label} sx={{ flex: 1, p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
               <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.25 }}>{d.label}</Typography>
@@ -244,7 +267,7 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
         {/* Status editor */}
         <FormControl fullWidth size="small">
           <InputLabel sx={{ color: MUTED }}>Update Status</InputLabel>
-          <Select value={status} onChange={(e: SelectChangeEvent) => setStatus(e.target.value)} label="Update Status">
+          <Select value={status} onChange={(e: SelectChangeEvent) => setStatus(e.target.value as RentalStatus)} label="Update Status">
             {Object.entries(RENTAL_STATUS_META).map(([val, m]) => (
               <MenuItem key={val} value={val}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -383,108 +406,14 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
   );
 };
 
-// ─── Analytics Dialog (chart bar click) ──────────────────────────────────────
-
-interface AnalyticsDialogProps {
-  title: string;
-  rentals: EnrichedRental[];
-  branches: RbBranch[];
-  open: boolean;
-  onClose: () => void;
-}
-
-const AnalyticsDialog: React.FC<AnalyticsDialogProps> = ({ title, rentals, branches, open, onClose }) => {
-  // Revenue per branch (rent_price from item)
-  const branchRevenue: Record<string, { name: string; revenue: number; count: number; topCam: string }> = {};
-  rentals.forEach((r) => {
-    const bid  = r.branch_id_fk ?? 'unassigned';
-    const name = branches.find((b) => b.id === bid)?.location_name ?? 'Unassigned';
-    const price = (r.item as EnrichedItem & { rent_price?: number | null })?.rent_price ?? 0;
-    if (!branchRevenue[bid]) branchRevenue[bid] = { name, revenue: 0, count: 0, topCam: '' };
-    branchRevenue[bid].revenue += price;
-    branchRevenue[bid].count  += 1;
-  });
-
-  // Most rented camera per branch
-  branches.forEach((b) => {
-    const br = rentals.filter((r) => r.branch_id_fk === b.id);
-    const camCount: Record<string, number> = {};
-    br.forEach((r) => {
-      const name = r.item?.device?.cam_name ?? '—';
-      camCount[name] = (camCount[name] ?? 0) + 1;
-    });
-    const top = Object.entries(camCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
-    if (branchRevenue[b.id]) branchRevenue[b.id].topCam = top;
-  });
-
-  const branchRows = Object.values(branchRevenue).sort((a, b) => b.revenue - a.revenue);
-  const totalRevenue = branchRows.reduce((s, r) => s + r.revenue, 0);
-
-  // Most rented camera overall
-  const camCount: Record<string, number> = {};
-  rentals.forEach((r) => {
-    const name = r.item?.device?.cam_name ?? '—';
-    camCount[name] = (camCount[name] ?? 0) + 1;
-  });
-  const topCamOverall = Object.entries(camCount).sort((a, b) => b[1] - a[1])[0]?.[0] ?? '—';
-
-  return (
-    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
-      PaperProps={{ sx: { background: CREAM, border: `1px solid ${BORDER}`, borderRadius: 3 } }}>
-      <DialogTitle sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        Analytics — {title}
-        <IconButton onClick={onClose} size="small" sx={{ color: MUTED }}><CloseIcon fontSize="small" /></IconButton>
-      </DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 1 }}>
-
-        {/* Summary row */}
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-          {[
-            { label: 'Total Rentals',    value: rentals.length.toString(), color: AMBER },
-            { label: 'Overall Revenue',  value: `₱${totalRevenue.toLocaleString()}`, color: '#2E7D32' },
-            { label: 'Top Camera (All)', value: topCamOverall, color: '#1565C0' },
-          ].map((s) => (
-            <Box key={s.label} sx={{ flex: '1 1 140px', p: 2, borderRadius: 2, background: CARD_BG, border: `1px solid ${BORDER}`, textAlign: 'center' }}>
-              <Typography sx={{ color: s.color, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '1.15rem', lineHeight: 1.2 }}>{s.value}</Typography>
-              <Typography sx={{ color: MUTED, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif', mt: 0.25 }}>{s.label}</Typography>
-            </Box>
-          ))}
-        </Box>
-
-        {/* Per-branch table */}
-        <Box>
-          <Typography sx={{ color: AMBER_DARK, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700, mb: 1 }}>By Branch</Typography>
-          <Paper elevation={0} sx={{ border: `1px solid ${BORDER}`, borderRadius: 2, overflow: 'hidden' }}>
-            <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px 1fr', px: 2, py: 1, background: 'rgba(201,151,58,0.05)', borderBottom: `1px solid ${BORDER}` }}>
-              {['Branch', 'Rentals', 'Revenue', 'Top Camera'].map((h) => (
-                <Typography key={h} sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.08em', textTransform: 'uppercase', fontWeight: 700 }}>{h}</Typography>
-              ))}
-            </Box>
-            {branchRows.length === 0
-              ? <Box sx={{ p: 3, textAlign: 'center' }}><Typography sx={{ color: MUTED, fontSize: '0.82rem' }}>No data</Typography></Box>
-              : branchRows.map((b, i) => (
-                  <Box key={b.name} sx={{ display: 'grid', gridTemplateColumns: '1fr 80px 100px 1fr', px: 2, py: 1.5, alignItems: 'center', borderBottom: i < branchRows.length - 1 ? `1px solid ${BORDER}` : 'none', background: i % 2 === 0 ? CARD_BG : 'rgba(201,151,58,0.015)' }}>
-                    <Typography sx={{ color: ESPRESSO, fontWeight: 600, fontSize: '0.85rem' }}>{b.name}</Typography>
-                    <Typography sx={{ color: MUTED, fontSize: '0.82rem' }}>{b.count}</Typography>
-                    <Typography sx={{ color: '#2E7D32', fontWeight: 600, fontSize: '0.85rem' }}>₱{b.revenue.toLocaleString()}</Typography>
-                    <Typography sx={{ color: AMBER_DARK, fontSize: '0.82rem' }}>{b.topCam}</Typography>
-                  </Box>
-                ))}
-          </Paper>
-        </Box>
-      </DialogContent>
-    </Dialog>
-  );
-};
-
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB 0 — OVERVIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const OverviewTab: React.FC<{ rentals: EnrichedRental[]; branches: RbBranch[]; onSave: (id: string, status: string) => Promise<void> }> = ({ rentals, branches, onSave }) => {
+const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, status: string) => Promise<void> }> = ({ rentals, onSave }) => {
   const today = dayjs();
+  const navigate = useNavigate();
   const [listDialog, setListDialog]         = useState<{ title: string; items: EnrichedRental[] } | null>(null);
-  const [analyticsDialog, setAnalyticsDialog] = useState<{ title: string; items: EnrichedRental[] } | null>(null);
 
   const upcomingDates = [...new Set(
     rentals
@@ -623,16 +552,10 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; branches: RbBranch[]; o
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
             <TrendingUpIcon sx={{ color: AMBER, fontSize: 18 }} />
             <Typography sx={{ color: ESPRESSO, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '0.88rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>Rentals This Year</Typography>
-            <Typography sx={{ color: MUTED, fontSize: '0.72rem', ml: 'auto' }}>Click a bar for branch analytics</Typography>
+            <Typography sx={{ color: MUTED, fontSize: '0.72rem', ml: 'auto' }}>Click a bar to open monthly analytics</Typography>
           </Box>
           <ResponsiveContainer width="100%" height={200}>
-            <BarChart data={monthlyData} barSize={28}
-              onClick={(data: { activePayload?: Array<{ payload: typeof monthlyData[0] }> } | null) => {
-                const payload = data?.activePayload?.[0]?.payload;
-                if (payload && payload.rentals.length > 0)
-                  setAnalyticsDialog({ title: `${payload.month} ${today.year()}`, items: payload.rentals });
-              }}
-            >
+            <BarChart data={monthlyData} barSize={28}>
               <CartesianGrid strokeDasharray="3 3" stroke={BORDER} />
               <XAxis dataKey="month" tick={{ fill: MUTED, fontSize: 11, fontFamily: '"Sora", sans-serif' }} axisLine={false} tickLine={false} />
               <YAxis tick={{ fill: MUTED, fontSize: 11 }} axisLine={false} tickLine={false} allowDecimals={false} />
@@ -641,7 +564,19 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; branches: RbBranch[]; o
                 contentStyle={{ background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 8, fontFamily: '"Sora", sans-serif', fontSize: 12, color: ESPRESSO }}
                 labelStyle={{ color: AMBER_DARK, fontWeight: 600 }}
               />
-              <Bar dataKey="count" name="Rentals" radius={[4, 4, 0, 0]} style={{ cursor: 'pointer' }}>
+              <Bar
+                dataKey="count"
+                name="Rentals"
+                radius={[4, 4, 0, 0]}
+                style={{ cursor: 'pointer' }}
+                onClick={(entry) => {
+                  const payload = (entry as unknown as { payload?: { rentals?: EnrichedRental[]; month?: string } })?.payload;
+                  if (payload?.rentals && payload.rentals.length > 0) {
+                    const monthIndex = MONTHS.findIndex((m) => m === payload.month);
+                    navigate(`/admin/analytics?year=${today.year()}&month=${monthIndex + 1}`);
+                  }
+                }}
+              >
                 {monthlyData.map((_, i) => (
                   <Cell key={i} fill={i === today.month() ? AMBER : 'rgba(201,151,58,0.35)'} />
                 ))}
@@ -684,12 +619,6 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; branches: RbBranch[]; o
           open={!!listDialog} onClose={() => setListDialog(null)} onSave={onSave}
         />
       )}
-      {analyticsDialog && (
-        <AnalyticsDialog
-          title={analyticsDialog.title} rentals={analyticsDialog.items} branches={branches}
-          open={!!analyticsDialog} onClose={() => setAnalyticsDialog(null)}
-        />
-      )}
     </Box>
   );
 };
@@ -702,7 +631,6 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
   const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
   const [selectedCamera, setSelectedCamera] = useState('all');
   const [selectedRental, setSelectedRental] = useState<EnrichedRental | null>(null);
-  const navigate = useNavigate();
 
   const calStart = currentMonth.startOf('month').startOf('week');
   const calEnd   = currentMonth.endOf('month').endOf('week');
@@ -715,10 +643,6 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
 
   const filtered = selectedCamera === 'all' ? rentals : rentals.filter((r) => r.cam_name_id_fk === selectedCamera);
-
-  // Stable slot assignment per rental to avoid Z-overlap chaos
-  const slotMap: Record<string, number> = {};
-  filtered.forEach((r, idx) => { slotMap[r.id] = idx % 3; });
 
   return (
     <Box>
@@ -767,6 +691,27 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
             dayjs(r.rent_date_start).isSameOrBefore(weekEnd, 'day') &&
             dayjs(r.rent_date_end).isSameOrAfter(weekStart, 'day')
           );
+          const sortedWeekRentals = [...weekRentals].sort((a, b) =>
+            dayjs(a.rent_date_start).valueOf() - dayjs(b.rent_date_start).valueOf()
+          );
+
+          const slotMap: Record<string, number> = {};
+          const slotEndCols: number[] = [];
+          sortedWeekRentals.forEach((r) => {
+            const rStart = dayjs(r.rent_date_start);
+            const rEnd = dayjs(r.rent_date_end);
+            const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
+            const colEnd = rEnd.isAfter(weekEnd, 'day') ? 6 : rEnd.day();
+
+            let assignedSlot = slotEndCols.findIndex((endCol) => colStart > endCol);
+            if (assignedSlot === -1) {
+              assignedSlot = slotEndCols.length;
+              slotEndCols.push(colEnd);
+            } else {
+              slotEndCols[assignedSlot] = colEnd;
+            }
+            slotMap[r.id] = assignedSlot;
+          });
 
           return (
             <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', position: 'relative', mb: '2px' }}>
@@ -790,7 +735,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
               })}
 
               {/* Spanning rental bars */}
-              {weekRentals.map((r) => {
+              {sortedWeekRentals.map((r) => {
                 const rStart   = dayjs(r.rent_date_start);
                 const rEnd     = dayjs(r.rent_date_end);
                 const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
@@ -834,9 +779,9 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
         })}
       </Box>
 
-      {/* Legend — only statuses relevant to calendar scheduling */}
+      {/* Legend — statuses relevant to calendar scheduling */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2.5 }}>
-        {(['in-review', 'renting', 'completed'] as const).map((key) => {
+        {(['in-review', 'for-delivery', 'delivered', 'renting', 'for-return', 'for-refund', 'for-penalty', 'completed'] as const).map((key) => {
           const meta = RENTAL_STATUS_META[key];
           return (
             <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
@@ -938,6 +883,7 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
   const [codeName, setCodeName]   = useState('');
   const [serialNo, setSerialNo]   = useState('');
   const [branchId, setBranchId]   = useState('');
+  const [rentPrice, setRentPrice] = useState('');
   const [gps, setGps]             = useState(false);
   const [saving, setSaving]       = useState(false);
   const [errors, setErrors]       = useState<Record<string, string>>({});
@@ -948,6 +894,7 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
     if (!deviceId)        e.deviceId = 'Select a camera type';
     if (!codeName.trim()) e.codeName = 'Code name required';
     if (!serialNo.trim()) e.serialNo = 'Serial number required';
+    if (rentPrice && (Number.isNaN(Number(rentPrice)) || Number(rentPrice) < 0)) e.rentPrice = 'Enter a valid non-negative price';
     setErrors(e); return Object.keys(e).length === 0;
   };
 
@@ -955,10 +902,10 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
     if (!validate()) return;
     setSaving(true); setSubmitErr('');
     try {
-      const { error } = await supabase.from('RB_ITEM').insert({ device_id_fk: deviceId, code_name: codeName, serial_no: serialNo, branch_id_fk: branchId || null, gps_installed: gps, current_condition: 'working', status: 'Available', created_by: createdBy });
+          const { error } = await supabase.from('RB_ITEM').insert({ device_id_fk: deviceId, code_name: codeName, serial_no: serialNo, rent_price: rentPrice ? Number(rentPrice) : null, branch_id_fk: branchId || null, gps_installed: gps, current_condition: 'working', status: 'Available', created_by: createdBy });
       if (error) throw new Error(error.message);
       onSaved(); onClose();
-      setDeviceId(''); setCodeName(''); setSerialNo(''); setBranchId(''); setGps(false);
+      setDeviceId(''); setCodeName(''); setSerialNo(''); setRentPrice(''); setBranchId(''); setGps(false);
     } catch (e: unknown) { setSubmitErr(e instanceof Error ? e.message : 'Error'); }
     finally { setSaving(false); }
   };
@@ -994,6 +941,18 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
               {errors[f.key] && <Typography sx={{ color: '#C0392B', fontSize: '0.72rem', mt: 0.25 }}>{errors[f.key]}</Typography>}
             </Box>
           ))}
+        </Box>
+                <Box>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            placeholder="Price"
+            value={rentPrice}
+            onChange={(e) => { setRentPrice(e.target.value); setErrors((p) => ({ ...p, rentPrice: '' })); }}
+            style={{ ...inputSx, border: `1.5px solid ${errors.rentPrice ? '#C0392B' : BORDER}` }}
+          />
+          {errors.rentPrice && <Typography sx={{ color: '#C0392B', fontSize: '0.72rem', mt: 0.25 }}>{errors.rentPrice}</Typography>}
         </Box>
         <FormControl fullWidth size="small">
           <InputLabel>Branch (optional)</InputLabel>
@@ -1411,10 +1370,67 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
 
-  const handleSaveStatus = useCallback(async (id: string, status: string) => {
-    await supabase.from('RB_RENTAL_FORM').update({ status }).eq('id', id);
+  const markOverdueRentalsForPenalty = useCallback(async () => {
+    const today = dayjs().startOf('day');
+    const overdueRentals = rentals.filter((r) => {
+      const endDate = dayjs(r.rent_date_end).startOf('day');
+      return (
+        endDate.isBefore(today) &&
+        !['completed', 'canceled', 'declined', 'for-penalty'].includes(r.status)
+      );
+    });
+
+    if (overdueRentals.length === 0) return;
+
+    const updates = overdueRentals.map((r) =>
+      supabase
+        .from('RB_RENTAL_FORM')
+        .update({
+          status: 'for-penalty',
+          actual_return_date: today.format('YYYY-MM-DD'),
+        })
+        .eq('id', r.id)
+    );
+
+    await Promise.all(updates);
+
+    const itemUpdates = overdueRentals
+      .filter((r) => !!r.cam_name_id_fk)
+      .map((r) =>
+        supabase
+          .from('RB_ITEM')
+          .update({ status: 'For Penalty' })
+          .eq('id', r.cam_name_id_fk)
+      );
+
+    if (itemUpdates.length > 0) await Promise.all(itemUpdates);
     await fetchAll();
-  }, [fetchAll]);
+  }, [fetchAll, rentals]);
+
+  useEffect(() => {
+    if (!loading && rentals.length > 0) {
+      void markOverdueRentalsForPenalty();
+    }
+  }, [loading, rentals, markOverdueRentalsForPenalty]);
+
+  const handleSaveStatus = useCallback(async (id: string, status: string) => {
+    const payload: { status: string; actual_return_date?: string | null } = { status };
+    if (status === 'completed') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
+    if (status === 'for-penalty') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
+
+    await supabase.from('RB_RENTAL_FORM').update(payload).eq('id', id);
+
+    const targetRental = rentals.find((r) => r.id === id);
+    const itemStatus = RENTAL_TO_ITEM_STATUS[status];
+    if (targetRental?.cam_name_id_fk && itemStatus) {
+      await supabase
+        .from('RB_ITEM')
+        .update({ status: itemStatus })
+        .eq('id', targetRental.cam_name_id_fk);
+    }
+
+    await fetchAll();
+  }, [fetchAll, rentals]);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -1436,7 +1452,7 @@ const AdminDashboard: React.FC = () => {
     <Box sx={{ minHeight: '100vh', background: '#F5EFE4' }}>
       <TopBar rbUser={rbUser} tab={tab} onTab={setTab} onLogout={handleLogout} />
       <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1400, mx: 'auto' }}>
-        {tab === 0 && <OverviewTab  rentals={rentals} branches={branches} onSave={handleSaveStatus} />}
+        {tab === 0 && <OverviewTab  rentals={rentals} onSave={handleSaveStatus} />}
         {tab === 1 && <CalendarTab  rentals={rentals} items={items} onSave={handleSaveStatus} />}
         {tab === 2 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
       </Box>

@@ -56,7 +56,7 @@ export interface RbItem {
   device_id_fk: string;
   code_name: string;
   serial_no: string;
-  branch_id: string | null;
+  branch_id_fk: string | null;
   status: ItemStatus;
   gps_installed: boolean;
   current_condition: ItemCondition;
@@ -95,7 +95,18 @@ export interface RbSelfieVerificationInst {
 
 // ─── Rental Form ──────────────────────────────────────────────────────────────
 
-export type RentalStatus = 'submitted' | 'in-review' | 'renting' | 'completed' | 'canceled' | 'declined';
+export type RentalStatus =
+  | 'submitted'
+  | 'in-review'
+  | 'for-delivery'
+  | 'delivered'
+  | 'renting'
+  | 'for-return'
+  | 'for-refund'
+  | 'for-penalty'
+  | 'completed'
+  | 'canceled'
+  | 'declined';
 export type LocUsage     = 'domestic' | 'international';
 
 export interface RbRentalForm {
@@ -110,6 +121,7 @@ export interface RbRentalForm {
   refund_info: string | null;
   rent_date_start: string;
   rent_date_end: string;
+  actual_return_date: string | null;
   hub_pick_up_addr: string | null;   // FK → RB_BRANCHES.id
   delivery_addr: string | null;
   hub_return_addr: string | null;    // FK → RB_BRANCHES.id

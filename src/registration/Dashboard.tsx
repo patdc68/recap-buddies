@@ -19,6 +19,7 @@ import CancelIcon             from '@mui/icons-material/Cancel';
 import BlockIcon              from '@mui/icons-material/Block';
 import GpsFixedIcon           from '@mui/icons-material/GpsFixed';
 import WarningAmberIcon       from '@mui/icons-material/WarningAmber';
+import LocalOfferIcon         from '@mui/icons-material/LocalOffer';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
@@ -35,7 +36,7 @@ interface EnrichedRental extends RbRentalForm {
   returnBranch?: RbBranch;
 }
 
-// ─── Status config — all 6 statuses ──────────────────────────────────────────
+// ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<RentalStatus, { label: string; bg: string; color: string; border: string; icon: React.ReactNode }> = {
   submitted: {
@@ -52,6 +53,31 @@ const STATUS_CONFIG: Record<RentalStatus, { label: string; bg: string; color: st
     label: 'Renting',
     bg: 'rgba(201,151,58,0.12)', color: '#7A4F00', border: 'rgba(201,151,58,0.40)',
     icon: <CameraIcon sx={{ fontSize: 14 }} />,
+  },
+  'for-delivery': {
+    label: 'For Delivery',
+    bg: 'rgba(100,149,237,0.12)', color: '#1565C0', border: 'rgba(100,149,237,0.35)',
+    icon: <LocalShippingIcon sx={{ fontSize: 14 }} />,
+  },
+  delivered: {
+    label: 'Delivered',
+    bg: 'rgba(100,149,237,0.08)', color: '#1A237E', border: 'rgba(100,149,237,0.25)',
+    icon: <CheckCircleOutlineIcon sx={{ fontSize: 14 }} />,
+  },
+  'for-return': {
+    label: 'For Return',
+    bg: 'rgba(255,165,0,0.12)', color: '#E65100', border: 'rgba(255,165,0,0.35)',
+    icon: <LocalShippingIcon sx={{ fontSize: 14 }} />,
+  },
+  'for-refund': {
+    label: 'For Refund',
+    bg: 'rgba(156,39,176,0.10)', color: '#6A1B9A', border: 'rgba(156,39,176,0.30)',
+    icon: <LocalOfferIcon sx={{ fontSize: 14 }} />,
+  },
+  'for-penalty': {
+    label: 'For Penalty',
+    bg: 'rgba(211,47,47,0.10)', color: '#B71C1C', border: 'rgba(211,47,47,0.30)',
+    icon: <WarningAmberIcon sx={{ fontSize: 14 }} />,
   },
   completed: {
     label: 'Completed',
