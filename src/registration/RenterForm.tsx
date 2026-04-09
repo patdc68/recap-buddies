@@ -507,7 +507,7 @@ const RenterForm: React.FC = () => {
       const { error } = await supabase.from('RB_RENTAL_FORM').insert({
         cam_name_id_fk:            form.cam_name_id_fk,
         renter_id_fk:              renter?.id ?? null,
-        branch_id_fk:              selectedItem?.branch_id ?? null,
+        branch_id_fk:              selectedItem?.branch_id_fk ?? null,
         loc_usage:                 form.loc_usage || null,
         proof_of_purpose_of_rental,
         discount_code:             form.discount_code  || null,
