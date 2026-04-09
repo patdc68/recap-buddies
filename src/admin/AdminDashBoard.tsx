@@ -1149,20 +1149,21 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
       </Box>
 
       <Paper elevation={0} sx={{ border: `1px solid ${BORDER}`, borderRadius: 3, overflow: 'hidden' }}>
-        {/* Header */}
-        <Box sx={{ display: 'grid', gridTemplateColumns: COLS, gap: 1, px: 2.5, py: 1.5, background: 'rgba(201,151,58,0.05)', borderBottom: `1px solid ${BORDER}` }}>
-          {HEADERS.map((h, i) => (
-            <Typography key={i} sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>{h}</Typography>
-          ))}
-        </Box>
+        <Box sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
+          {/* Header */}
+          <Box sx={{ display: 'grid', gridTemplateColumns: COLS, minWidth: 900, gap: 1, px: 2.5, py: 1.5, background: 'rgba(201,151,58,0.05)', borderBottom: `1px solid ${BORDER}` }}>
+            {HEADERS.map((h, i) => (
+              <Typography key={i} sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>{h}</Typography>
+            ))}
+          </Box>
 
-        {/* Rows */}
-        {displayed.length === 0
-          ? <Box sx={{ textAlign: 'center', py: 6 }}><Typography sx={{ color: MUTED, fontFamily: '"Sora", sans-serif', fontSize: '0.85rem' }}>No items match the current filters.</Typography></Box>
-          : displayed.map((item, idx) => {
-              const sc = ITEM_STATUS_COLORS[item.status] ?? ITEM_STATUS_COLORS['Available'];
-              return (
-                <Box key={item.id} sx={{ display: 'grid', gridTemplateColumns: COLS, gap: 1, px: 2.5, py: 1.75, alignItems: 'center', borderBottom: idx < displayed.length - 1 ? `1px solid ${BORDER}` : 'none', background: idx % 2 === 0 ? CARD_BG : 'rgba(201,151,58,0.015)', '&:hover': { background: 'rgba(201,151,58,0.06)' }, transition: 'background 0.15s' }}>
+          {/* Rows */}
+          {displayed.length === 0
+            ? <Box sx={{ minWidth: 900, textAlign: 'center', py: 6 }}><Typography sx={{ color: MUTED, fontFamily: '"Sora", sans-serif', fontSize: '0.85rem' }}>No items match the current filters.</Typography></Box>
+            : displayed.map((item, idx) => {
+                const sc = ITEM_STATUS_COLORS[item.status] ?? ITEM_STATUS_COLORS['Available'];
+                return (
+                  <Box key={item.id} sx={{ display: 'grid', gridTemplateColumns: COLS, minWidth: 900, gap: 1, px: 2.5, py: 1.75, alignItems: 'center', borderBottom: idx < displayed.length - 1 ? `1px solid ${BORDER}` : 'none', background: idx % 2 === 0 ? CARD_BG : 'rgba(201,151,58,0.015)', '&:hover': { background: 'rgba(201,151,58,0.06)' }, transition: 'background 0.15s' }}>
                   {/* Image */}
                   <Box sx={{ position: 'relative', width: 60, cursor: item.device?.device_img ? 'pointer' : 'default' }} onClick={() => item.device?.device_img && setViewImg(item.device.device_img)}>
                     {item.device?.device_img
@@ -1214,9 +1215,10 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
                       </IconButton>
                     </Tooltip>
                   </Box>
-                </Box>
-              );
-            })}
+                  </Box>
+                );
+              })}
+        </Box>
       </Paper>
 
       <AddDeviceDialog open={addDeviceOpen} onClose={() => setAddDeviceOpen(false)} onSaved={onRefresh} />
