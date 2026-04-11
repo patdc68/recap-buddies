@@ -742,7 +742,7 @@ const RenterRegistration: React.FC = () => {
                 onChange={(e) => setAcceptedTerms(e.target.checked)}
               />
             )}
-            label="I have read and agree to the terms and conditions."
+            label="By checking this box, you acknowledge that you have read and agreed to all terms & will proceed to the collection of your data under DATA PRIVACY ACT of 2012 of the Republic of the Philippines with Krystal Gutierrez of Recap Buddies PH to facilitate your reservations."
           />
         </DialogContent>
         <DialogActions>
