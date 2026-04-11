@@ -7,7 +7,6 @@ By entering into this agreement, the parties below acknowledge and accept their 
 ● the camera should be returned on how it was given on the start of the rental date. ensure to have it sufficiently charged, complete accessories and safely stored in the provided bag. 
 
 
-
 **Leasing terms:**
 
 ● the owner may waive the penalty only if the delay is caused by factors under the owner's responsibility, such as delays involving in-house drivers due to traffic or other similar reasons. however, if the delay is caused by the renter—for example, due to late transfer of files, undeclared itinerary change, missing items or accessories, and other related issues — a penalty of Php 150.00 per hour will be charged.
@@ -21,7 +20,6 @@ By entering into this agreement, the parties below acknowledge and accept their 
 ● if the renter fails to save their files and requests us to store them, we are not liable for any file corruption or loss that may occur. we will make reasonable efforts to assist in recovering or fixing corrupted files, but we cannot guarantee successful retrieval. if the renter corrupted or damaged the sd card, he/she will be charged a full marketplace of a new sd card. only the owner can buy a new sd card to ensure the authenticity of the card. receipt will be provided for transparency purposes.
 
 
-
 **Cancellations, Fees & Penalties:**
 
 ● the owner will provide the proposed fees, such as rental fees, upon inquiry. once accepted, the support group will provide a designated link at least 2 days before your rental dates to provide all the details and such as booking, payment, and rider’s details for final verification. all communications will be thereon after.
@@ -33,11 +31,3 @@ By entering into this agreement, the parties below acknowledge and accept their 
 ● If the renter is not responsive, fails to cooperate, or cannot be reached, the owner reserves the right to pursue all available legal remedies to recover the equipment. the renter acknowledges that continued failure to return the equipment or failure to respond to the owner' s attempts to contact will lead to further legal proceedings, including the pursuit of the full rental value costs, and any other applicable charges. 
 * For lost and damaged items, below price list as of july 21, 2025 will be collected or charged accordingly to this link: T\&C; in addition to the list, minor scratches are charged at Php 500.00 / area while major permanent scratches and dents will undergo evaluation on the final cost. on top of it, succeeding days that the device is not returned in proper condition or in repair will be collected to the renter since it will be a loss profit on our company.
 ● This agreement, along with any attached exhibits, constitutes the complete understanding between the renter and the owner regarding the subject matter herein. it supersedes all prior agreements, representations, or dealings between the parties. the terms of this agreement are accepted by the renter upon receipt of the terms, whether delivered directly to the renter or to an agent or representative of the renter.
-
-
-**By checking this box, you acknowledge that you have read and agreed to all terms \& will proceed to the collection of your data under "DATA PRIVACY ACT of 2012 of the Republic of the Philippines" with Krystal Gutierrez of Recap Buddies PH to facilitate your reservations.** 
-
-
-
-
-
