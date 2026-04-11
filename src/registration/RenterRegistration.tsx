@@ -18,6 +18,12 @@ import {
   Stepper,
   Step,
   StepLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
+  FormControlLabel,
+  Checkbox,
   type SelectChangeEvent,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -33,6 +39,7 @@ import type { RbSelfieVerificationInst } from '../service/supabaseClient';
 import PageLayout from '../components/PageLayout';
 import CameraCapture from '../components/CameraCapture';
 import FileUpload, { type FileUploadResult } from '../components/FileUpload';
+import rentalContractAgreement from '../../official rental contract agreement.md?raw';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -379,6 +386,8 @@ const RenterRegistration: React.FC = () => {
   const [submitError, setSubmitError]               = useState('');
   const [done, setDone]                             = useState(false);
   const [countdown, setCountdown]                   = useState(3);
+  const [termsOpen, setTermsOpen]                   = useState(false);
+  const [acceptedTerms, setAcceptedTerms]           = useState(false);
 
   useEffect(() => {
     supabase
@@ -550,6 +559,17 @@ const RenterRegistration: React.FC = () => {
     }
   };
 
+  const handleReviewAndSubmit = () => {
+    if (!validate()) return;
+    setTermsOpen(true);
+  };
+
+  const handleConfirmSubmit = async () => {
+    if (!acceptedTerms) return;
+    setTermsOpen(false);
+    await handleSubmit();
+  };
+
   // ── Derived ───────────────────────────────────────────────────────────────────
 
   const progress = (activeStep / STEPS.length) * 100;
@@ -694,12 +714,50 @@ const RenterRegistration: React.FC = () => {
           <Button
             variant="contained"
             endIcon={submitting ? <CircularProgress size={16} sx={{ color: '#0A0F1E' }} /> : <CheckCircleIcon />}
-            onClick={handleSubmit} disabled={submitting} sx={{ minWidth: 200 }}
+            onClick={handleReviewAndSubmit} disabled={submitting} sx={{ minWidth: 200 }}
           >
             {submitting ? 'Submitting…' : 'Complete Registration'}
           </Button>
         )}
       </Box>
+
+      <Dialog
+        open={termsOpen}
+        onClose={() => setTermsOpen(false)}
+        fullWidth
+        maxWidth="md"
+      >
+        <DialogTitle>Official Rental Contract Agreement</DialogTitle>
+        <DialogContent dividers>
+          <Typography
+            variant="body2"
+            sx={{ whiteSpace: 'pre-wrap', color: '#3A2A12', lineHeight: 1.7, mb: 2 }}
+          >
+            {rentalContractAgreement}
+          </Typography>
+          <FormControlLabel
+            control={(
+              <Checkbox
+                checked={acceptedTerms}
+                onChange={(e) => setAcceptedTerms(e.target.checked)}
+              />
+            )}
+            label="I have read and agree to the terms and conditions."
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={() => setTermsOpen(false)} disabled={submitting}>
+            Cancel
+          </Button>
+          <Button
+            variant="contained"
+            onClick={handleConfirmSubmit}
+            disabled={!acceptedTerms || submitting}
+          >
+            Agree & Submit
+          </Button>
+        </DialogActions>
+      </Dialog>
 
       {/* Mobile step dots */}
       <Box sx={{ display: { xs: 'flex', md: 'none' }, justifyContent: 'center', gap: 0.75, mt: 3 }}>
