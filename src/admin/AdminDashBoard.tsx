@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Box, Typography, Paper, Chip, Button, CircularProgress, Avatar,
   Tabs, Tab, Divider, IconButton, Dialog, DialogTitle, DialogContent,
@@ -119,6 +119,15 @@ interface EnrichedRental extends RbRentalForm {
   returnBranch?: RbBranch;
 }
 
+interface DailyEvent {
+  id: string;
+  rentalId: string;
+  date: string;
+  title: string;
+  status: string;
+  rental: EnrichedRental;
+}
+
 // ─── Small helpers ────────────────────────────────────────────────────────────
 
 const InfoBox: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
@@ -135,6 +144,33 @@ const getRentalDayCount = (startDate: string, endDate: string) => {
   const end = dayjs(endDate).startOf('day');
   return Math.max(end.diff(start, 'day'), 1);
 };
+
+const expandReservations = (reservations: EnrichedRental[]): DailyEvent[] =>
+  reservations.flatMap((rental) => {
+    const start = dayjs(rental.rent_date_start).startOf('day');
+    const end = dayjs(rental.rent_date_end).startOf('day');
+    const totalDays = Math.max(end.diff(start, 'day'), 0);
+    const title = rental.renter?.renter_fname ?? rental.item?.code_name ?? '?';
+
+    return Array.from({ length: totalDays + 1 }, (_, offset) => {
+      const date = start.add(offset, 'day').format('YYYY-MM-DD');
+      return {
+        id: `${rental.id}-${date}`,
+        rentalId: rental.id,
+        date,
+        title,
+        status: rental.status,
+        rental,
+      };
+    });
+  });
+
+const groupEventsByDate = (events: DailyEvent[]): Record<string, DailyEvent[]> =>
+  events.reduce<Record<string, DailyEvent[]>>((acc, event) => {
+    if (!acc[event.date]) acc[event.date] = [];
+    acc[event.date].push(event);
+    return acc;
+  }, {});
 
 // ─── Rental Detail Dialog ─────────────────────────────────────────────────────
 
@@ -623,8 +659,69 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, st
   );
 };
 
+const DayEvents: React.FC<{ events: DailyEvent[]; onEventClick: (rental: EnrichedRental) => void; onMoreClick?: (events: DailyEvent[]) => void }> = ({
+  events,
+  onEventClick,
+  onMoreClick,
+}) => {
+  const visibleEvents = events.slice(0, 3);
+  const hiddenCount = Math.max(events.length - visibleEvents.length, 0);
+
+  return (
+    <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 0.5, overflow: 'hidden' }}>
+      {visibleEvents.map((event) => {
+        const meta = RENTAL_STATUS_META[event.status] ?? RENTAL_STATUS_META.submitted;
+        return (
+          <Box
+            key={event.id}
+            onClick={() => onEventClick(event.rental)}
+            sx={{
+              height: 16,
+              px: 0.6,
+              borderRadius: 1,
+              border: `1px solid ${meta.border}`,
+              background: meta.bg,
+              color: meta.color,
+              fontSize: '0.58rem',
+              fontFamily: '"Sora", sans-serif',
+              fontWeight: 700,
+              display: 'flex',
+              alignItems: 'center',
+              whiteSpace: 'nowrap',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              cursor: 'pointer',
+              '&:hover': { filter: 'brightness(0.96)' },
+            }}
+            title={event.title}
+          >
+            {event.title}
+          </Box>
+        );
+      })}
+      {hiddenCount > 0 && (
+        <Typography
+          onClick={() => onMoreClick?.(events)}
+          sx={{
+            color: MUTED,
+            fontSize: '0.6rem',
+            fontFamily: '"Sora", sans-serif',
+            fontWeight: 700,
+            cursor: 'pointer',
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          +{hiddenCount} more
+        </Typography>
+      )}
+    </Box>
+  );
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
-// TAB 1 — CALENDAR (Teams-style continuous span bars, first name label)
+// TAB 1 — CALENDAR (TimeTree-style daily events)
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; onSave: (id: string, status: string) => Promise<void> }> = ({ rentals, items, onSave }) => {
@@ -643,6 +740,36 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
 
   const filtered = selectedCamera === 'all' ? rentals : rentals.filter((r) => r.cam_name_id_fk === selectedCamera);
+  const expandedReservations = useMemo(() => expandReservations(filtered), [filtered]);
+  const groupedEventsByDate = useMemo(() => groupEventsByDate(expandedReservations), [expandedReservations]);
+
+  const handleMoreClick = useCallback((events: DailyEvent[]) => {
+    // stub for future popover / modal expansion
+    console.log('Show more events for day:', events[0]?.date, events.length);
+  }, []);
+
+  const renderDay = (day: Dayjs) => {
+    const dayKey = day.format('YYYY-MM-DD');
+    const isCurrentMonth = day.month() === currentMonth.month();
+    const isToday = day.isSame(dayjs(), 'day');
+    const dayEvents = groupedEventsByDate[dayKey] ?? [];
+
+    return (
+      <Box key={dayKey} sx={{
+        minHeight: 84,
+        borderRadius: 1.5,
+        border: isToday ? `2px solid ${AMBER}` : `1px solid ${BORDER}`,
+        background: isCurrentMonth ? CARD_BG : 'rgba(201,151,58,0.015)',
+        p: 0.75,
+        overflow: 'hidden',
+      }}>
+        <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Sora", sans-serif', fontWeight: isToday ? 800 : 500, color: isToday ? AMBER : isCurrentMonth ? ESPRESSO : MUTED, lineHeight: 1 }}>
+          {day.format('D')}
+        </Typography>
+        <DayEvents events={dayEvents} onEventClick={setSelectedRental} onMoreClick={handleMoreClick} />
+      </Box>
+    );
+  };
 
   return (
     <Box>
@@ -682,101 +809,13 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
         ))}
       </Box>
 
-      {/* Weekly rows with spanning bars */}
+      {/* Weekly rows with per-day events */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        {weeks.map((week, wi) => {
-          const weekStart = week[0];
-          const weekEnd   = week[6];
-          const weekRentals = filtered.filter((r) =>
-            dayjs(r.rent_date_start).isSameOrBefore(weekEnd, 'day') &&
-            dayjs(r.rent_date_end).isSameOrAfter(weekStart, 'day')
-          );
-          const sortedWeekRentals = [...weekRentals].sort((a, b) =>
-            dayjs(a.rent_date_start).valueOf() - dayjs(b.rent_date_start).valueOf()
-          );
-
-          const slotMap: Record<string, number> = {};
-          const slotEndCols: number[] = [];
-          sortedWeekRentals.forEach((r) => {
-            const rStart = dayjs(r.rent_date_start);
-            const rEnd = dayjs(r.rent_date_end);
-            const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
-            const colEnd = rEnd.isAfter(weekEnd, 'day') ? 6 : rEnd.day();
-
-            let assignedSlot = slotEndCols.findIndex((endCol) => colStart > endCol);
-            if (assignedSlot === -1) {
-              assignedSlot = slotEndCols.length;
-              slotEndCols.push(colEnd);
-            } else {
-              slotEndCols[assignedSlot] = colEnd;
-            }
-            slotMap[r.id] = assignedSlot;
-          });
-
-          return (
-            <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', position: 'relative', mb: '2px' }}>
-              {/* Day cells */}
-              {week.map((day) => {
-                const isCurrentMonth = day.month() === currentMonth.month();
-                const isToday        = day.isSame(dayjs(), 'day');
-                return (
-                  <Box key={day.format('YYYY-MM-DD')} sx={{
-                    minHeight: 84,
-                    borderRadius: 1.5,
-                    border: isToday ? `2px solid ${AMBER}` : `1px solid ${BORDER}`,
-                    background: isCurrentMonth ? CARD_BG : 'rgba(201,151,58,0.015)',
-                    pt: 0.75, px: 0.75, pb: '36px',
-                  }}>
-                    <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Sora", sans-serif', fontWeight: isToday ? 800 : 500, color: isToday ? AMBER : isCurrentMonth ? ESPRESSO : MUTED, lineHeight: 1 }}>
-                      {day.format('D')}
-                    </Typography>
-                  </Box>
-                );
-              })}
-
-              {/* Spanning rental bars */}
-              {sortedWeekRentals.map((r) => {
-                const rStart   = dayjs(r.rent_date_start);
-                const rEnd     = dayjs(r.rent_date_end);
-                const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
-                const colEnd   = rEnd.isAfter(weekEnd, 'day')      ? 6 : rEnd.day();
-                const spanCols = colEnd - colStart + 1;
-                const isStart  = rStart.isSameOrAfter(weekStart, 'day') && rStart.isSameOrBefore(weekEnd, 'day');
-                const isEnd    = rEnd.isSameOrAfter(weekStart, 'day')   && rEnd.isSameOrBefore(weekEnd, 'day');
-                const slot     = slotMap[r.id] ?? 0;
-                const meta     = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META.submitted;
-                const firstName = r.renter?.renter_fname ?? r.item?.code_name ?? '?';
-
-                return (
-                  <Box
-                    key={r.id}
-                    onClick={() => setSelectedRental(r)}
-                    sx={{
-                      position: 'absolute',
-                      top:   `${26 + slot * 19}px`,
-                      left:  `calc(${(colStart / 7) * 100}% + 2px)`,
-                      width: `calc(${(spanCols  / 7) * 100}% - 4px)`,
-                      height: 16,
-                      background: meta.bg,
-                      border: `1px solid ${meta.border}`,
-                      borderRadius: isStart && isEnd ? '5px' : isStart ? '5px 0 0 5px' : isEnd ? '0 5px 5px 0' : '0',
-                      cursor: 'pointer', zIndex: 5,
-                      display: 'flex', alignItems: 'center', px: 0.75, overflow: 'hidden',
-                      '&:hover': { filter: 'brightness(0.9)', zIndex: 10 },
-                      transition: 'filter 0.12s',
-                    }}
-                  >
-                    {isStart && (
-                      <Typography sx={{ fontSize: '0.6rem', color: meta.color, fontFamily: '"Sora", sans-serif', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {firstName}
-                      </Typography>
-                    )}
-                  </Box>
-                );
-              })}
-            </Box>
-          );
-        })}
+        {weeks.map((week, wi) => (
+          <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', mb: '2px' }}>
+            {week.map(renderDay)}
+          </Box>
+        ))}
       </Box>
 
       {/* Legend — statuses relevant to calendar scheduling */}
