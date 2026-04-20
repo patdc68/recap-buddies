@@ -3,7 +3,7 @@ import {
   Box, Typography, Paper, Chip, Button, CircularProgress, Avatar,
   Tabs, Tab, Divider, IconButton, Dialog, DialogTitle, DialogContent,
   DialogActions, Select, MenuItem, FormControl, InputLabel, FormHelperText,
-  Switch, FormControlLabel, Tooltip, type SelectChangeEvent,
+  Switch, FormControlLabel, Tooltip, Fade, type SelectChangeEvent,
 } from '@mui/material';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
@@ -152,23 +152,29 @@ const expandReservations = (reservations: EnrichedRental[]): DailyEvent[] =>
   reservations.flatMap((rental) => {
     const start = dayjs(rental.rent_date_start).startOf('day');
     const end = dayjs(rental.rent_date_end).startOf('day');
-    const totalDays = Math.max(end.diff(start, 'day'), 0);
     const title = rental.renter?.renter_fname ?? rental.item?.code_name ?? '?';
+    const events: DailyEvent[] = [];
+    let current = start;
+    let dayOffset = 0;
 
-    return Array.from({ length: totalDays + 1 }, (_, offset) => {
-      const date = start.add(offset, 'day').format('YYYY-MM-DD');
-      return {
+    while (current.isBefore(end, 'day') || current.isSame(end, 'day')) {
+      const date = current.format('YYYY-MM-DD');
+      events.push({
         id: `${rental.id}-${date}`,
         rentalId: rental.id,
         reservationId: rental.id,
         date,
         title,
         status: rental.status,
-        isStart: offset === 0,
-        isEnd: offset === totalDays,
+        isStart: dayOffset === 0,
+        isEnd: current.isSame(end, 'day'),
         rental,
-      };
-    });
+      });
+      current = current.add(1, 'day');
+      dayOffset += 1;
+    }
+
+    return events;
   });
 
 const groupEventsByDate = (events: DailyEvent[]): Record<string, DailyEvent[]> =>
@@ -696,6 +702,10 @@ const DayEvents: React.FC<{
     const rowIndex = rowIndexByReservation[event.reservationId] ?? Number.MAX_SAFE_INTEGER;
     return rowIndex >= maxVisibleRows ? count + 1 : count;
   }, 0);
+  const hiddenStartCount = events.reduce((count, event) => {
+    const rowIndex = rowIndexByReservation[event.reservationId] ?? Number.MAX_SAFE_INTEGER;
+    return rowIndex >= maxVisibleRows && event.isStart ? count + 1 : count;
+  }, 0);
 
   return (
     <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 0.5, overflow: 'hidden' }}>
@@ -725,7 +735,7 @@ const DayEvents: React.FC<{
               background,
               color: '#fff',
               width: '100%',
-              mr: '-2px',
+              mr: '-4px',
               fontSize: '11px',
               fontFamily: '"Sora", sans-serif',
               fontWeight: 700,
@@ -744,7 +754,7 @@ const DayEvents: React.FC<{
           </Box>
         );
       })}
-      {hiddenCount > 0 && (
+      {hiddenCount > 0 && hiddenStartCount > 0 && (
         <Typography
           onClick={() => onMoreClick?.(dateKey)}
           sx={{
@@ -759,7 +769,7 @@ const DayEvents: React.FC<{
             textOverflow: 'ellipsis',
           }}
         >
-          +{hiddenCount} more
+          +{hiddenStartCount} more
         </Typography>
       )}
     </Box>
@@ -815,9 +825,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
     const dayKey = day.format('YYYY-MM-DD');
     const isCurrentMonth = day.month() === currentMonth.month();
     const isToday = day.isSame(dayjs(), 'day');
-    const dayEvents = (groupedEventsByDate[dayKey] ?? []).sort((a, b) => {
-      return (rowIndexByReservation[a.reservationId] ?? 0) - (rowIndexByReservation[b.reservationId] ?? 0);
-    });
+    const dayEvents = groupedEventsByDate[dayKey] ?? [];
 
     return (
       <Box key={dayKey} sx={{
@@ -842,7 +850,11 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
     );
   };
 
-  const selectedDateEvents = selectedDate ? groupedEventsByDate[selectedDate] ?? [] : [];
+  const selectedDateEvents = selectedDate
+    ? [...(groupedEventsByDate[selectedDate] ?? [])].sort((a, b) => {
+      return (rowIndexByReservation[a.reservationId] ?? 0) - (rowIndexByReservation[b.reservationId] ?? 0);
+    })
+    : [];
 
   return (
     <Box>
@@ -919,12 +931,14 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
         onClose={handleCloseDialog}
         maxWidth="xs"
         fullWidth
-        PaperProps={{ sx: { borderRadius: 3, border: `1px solid ${BORDER}`, background: CARD_BG } }}
+        TransitionComponent={Fade}
+        PaperProps={{ sx: { borderRadius: '12px', border: `1px solid ${BORDER}`, background: CARD_BG } }}
       >
         <DialogTitle sx={{ fontFamily: '"Playfair Display", serif', color: ESPRESSO, pb: 1 }}>
           {selectedDate ? dayjs(selectedDate).format('MMMM D, YYYY') : 'Events'}
         </DialogTitle>
-        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1, pt: 1 }}>
+        <Divider />
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1, pt: 1.5, maxHeight: 360, overflowY: 'auto' }}>
           {selectedDateEvents.length === 0 ? (
             <Typography sx={{ color: MUTED, fontSize: '0.85rem' }}>No events for this date.</Typography>
           ) : (
@@ -933,20 +947,32 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                 key={`${event.id}-dialog`}
                 onClick={() => setSelectedRental(event.rental)}
                 sx={{
-                  px: 1,
-                  py: 0.75,
-                  borderRadius: 1.5,
-                  background: getReservationColor(event.reservationId),
-                  color: '#fff',
+                  p: '10px',
+                  borderRadius: '8px',
+                  background: '#f5f5f5',
+                  mb: '8px',
+                  border: `1px solid ${BORDER}`,
                   cursor: 'pointer',
                 }}
               >
-                <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, lineHeight: 1.2 }}>
-                  {event.title}
-                </Typography>
-                <Typography sx={{ fontSize: '0.68rem', opacity: 0.9 }}>
-                  {event.isStart && event.isEnd ? 'Start & End' : event.isStart ? 'Start' : event.isEnd ? 'End' : 'Continuing'}
-                </Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
+                  <Typography sx={{ fontSize: '0.78rem', fontWeight: 700, lineHeight: 1.2, color: ESPRESSO }}>
+                    {event.title}
+                  </Typography>
+                  {(event.isStart || event.isEnd) && (
+                    <Chip
+                      size="small"
+                      label={event.isStart && event.isEnd ? 'Start & End' : event.isStart ? 'Start' : 'End'}
+                      sx={{
+                        height: 20,
+                        fontSize: '0.62rem',
+                        fontWeight: 700,
+                        background: event.isStart ? 'rgba(46, 125, 50, 0.12)' : 'rgba(2, 136, 209, 0.12)',
+                        color: event.isStart ? '#1B5E20' : '#01579B',
+                      }}
+                    />
+                  )}
+                </Box>
               </Box>
             ))
           )}
