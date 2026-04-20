@@ -122,9 +122,12 @@ interface EnrichedRental extends RbRentalForm {
 interface DailyEvent {
   id: string;
   rentalId: string;
+  reservationId: string;
   date: string;
   title: string;
   status: string;
+  isStart: boolean;
+  isEnd: boolean;
   rental: EnrichedRental;
 }
 
@@ -157,9 +160,12 @@ const expandReservations = (reservations: EnrichedRental[]): DailyEvent[] =>
       return {
         id: `${rental.id}-${date}`,
         rentalId: rental.id,
+        reservationId: rental.id,
         date,
         title,
         status: rental.status,
+        isStart: offset === 0,
+        isEnd: offset === totalDays,
         rental,
       };
     });
@@ -171,6 +177,11 @@ const groupEventsByDate = (events: DailyEvent[]): Record<string, DailyEvent[]> =
     acc[event.date].push(event);
     return acc;
   }, {});
+
+const getReservationColor = (reservationId: string) => {
+  const hash = reservationId.split('').reduce((acc, char) => ((acc * 31) + char.charCodeAt(0)) % 360, 0);
+  return `hsl(${hash}, 72%, 44%)`;
+};
 
 // ─── Rental Detail Dialog ─────────────────────────────────────────────────────
 
@@ -659,34 +670,68 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, st
   );
 };
 
-const DayEvents: React.FC<{ events: DailyEvent[]; onEventClick: (rental: EnrichedRental) => void; onMoreClick?: (events: DailyEvent[]) => void }> = ({
+const DayEvents: React.FC<{
+  dateKey: string;
+  events: DailyEvent[];
+  rowIndexByReservation: Record<string, number>;
+  onEventClick: (rental: EnrichedRental) => void;
+  onMoreClick?: (dateKey: string) => void;
+}> = ({
+  dateKey,
   events,
+  rowIndexByReservation,
   onEventClick,
   onMoreClick,
 }) => {
-  const visibleEvents = events.slice(0, 3);
-  const hiddenCount = Math.max(events.length - visibleEvents.length, 0);
+  const maxVisibleRows = 3;
+  const eventsByRow = useMemo(() => {
+    return events.reduce<Record<number, DailyEvent>>((acc, event) => {
+      const rowIndex = rowIndexByReservation[event.reservationId];
+      if (rowIndex !== undefined) acc[rowIndex] = event;
+      return acc;
+    }, {});
+  }, [events, rowIndexByReservation]);
+
+  const hiddenCount = events.reduce((count, event) => {
+    const rowIndex = rowIndexByReservation[event.reservationId] ?? Number.MAX_SAFE_INTEGER;
+    return rowIndex >= maxVisibleRows ? count + 1 : count;
+  }, 0);
 
   return (
     <Box sx={{ mt: 0.75, display: 'flex', flexDirection: 'column', gap: 0.5, overflow: 'hidden' }}>
-      {visibleEvents.map((event) => {
-        const meta = RENTAL_STATUS_META[event.status] ?? RENTAL_STATUS_META.submitted;
+      {Array.from({ length: maxVisibleRows }, (_, rowIndex) => {
+        const event = eventsByRow[rowIndex];
+        if (!event) {
+          return <Box key={`empty-${dateKey}-${rowIndex}`} sx={{ height: 16 }} />;
+        }
+
+        const background = getReservationColor(event.reservationId);
+        const borderRadius = event.isStart && event.isEnd
+          ? '6px'
+          : event.isStart
+            ? '6px 0 0 6px'
+            : event.isEnd
+              ? '0 6px 6px 0'
+              : 0;
+
         return (
           <Box
             key={event.id}
             onClick={() => onEventClick(event.rental)}
             sx={{
               height: 16,
-              px: 0.6,
-              borderRadius: 1,
-              border: `1px solid ${meta.border}`,
-              background: meta.bg,
-              color: meta.color,
-              fontSize: '0.58rem',
+              px: '6px',
+              borderRadius,
+              background,
+              color: '#fff',
+              width: '100%',
+              mr: '-2px',
+              fontSize: '11px',
               fontFamily: '"Sora", sans-serif',
               fontWeight: 700,
               display: 'flex',
               alignItems: 'center',
+              boxSizing: 'border-box',
               whiteSpace: 'nowrap',
               overflow: 'hidden',
               textOverflow: 'ellipsis',
@@ -701,13 +746,14 @@ const DayEvents: React.FC<{ events: DailyEvent[]; onEventClick: (rental: Enriche
       })}
       {hiddenCount > 0 && (
         <Typography
-          onClick={() => onMoreClick?.(events)}
+          onClick={() => onMoreClick?.(dateKey)}
           sx={{
             color: MUTED,
             fontSize: '0.6rem',
             fontFamily: '"Sora", sans-serif',
             fontWeight: 700,
             cursor: 'pointer',
+            textDecoration: 'underline',
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
@@ -728,6 +774,8 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
   const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
   const [selectedCamera, setSelectedCamera] = useState('all');
   const [selectedRental, setSelectedRental] = useState<EnrichedRental | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
 
   const calStart = currentMonth.startOf('month').startOf('week');
   const calEnd   = currentMonth.endOf('month').endOf('week');
@@ -742,17 +790,34 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
   const filtered = selectedCamera === 'all' ? rentals : rentals.filter((r) => r.cam_name_id_fk === selectedCamera);
   const expandedReservations = useMemo(() => expandReservations(filtered), [filtered]);
   const groupedEventsByDate = useMemo(() => groupEventsByDate(expandedReservations), [expandedReservations]);
+  const rowIndexByReservation = useMemo(() => {
+    const sorted = [...filtered].sort((a, b) => {
+      const startDiff = dayjs(a.rent_date_start).valueOf() - dayjs(b.rent_date_start).valueOf();
+      return startDiff !== 0 ? startDiff : a.id.localeCompare(b.id);
+    });
 
-  const handleMoreClick = useCallback((events: DailyEvent[]) => {
-    // stub for future popover / modal expansion
-    console.log('Show more events for day:', events[0]?.date, events.length);
+    return sorted.reduce<Record<string, number>>((acc, rental, index) => {
+      acc[rental.id] = index;
+      return acc;
+    }, {});
+  }, [filtered]);
+
+  const handleMoreClick = useCallback((dateKey: string) => {
+    setSelectedDate(dateKey);
+    setDialogOpen(true);
+  }, []);
+
+  const handleCloseDialog = useCallback(() => {
+    setDialogOpen(false);
   }, []);
 
   const renderDay = (day: Dayjs) => {
     const dayKey = day.format('YYYY-MM-DD');
     const isCurrentMonth = day.month() === currentMonth.month();
     const isToday = day.isSame(dayjs(), 'day');
-    const dayEvents = groupedEventsByDate[dayKey] ?? [];
+    const dayEvents = (groupedEventsByDate[dayKey] ?? []).sort((a, b) => {
+      return (rowIndexByReservation[a.reservationId] ?? 0) - (rowIndexByReservation[b.reservationId] ?? 0);
+    });
 
     return (
       <Box key={dayKey} sx={{
@@ -766,10 +831,18 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
         <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Sora", sans-serif', fontWeight: isToday ? 800 : 500, color: isToday ? AMBER : isCurrentMonth ? ESPRESSO : MUTED, lineHeight: 1 }}>
           {day.format('D')}
         </Typography>
-        <DayEvents events={dayEvents} onEventClick={setSelectedRental} onMoreClick={handleMoreClick} />
+        <DayEvents
+          dateKey={dayKey}
+          events={dayEvents}
+          rowIndexByReservation={rowIndexByReservation}
+          onEventClick={setSelectedRental}
+          onMoreClick={handleMoreClick}
+        />
       </Box>
     );
   };
+
+  const selectedDateEvents = selectedDate ? groupedEventsByDate[selectedDate] ?? [] : [];
 
   return (
     <Box>
@@ -840,6 +913,45 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
           onSave={onSave}
         />
       )}
+
+      <Dialog
+        open={dialogOpen}
+        onClose={handleCloseDialog}
+        maxWidth="xs"
+        fullWidth
+        PaperProps={{ sx: { borderRadius: 3, border: `1px solid ${BORDER}`, background: CARD_BG } }}
+      >
+        <DialogTitle sx={{ fontFamily: '"Playfair Display", serif', color: ESPRESSO, pb: 1 }}>
+          {selectedDate ? dayjs(selectedDate).format('MMMM D, YYYY') : 'Events'}
+        </DialogTitle>
+        <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1, pt: 1 }}>
+          {selectedDateEvents.length === 0 ? (
+            <Typography sx={{ color: MUTED, fontSize: '0.85rem' }}>No events for this date.</Typography>
+          ) : (
+            selectedDateEvents.map((event) => (
+              <Box
+                key={`${event.id}-dialog`}
+                onClick={() => setSelectedRental(event.rental)}
+                sx={{
+                  px: 1,
+                  py: 0.75,
+                  borderRadius: 1.5,
+                  background: getReservationColor(event.reservationId),
+                  color: '#fff',
+                  cursor: 'pointer',
+                }}
+              >
+                <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, lineHeight: 1.2 }}>
+                  {event.title}
+                </Typography>
+                <Typography sx={{ fontSize: '0.68rem', opacity: 0.9 }}>
+                  {event.isStart && event.isEnd ? 'Start & End' : event.isStart ? 'Start' : event.isEnd ? 'End' : 'Continuing'}
+                </Typography>
+              </Box>
+            ))
+          )}
+        </DialogContent>
+      </Dialog>
     </Box>
   );
 };
