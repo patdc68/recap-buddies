@@ -126,6 +126,9 @@ export interface RbRentalForm {
   delivery_addr: string | null;
   hub_return_addr: string | null;    // FK → RB_BRANCHES.id
   return_addr: string | null;
+  remarks: string | null;
+  messenger_link: string | null;
+  rent_price: number | null;
   status: RentalStatus;
   created_at: string;
 }
