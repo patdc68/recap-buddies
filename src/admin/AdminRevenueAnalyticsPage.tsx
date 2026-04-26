@@ -74,7 +74,9 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
     rentals.forEach((r) => {
       const camKey = r.item?.device_id_fk ?? r.cam_name_id_fk;
       const camName = r.item?.device?.cam_name ?? 'Unknown Camera';
-      const revenue = Number(r.rent_price ?? 0) || 0;
+      const unitPrice = Number(r.rent_price ?? 0) || 0;
+      const rentalDays = Math.max(dayjs(r.rent_date_end).diff(dayjs(r.rent_date_start), 'day'), 0);
+      const revenue = unitPrice * rentalDays;
 
       if (!byCamera[camKey]) {
         byCamera[camKey] = { camera: camName, rentals: 0, revenue: 0 };
@@ -125,7 +127,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
             <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '1.2rem' }}>
               Monthly Revenue Analytics — {dayjs(`${selectedYear}-${selectedMonth}-01`).format('MMMM YYYY')}
             </Typography>
-            <Typography sx={{ color: MUTED, fontSize: '0.82rem' }}>Per-camera revenue using saved rental form prices.</Typography>
+            <Typography sx={{ color: MUTED, fontSize: '0.82rem' }}>Per-camera revenue computed as rent price × rental duration.</Typography>
           </Box>
         </Box>
 
