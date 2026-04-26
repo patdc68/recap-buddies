@@ -778,12 +778,14 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
             startDayCounts[startKey] = (startDayCounts[startKey] ?? 0) + 1;
           });
 
+          const MAX_VISIBLE_START_ITEMS = 3;
+          const FIRST_ITEM_TOP_MARGIN_PX = 5;
           const startDayVisibleCounts: Record<string, number> = {};
           const hiddenStartRentalIds = new Set<string>();
           sortedWeekRentals.forEach((r) => {
             const startKey = dayjs(r.rent_date_start).format('YYYY-MM-DD');
             const visibleCount = startDayVisibleCounts[startKey] ?? 0;
-            if ((startDayCounts[startKey] ?? 0) >= 4 && visibleCount >= 3) {
+            if ((startDayCounts[startKey] ?? 0) > MAX_VISIBLE_START_ITEMS && visibleCount >= MAX_VISIBLE_START_ITEMS) {
               hiddenStartRentalIds.add(r.id);
             } else {
               startDayVisibleCounts[startKey] = visibleCount + 1;
@@ -794,8 +796,8 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
             .map((day) => {
               const dayKey = day.format('YYYY-MM-DD');
               const totalStarting = startDayCounts[dayKey] ?? 0;
-              if (totalStarting < 4) return null;
-              const hiddenCount = Math.max(totalStarting - 3, 0);
+              if (totalStarting <= MAX_VISIBLE_START_ITEMS) return null;
+              const hiddenCount = Math.max(totalStarting - MAX_VISIBLE_START_ITEMS, 0);
               return hiddenCount > 0 ? { day, hiddenCount } : null;
             })
             .filter((entry): entry is { day: Dayjs; hiddenCount: number } => !!entry);
@@ -840,7 +842,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                     onClick={() => setSelectedRental(r)}
                     sx={{
                       position: 'absolute',
-                      top:   `${26 + slot * 19}px`,
+                      top:   `${26 + FIRST_ITEM_TOP_MARGIN_PX + slot * 19}px`,
                       left:  `calc(${(colStart / 7) * 100}% + 2px)`,
                       width: `calc(${(spanCols  / 7) * 100}% - 4px)`,
                       height: 16,
