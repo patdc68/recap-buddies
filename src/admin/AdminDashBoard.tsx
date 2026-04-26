@@ -872,7 +872,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                   }}
                   sx={{
                     position: 'absolute',
-                    top: '26px',
+                    top: '62px',
                     left: `calc(${(day.day() / 7) * 100}% + 6px)`,
                     minWidth: 0,
                     px: 0.8,
@@ -1314,8 +1314,8 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
     return matchStatus && matchSearch;
   });
 
-  const COLS = '90px 1fr 120px 100px 150px 110px 56px 52px 48px';
-  const HEADERS = ['Image', 'Camera · Code', 'Serial No.', 'Rent Price', 'Condition', 'GPS', '', ''];
+  const COLS = '90px 1fr 120px 150px 110px 56px 52px 48px';
+  const HEADERS = ['Image', 'Camera · Code', 'Serial No.', 'Condition', 'GPS', '', '', ''];
 
   return (
     <Box>
@@ -1385,12 +1385,6 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
                   </Box>
 
                   <Typography sx={{ color: MUTED, fontSize: '0.78rem', fontFamily: 'monospace' }}>{item.serial_no}</Typography>
-
-                  {/* Rent price */}
-                  <Typography sx={{ color: item.rent_price ? '#2E7D32' : MUTED, fontSize: '0.82rem', fontWeight: item.rent_price ? 600 : 400 }}>
-                    {item.rent_price ? `₱${item.rent_price.toLocaleString()}` : '—'}
-                  </Typography>
-
                   {/* Status — read-only chip */}
                   {/* <Chip label={item.status} size="small" sx={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.68rem', height: 22, width: 'fit-content' }} /> */}
 
