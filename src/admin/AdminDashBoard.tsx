@@ -778,8 +778,8 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
             startDayCounts[startKey] = (startDayCounts[startKey] ?? 0) + 1;
           });
 
-          const MAX_VISIBLE_START_ITEMS = 3;
-          const FIRST_ITEM_TOP_MARGIN_PX = 5;
+          const MAX_VISIBLE_START_ITEMS = 2;
+          const FIRST_ITEM_TOP_MARGIN_PX = 10;
           const startDayVisibleCounts: Record<string, number> = {};
           const hiddenStartRentalIds = new Set<string>();
           sortedWeekRentals.forEach((r) => {
