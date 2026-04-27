@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import {
   Box, Typography, Paper, Chip, Button, CircularProgress, Avatar,
   Tabs, Tab, Divider, IconButton, Dialog, DialogTitle, DialogContent,
@@ -27,8 +27,6 @@ import LogoutIcon             from '@mui/icons-material/Logout';
 import CameraAltIcon          from '@mui/icons-material/CameraAlt';
 import AddIcon                from '@mui/icons-material/Add';
 import EditIcon               from '@mui/icons-material/Edit';
-import ChevronLeftIcon        from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon       from '@mui/icons-material/ChevronRight';
 import LocalShippingIcon      from '@mui/icons-material/LocalShipping';
 import StorefrontIcon         from '@mui/icons-material/Storefront';
 import CalendarTodayIcon      from '@mui/icons-material/CalendarToday';
@@ -45,6 +43,14 @@ import VerifiedUserIcon       from '@mui/icons-material/VerifiedUser';
 import OpenInNewIcon          from '@mui/icons-material/OpenInNew';
 import DeleteIcon             from '@mui/icons-material/Delete';
 import FilterListIcon         from '@mui/icons-material/FilterList';
+import FullCalendar from '@fullcalendar/react';
+import dayGridPlugin from '@fullcalendar/daygrid';
+import interactionPlugin from '@fullcalendar/interaction';
+import type { EventClickArg, EventContentArg } from '@fullcalendar/core';
+
+import '@fullcalendar/core/index.css';
+import '@fullcalendar/daygrid/index.css';
+import './adminDashboardCalendar.css';
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
@@ -106,7 +112,6 @@ const RENTAL_TO_ITEM_STATUS: Partial<Record<string, ItemStatus>> = {
 };
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -685,39 +690,56 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
 // TAB 1 — CALENDAR (Teams-style continuous span bars, first name label)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; onSave: (id: string, updates: { status: string; remarks: string; messenger_link: string; rent_price: string }) => Promise<void> }> = ({ rentals, items, onSave }) => {
-  const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
+const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; onSave: (id: string, updates: { status: string; remarks: string; messenger_link: string; rent_price: string }) => Promise<void> }> = ({ rentals, items }) => {
   const [selectedCamera, setSelectedCamera] = useState('all');
   const [selectedRental, setSelectedRental] = useState<EnrichedRental | null>(null);
-  const [listDialog, setListDialog] = useState<{ date: Dayjs; rentals: EnrichedRental[] } | null>(null);
-
-  const calStart = currentMonth.startOf('month').startOf('week');
-  const calEnd   = currentMonth.endOf('month').endOf('week');
-
-  const days: Dayjs[] = [];
-  let cur = calStart;
-  while (cur.isSameOrBefore(calEnd, 'day')) { days.push(cur); cur = cur.add(1, 'day'); }
-
-  const weeks: Dayjs[][] = [];
-  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
 
   const filtered = selectedCamera === 'all' ? rentals : rentals.filter((r) => r.cam_name_id_fk === selectedCamera);
+  const events = useMemo(() => (
+    filtered.map((rental) => {
+      const renterName = rental.renter
+        ? `${rental.renter.renter_fname} ${rental.renter.renter_lname}`
+        : 'Unknown renter';
+      return {
+        id: rental.id,
+        title: renterName,
+        start: dayjs(rental.rent_date_start).format('YYYY-MM-DD'),
+        // FullCalendar expects all-day event end as exclusive.
+        end: dayjs(rental.rent_date_end).add(1, 'day').format('YYYY-MM-DD'),
+        backgroundColor: RENTAL_STATUS_META[rental.status]?.bg ?? 'rgba(252,165,165,0.35)',
+        borderColor: RENTAL_STATUS_META[rental.status]?.border ?? 'rgba(252,165,165,0.8)',
+        textColor: RENTAL_STATUS_META[rental.status]?.color ?? '#7A4F00',
+        extendedProps: {
+          camera_name: rental.item?.device?.cam_name ?? '—',
+          renter_name: renterName,
+          contact_number: rental.renter?.mobile_no ?? '—',
+          remarks: rental.remarks ?? '—',
+          messenger_link: rental.messenger_link ?? '',
+          rent_price: rental.rent_price != null ? String(rental.rent_price) : '—',
+        },
+      };
+    })
+  ), [filtered]);
+
+  const renderEventContent = (arg: EventContentArg) => {
+    if (arg.isStart) {
+      return { html: `<div class="fc-event-title">${arg.event.title}</div>` };
+    }
+    return { html: '<div class="fc-event-continue"></div>' };
+  };
+
+  const handleEventClick = (info: EventClickArg) => {
+    const rental = filtered.find((entry) => entry.id === info.event.id) ?? null;
+    setSelectedRental(rental);
+  };
 
   return (
     <Box>
       {/* Controls */}
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <IconButton onClick={() => setCurrentMonth((m) => m.subtract(1, 'month'))} size="small" sx={{ color: AMBER, border: `1px solid ${BORDER}`, '&:hover': { background: 'rgba(201,151,58,0.08)' } }}>
-            <ChevronLeftIcon />
-          </IconButton>
-          <Typography sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', fontWeight: 700, fontSize: '1.2rem', minWidth: 180, textAlign: 'center' }}>
-            {currentMonth.format('MMMM YYYY')}
-          </Typography>
-          <IconButton onClick={() => setCurrentMonth((m) => m.add(1, 'month'))} size="small" sx={{ color: AMBER, border: `1px solid ${BORDER}`, '&:hover': { background: 'rgba(201,151,58,0.08)' } }}>
-            <ChevronRightIcon />
-          </IconButton>
-        </Box>
+        <Typography sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', fontWeight: 700, fontSize: '1.2rem' }}>
+          Rental Calendar
+        </Typography>
 
         <FormControl size="small" sx={{ minWidth: 260 }}>
           <InputLabel sx={{ color: MUTED, fontSize: '0.82rem' }}>Filter by camera</InputLabel>
@@ -732,171 +754,27 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
         </FormControl>
       </Box>
 
-      {/* Day headers */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', mb: 0.5 }}>
-        {DAYS.map((d) => (
-          <Box key={d} sx={{ textAlign: 'center', py: 0.75 }}>
-            <Typography sx={{ color: MUTED, fontFamily: '"Sora", sans-serif', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{d}</Typography>
-          </Box>
-        ))}
-      </Box>
-
-      {/* Weekly rows with spanning bars */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        {weeks.map((week, wi) => {
-          const weekStart = week[0];
-          const weekEnd   = week[6];
-          const weekRentals = filtered.filter((r) =>
-            dayjs(r.rent_date_start).isSameOrBefore(weekEnd, 'day') &&
-            dayjs(r.rent_date_end).isSameOrAfter(weekStart, 'day')
-          );
-          const sortedWeekRentals = [...weekRentals].sort((a, b) =>
-            dayjs(a.rent_date_start).valueOf() - dayjs(b.rent_date_start).valueOf()
-          );
-
-          const slotMap: Record<string, number> = {};
-          const slotEndCols: number[] = [];
-          sortedWeekRentals.forEach((r) => {
-            const rStart = dayjs(r.rent_date_start);
-            const rEnd = dayjs(r.rent_date_end);
-            const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
-            const colEnd = rEnd.isAfter(weekEnd, 'day') ? 6 : rEnd.day();
-
-            let assignedSlot = slotEndCols.findIndex((endCol) => colStart > endCol);
-            if (assignedSlot === -1) {
-              assignedSlot = slotEndCols.length;
-              slotEndCols.push(colEnd);
-            } else {
-              slotEndCols[assignedSlot] = colEnd;
-            }
-            slotMap[r.id] = assignedSlot;
-          });
-
-          const startDayCounts: Record<string, number> = {};
-          filtered.forEach((r) => {
-            const startKey = dayjs(r.rent_date_start).format('YYYY-MM-DD');
-            startDayCounts[startKey] = (startDayCounts[startKey] ?? 0) + 1;
-          });
-
-          const MAX_VISIBLE_START_ITEMS = 2;
-          const FIRST_ITEM_TOP_MARGIN_PX = 10;
-          const startDayVisibleCounts: Record<string, number> = {};
-          const hiddenStartRentalIds = new Set<string>();
-          sortedWeekRentals.forEach((r) => {
-            const startKey = dayjs(r.rent_date_start).format('YYYY-MM-DD');
-            const visibleCount = startDayVisibleCounts[startKey] ?? 0;
-            if ((startDayCounts[startKey] ?? 0) > MAX_VISIBLE_START_ITEMS && visibleCount >= MAX_VISIBLE_START_ITEMS) {
-              hiddenStartRentalIds.add(r.id);
-            } else {
-              startDayVisibleCounts[startKey] = visibleCount + 1;
-            }
-          });
-
-          const moreIndicators = week
-            .map((day) => {
-              const dayKey = day.format('YYYY-MM-DD');
-              const totalStarting = startDayCounts[dayKey] ?? 0;
-              if (totalStarting <= MAX_VISIBLE_START_ITEMS) return null;
-              const hiddenCount = Math.max(totalStarting - MAX_VISIBLE_START_ITEMS, 0);
-              return hiddenCount > 0 ? { day, hiddenCount } : null;
-            })
-            .filter((entry): entry is { day: Dayjs; hiddenCount: number } => !!entry);
-
-          return (
-            <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', position: 'relative', mb: '2px' }}>
-              {/* Day cells */}
-              {week.map((day) => {
-                const isCurrentMonth = day.month() === currentMonth.month();
-                const isToday        = day.isSame(dayjs(), 'day');
-                return (
-                  <Box key={day.format('YYYY-MM-DD')} sx={{
-                    minHeight: 84,
-                    borderRadius: 1.5,
-                    border: isToday ? `2px solid ${AMBER}` : `1px solid ${BORDER}`,
-                    background: isCurrentMonth ? CARD_BG : 'rgba(201,151,58,0.015)',
-                    pt: 0.75, px: 0.75, pb: '36px',
-                  }}>
-                    <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Sora", sans-serif', fontWeight: isToday ? 800 : 500, color: isToday ? AMBER : isCurrentMonth ? ESPRESSO : MUTED, lineHeight: 1 }}>
-                      {day.format('D')}
-                    </Typography>
-                  </Box>
-                );
-              })}
-
-              {/* Spanning rental bars */}
-              {sortedWeekRentals.filter((r) => !hiddenStartRentalIds.has(r.id)).map((r) => {
-                const rStart   = dayjs(r.rent_date_start);
-                const rEnd     = dayjs(r.rent_date_end);
-                const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
-                const colEnd   = rEnd.isAfter(weekEnd, 'day')      ? 6 : rEnd.day();
-                const spanCols = colEnd - colStart + 1;
-                const isStart  = rStart.isSameOrAfter(weekStart, 'day') && rStart.isSameOrBefore(weekEnd, 'day');
-                const isEnd    = rEnd.isSameOrAfter(weekStart, 'day')   && rEnd.isSameOrBefore(weekEnd, 'day');
-                const slot     = slotMap[r.id] ?? 0;
-                const meta     = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META.submitted;
-                const firstName = r.renter?.renter_fname ?? r.item?.code_name ?? '?';
-
-                return (
-                  <Box
-                    key={r.id}
-                    onClick={() => setSelectedRental(r)}
-                    sx={{
-                      position: 'absolute',
-                      top:   `${26 + FIRST_ITEM_TOP_MARGIN_PX + slot * 19}px`,
-                      left:  `calc(${(colStart / 7) * 100}% + 2px)`,
-                      width: `calc(${(spanCols  / 7) * 100}% - 4px)`,
-                      height: 16,
-                      background: meta.bg,
-                      border: `1px solid ${meta.border}`,
-                      borderRadius: isStart && isEnd ? '5px' : isStart ? '5px 0 0 5px' : isEnd ? '0 5px 5px 0' : '0',
-                      cursor: 'pointer', zIndex: 5,
-                      display: 'flex', alignItems: 'center', px: 0.75, overflow: 'hidden',
-                      '&:hover': { filter: 'brightness(0.9)', zIndex: 10 },
-                      transition: 'filter 0.12s',
-                    }}
-                  >
-                    {isStart && (
-                      <Typography sx={{ fontSize: '0.6rem', color: meta.color, fontFamily: '"Sora", sans-serif', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {firstName}
-                      </Typography>
-                    )}
-                  </Box>
-                );
-              })}
-
-              {moreIndicators.map(({ day, hiddenCount }) => (
-                <Button
-                  key={`more-${day.format('YYYY-MM-DD')}`}
-                  size="small"
-                  onClick={() => {
-                    const dayRentals = filtered.filter((r) => dayjs(r.rent_date_start).isSame(day, 'day'));
-                    setListDialog({ date: day, rentals: dayRentals });
-                  }}
-                  sx={{
-                    position: 'absolute',
-                    top: '62px',
-                    left: `calc(${(day.day() / 7) * 100}% + 6px)`,
-                    minWidth: 0,
-                    px: 0.8,
-                    py: 0.1,
-                    lineHeight: 1.2,
-                    fontSize: '0.65rem',
-                    fontFamily: '"Sora", sans-serif',
-                    textTransform: 'none',
-                    color: AMBER_DARK,
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: 1.5,
-                    background: 'rgba(201,151,58,0.10)',
-                    zIndex: 8,
-                    '&:hover': { background: 'rgba(201,151,58,0.18)' },
-                  }}
-                >
-                  +{hiddenCount} more
-                </Button>
-              ))}
-            </Box>
-          );
-        })}
+      <Box sx={{ borderRadius: 3, border: `1px solid ${BORDER}`, p: 1.5, boxShadow: '0 8px 24px rgba(26,16,8,0.06)', background: CARD_BG }}>
+        <FullCalendar
+          plugins={[dayGridPlugin, interactionPlugin]}
+          initialView="dayGridMonth"
+          height="auto"
+          selectable
+          selectMirror
+          dayMaxEvents={3}
+          events={events}
+          eventClick={handleEventClick}
+          eventContent={renderEventContent}
+          moreLinkClick="popover"
+          headerToolbar={{
+            left: 'prev,next today',
+            center: 'title',
+            right: '',
+          }}
+          buttonText={{ today: 'Today' }}
+          fixedWeekCount={false}
+          dayHeaderFormat={{ weekday: 'short' }}
+        />
       </Box>
 
       {/* Legend — statuses relevant to calendar scheduling */}
@@ -912,49 +790,43 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
         })}
       </Box>
 
-      {listDialog && (
-        <Dialog
-          open={!!listDialog}
-          onClose={() => setListDialog(null)}
-          maxWidth="sm"
-          fullWidth
-          PaperProps={{ sx: { background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 3 } }}
-        >
+      {selectedRental && (
+        <Dialog open={!!selectedRental} onClose={() => setSelectedRental(null)} maxWidth="sm" fullWidth
+          PaperProps={{ sx: { background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 3, boxShadow: '0 18px 40px rgba(26,16,8,0.22)' } }}>
           <DialogTitle sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            Bookings — {listDialog.date.format('MMM D, YYYY')}
-            <IconButton onClick={() => setListDialog(null)} size="small" sx={{ color: MUTED }}>
+            Rental Details
+            <IconButton onClick={() => setSelectedRental(null)} size="small" sx={{ color: MUTED }}>
               <CloseIcon fontSize="small" />
             </IconButton>
           </DialogTitle>
           <DialogContent sx={{ pt: 1 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {listDialog.rentals.map((r) => (
-                <Box
-                  key={r.id}
-                  onClick={() => {
-                    setSelectedRental(r);
-                    setListDialog(null);
-                  }}
-                  sx={{ p: 1.4, borderRadius: 2, border: `1px solid ${BORDER}`, background: 'rgba(201,151,58,0.04)', cursor: 'pointer', '&:hover': { background: 'rgba(201,151,58,0.09)' } }}
-                >
-                  <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.86rem' }}>{r.item?.device?.cam_name ?? '—'}</Typography>
-                  <Typography sx={{ color: INK, fontSize: '0.8rem' }}>{r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—'}</Typography>
-                  <Typography sx={{ color: MUTED, fontSize: '0.76rem' }}>{r.renter?.mobile_no ?? 'No contact number'}</Typography>
+            <Box sx={{ display: 'grid', gap: 1.2 }}>
+              {[
+                { label: 'Camera Name', val: selectedRental.item?.device?.cam_name ?? '—' },
+                { label: 'Renter Name', val: selectedRental.renter ? `${selectedRental.renter.renter_fname} ${selectedRental.renter.renter_lname}` : '—' },
+                { label: 'Contact Number', val: selectedRental.renter?.mobile_no ?? '—' },
+                { label: 'Remarks', val: selectedRental.remarks ?? '—' },
+                { label: 'Rent Price', val: selectedRental.rent_price != null ? `₱${selectedRental.rent_price}` : '—' },
+              ].map((field) => (
+                <Box key={field.label} sx={{ p: 1.2, borderRadius: 2, border: `1px solid ${BORDER}`, background: 'rgba(201,151,58,0.04)' }}>
+                  <Typography sx={{ color: MUTED, fontSize: '0.74rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>{field.label}</Typography>
+                  <Typography sx={{ color: ESPRESSO, fontSize: '0.9rem', fontWeight: 600 }}>{field.val}</Typography>
                 </Box>
               ))}
+              <Box sx={{ p: 1.2, borderRadius: 2, border: `1px solid ${BORDER}`, background: 'rgba(201,151,58,0.04)' }}>
+                <Typography sx={{ color: MUTED, fontSize: '0.74rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Messenger Link</Typography>
+                {selectedRental.messenger_link ? (
+                  <Typography component="a" href={selectedRental.messenger_link} target="_blank" rel="noreferrer"
+                    sx={{ color: AMBER_DARK, fontSize: '0.9rem', fontWeight: 600, textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                    Open conversation
+                  </Typography>
+                ) : (
+                  <Typography sx={{ color: ESPRESSO, fontSize: '0.9rem', fontWeight: 600 }}>—</Typography>
+                )}
+              </Box>
             </Box>
           </DialogContent>
         </Dialog>
-      )}
-
-      {/* Rental detail — opens verification page if pending */}
-      {selectedRental && (
-        <RentalDetailDialog
-          rental={selectedRental}
-          open={!!selectedRental}
-          onClose={() => setSelectedRental(null)}
-          onSave={onSave}
-        />
       )}
     </Box>
   );
