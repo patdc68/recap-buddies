@@ -741,7 +741,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
         ))}
       </Box>
 
-      {/* Weekly rows with spanning bars */}
+      {/* Weekly rows with per-day stacked segments */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
         {weeks.map((week, wi) => {
           const weekStart = week[0];
@@ -772,128 +772,132 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
             slotMap[r.id] = assignedSlot;
           });
 
-          const startDayCounts: Record<string, number> = {};
-          filtered.forEach((r) => {
-            const startKey = dayjs(r.rent_date_start).format('YYYY-MM-DD');
-            startDayCounts[startKey] = (startDayCounts[startKey] ?? 0) + 1;
-          });
+          type DayRentalSegment = {
+            rental: EnrichedRental;
+            slot: number;
+            isSegmentStart: boolean;
+            isSegmentEnd: boolean;
+          };
 
-          const MAX_VISIBLE_START_ITEMS = 2;
-          const FIRST_ITEM_TOP_MARGIN_PX = 10;
-          const startDayVisibleCounts: Record<string, number> = {};
-          const hiddenStartRentalIds = new Set<string>();
+          const segmentsByDay: Record<string, DayRentalSegment[]> = {};
+          week.forEach((d) => { segmentsByDay[d.format('YYYY-MM-DD')] = []; });
+
           sortedWeekRentals.forEach((r) => {
-            const startKey = dayjs(r.rent_date_start).format('YYYY-MM-DD');
-            const visibleCount = startDayVisibleCounts[startKey] ?? 0;
-            if ((startDayCounts[startKey] ?? 0) > MAX_VISIBLE_START_ITEMS && visibleCount >= MAX_VISIBLE_START_ITEMS) {
-              hiddenStartRentalIds.add(r.id);
-            } else {
-              startDayVisibleCounts[startKey] = visibleCount + 1;
+            const rStart = dayjs(r.rent_date_start);
+            const rEnd   = dayjs(r.rent_date_end);
+            const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
+            const colEnd   = rEnd.isAfter(weekEnd, 'day') ? 6 : rEnd.day();
+            const slot = slotMap[r.id] ?? 0;
+
+            for (let col = colStart; col <= colEnd; col += 1) {
+              const day = week[col];
+              const key = day.format('YYYY-MM-DD');
+              segmentsByDay[key].push({
+                rental: r,
+                slot,
+                isSegmentStart: day.isSame(rStart, 'day') || col === colStart,
+                isSegmentEnd: day.isSame(rEnd, 'day') || col === colEnd,
+              });
             }
           });
 
-          const moreIndicators = week
-            .map((day) => {
-              const dayKey = day.format('YYYY-MM-DD');
-              const totalStarting = startDayCounts[dayKey] ?? 0;
-              if (totalStarting <= MAX_VISIBLE_START_ITEMS) return null;
-              const hiddenCount = Math.max(totalStarting - MAX_VISIBLE_START_ITEMS, 0);
-              return hiddenCount > 0 ? { day, hiddenCount } : null;
-            })
-            .filter((entry): entry is { day: Dayjs; hiddenCount: number } => !!entry);
+          Object.values(segmentsByDay).forEach((daySegments) => {
+            daySegments.sort((a, b) => a.slot - b.slot);
+          });
+
+          const MAX_VISIBLE_PER_DAY = 3;
 
           return (
-            <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', position: 'relative', mb: '2px' }}>
+            <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', mb: '2px' }}>
               {/* Day cells */}
               {week.map((day) => {
                 const isCurrentMonth = day.month() === currentMonth.month();
                 const isToday        = day.isSame(dayjs(), 'day');
+                const dayKey = day.format('YYYY-MM-DD');
+                const daySegments = segmentsByDay[dayKey] ?? [];
+                const visibleSegments = daySegments.slice(0, MAX_VISIBLE_PER_DAY);
+                const hiddenCount = Math.max(daySegments.length - MAX_VISIBLE_PER_DAY, 0);
+
                 return (
                   <Box key={day.format('YYYY-MM-DD')} sx={{
-                    minHeight: 84,
+                    minHeight: 96,
                     borderRadius: 1.5,
                     border: isToday ? `2px solid ${AMBER}` : `1px solid ${BORDER}`,
                     background: isCurrentMonth ? CARD_BG : 'rgba(201,151,58,0.015)',
-                    pt: 0.75, px: 0.75, pb: '36px',
+                    pt: 0.75,
+                    px: 0.5,
+                    pb: 0.75,
+                    overflow: 'hidden',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: '4px',
                   }}>
                     <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Sora", sans-serif', fontWeight: isToday ? 800 : 500, color: isToday ? AMBER : isCurrentMonth ? ESPRESSO : MUTED, lineHeight: 1 }}>
                       {day.format('D')}
                     </Typography>
-                  </Box>
-                );
-              })}
+                    {visibleSegments.map(({ rental, isSegmentStart, isSegmentEnd }) => {
+                      const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META.submitted;
+                      const firstName = rental.renter?.renter_fname ?? rental.item?.code_name ?? '?';
+                      return (
+                        <Box
+                          key={`${rental.id}-${dayKey}`}
+                          onClick={() => setSelectedRental(rental)}
+                          sx={{
+                            height: 16,
+                            minHeight: 16,
+                            background: meta.bg,
+                            border: `1px solid ${meta.border}`,
+                            borderRadius: isSegmentStart && isSegmentEnd ? '5px' : isSegmentStart ? '5px 0 0 5px' : isSegmentEnd ? '0 5px 5px 0' : '0',
+                            cursor: 'pointer',
+                            display: 'flex',
+                            alignItems: 'center',
+                            px: 0.6,
+                            overflow: 'hidden',
+                            '&:hover': { filter: 'brightness(0.9)' },
+                            transition: 'filter 0.12s',
+                          }}
+                        >
+                          {isSegmentStart && (
+                            <Typography sx={{ fontSize: '0.6rem', color: meta.color, fontFamily: '"Sora", sans-serif', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {firstName}
+                            </Typography>
+                          )}
+                        </Box>
+                      );
+                    })}
 
-              {/* Spanning rental bars */}
-              {sortedWeekRentals.filter((r) => !hiddenStartRentalIds.has(r.id)).map((r) => {
-                const rStart   = dayjs(r.rent_date_start);
-                const rEnd     = dayjs(r.rent_date_end);
-                const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
-                const colEnd   = rEnd.isAfter(weekEnd, 'day')      ? 6 : rEnd.day();
-                const spanCols = colEnd - colStart + 1;
-                const isStart  = rStart.isSameOrAfter(weekStart, 'day') && rStart.isSameOrBefore(weekEnd, 'day');
-                const isEnd    = rEnd.isSameOrAfter(weekStart, 'day')   && rEnd.isSameOrBefore(weekEnd, 'day');
-                const slot     = slotMap[r.id] ?? 0;
-                const meta     = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META.submitted;
-                const firstName = r.renter?.renter_fname ?? r.item?.code_name ?? '?';
-
-                return (
-                  <Box
-                    key={r.id}
-                    onClick={() => setSelectedRental(r)}
-                    sx={{
-                      position: 'absolute',
-                      top:   `${26 + FIRST_ITEM_TOP_MARGIN_PX + slot * 19}px`,
-                      left:  `calc(${(colStart / 7) * 100}% + 2px)`,
-                      width: `calc(${(spanCols  / 7) * 100}% - 4px)`,
-                      height: 16,
-                      background: meta.bg,
-                      border: `1px solid ${meta.border}`,
-                      borderRadius: isStart && isEnd ? '5px' : isStart ? '5px 0 0 5px' : isEnd ? '0 5px 5px 0' : '0',
-                      cursor: 'pointer', zIndex: 5,
-                      display: 'flex', alignItems: 'center', px: 0.75, overflow: 'hidden',
-                      '&:hover': { filter: 'brightness(0.9)', zIndex: 10 },
-                      transition: 'filter 0.12s',
-                    }}
-                  >
-                    {isStart && (
-                      <Typography sx={{ fontSize: '0.6rem', color: meta.color, fontFamily: '"Sora", sans-serif', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {firstName}
-                      </Typography>
+                    {hiddenCount > 0 && (
+                      <Button
+                        size="small"
+                        onClick={() => {
+                          const dayRentals = filtered.filter((r) =>
+                            dayjs(r.rent_date_start).isSameOrBefore(day, 'day') &&
+                            dayjs(r.rent_date_end).isSameOrAfter(day, 'day')
+                          );
+                          setListDialog({ date: day, rentals: dayRentals });
+                        }}
+                        sx={{
+                          alignSelf: 'flex-start',
+                          minWidth: 0,
+                          px: 0.8,
+                          py: 0.1,
+                          lineHeight: 1.2,
+                          fontSize: '0.65rem',
+                          fontFamily: '"Sora", sans-serif',
+                          textTransform: 'none',
+                          color: AMBER_DARK,
+                          border: `1px solid ${BORDER}`,
+                          borderRadius: 1.5,
+                          background: 'rgba(201,151,58,0.10)',
+                          '&:hover': { background: 'rgba(201,151,58,0.18)' },
+                        }}
+                      >
+                        +{hiddenCount} more
+                      </Button>
                     )}
                   </Box>
                 );
               })}
-
-              {moreIndicators.map(({ day, hiddenCount }) => (
-                <Button
-                  key={`more-${day.format('YYYY-MM-DD')}`}
-                  size="small"
-                  onClick={() => {
-                    const dayRentals = filtered.filter((r) => dayjs(r.rent_date_start).isSame(day, 'day'));
-                    setListDialog({ date: day, rentals: dayRentals });
-                  }}
-                  sx={{
-                    position: 'absolute',
-                    top: '62px',
-                    left: `calc(${(day.day() / 7) * 100}% + 6px)`,
-                    minWidth: 0,
-                    px: 0.8,
-                    py: 0.1,
-                    lineHeight: 1.2,
-                    fontSize: '0.65rem',
-                    fontFamily: '"Sora", sans-serif',
-                    textTransform: 'none',
-                    color: AMBER_DARK,
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: 1.5,
-                    background: 'rgba(201,151,58,0.10)',
-                    zIndex: 8,
-                    '&:hover': { background: 'rgba(201,151,58,0.18)' },
-                  }}
-                >
-                  +{hiddenCount} more
-                </Button>
-              ))}
             </Box>
           );
         })}
