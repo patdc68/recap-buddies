@@ -772,32 +772,20 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
             slotMap[r.id] = assignedSlot;
           });
 
-          const startDayCounts: Record<string, number> = {};
-          filtered.forEach((r) => {
-            const startKey = dayjs(r.rent_date_start).format('YYYY-MM-DD');
-            startDayCounts[startKey] = (startDayCounts[startKey] ?? 0) + 1;
-          });
-
-          const MAX_VISIBLE_START_ITEMS = 2;
-          const FIRST_ITEM_TOP_MARGIN_PX = 10;
-          const startDayVisibleCounts: Record<string, number> = {};
-          const hiddenStartRentalIds = new Set<string>();
+          const MAX_VISIBLE_ROWS = 3;
+          const hiddenByStartDay: Record<string, number> = {};
           sortedWeekRentals.forEach((r) => {
-            const startKey = dayjs(r.rent_date_start).format('YYYY-MM-DD');
-            const visibleCount = startDayVisibleCounts[startKey] ?? 0;
-            if ((startDayCounts[startKey] ?? 0) > MAX_VISIBLE_START_ITEMS && visibleCount >= MAX_VISIBLE_START_ITEMS) {
-              hiddenStartRentalIds.add(r.id);
-            } else {
-              startDayVisibleCounts[startKey] = visibleCount + 1;
-            }
+            const slot = slotMap[r.id] ?? 0;
+            if (slot < MAX_VISIBLE_ROWS) return;
+            const rentalStart = dayjs(r.rent_date_start);
+            if (!rentalStart.isSameOrAfter(weekStart, 'day') || !rentalStart.isSameOrBefore(weekEnd, 'day')) return;
+            const startKey = rentalStart.format('YYYY-MM-DD');
+            hiddenByStartDay[startKey] = (hiddenByStartDay[startKey] ?? 0) + 1;
           });
 
           const moreIndicators = week
             .map((day) => {
-              const dayKey = day.format('YYYY-MM-DD');
-              const totalStarting = startDayCounts[dayKey] ?? 0;
-              if (totalStarting <= MAX_VISIBLE_START_ITEMS) return null;
-              const hiddenCount = Math.max(totalStarting - MAX_VISIBLE_START_ITEMS, 0);
+              const hiddenCount = hiddenByStartDay[day.format('YYYY-MM-DD')] ?? 0;
               return hiddenCount > 0 ? { day, hiddenCount } : null;
             })
             .filter((entry): entry is { day: Dayjs; hiddenCount: number } => !!entry);
@@ -810,11 +798,11 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                 const isToday        = day.isSame(dayjs(), 'day');
                 return (
                   <Box key={day.format('YYYY-MM-DD')} sx={{
-                    minHeight: 84,
+                    minHeight: 112,
                     borderRadius: 1.5,
                     border: isToday ? `2px solid ${AMBER}` : `1px solid ${BORDER}`,
                     background: isCurrentMonth ? CARD_BG : 'rgba(201,151,58,0.015)',
-                    pt: 0.75, px: 0.75, pb: '36px',
+                    pt: 0.75, px: 0.75, pb: '44px',
                   }}>
                     <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Sora", sans-serif', fontWeight: isToday ? 800 : 500, color: isToday ? AMBER : isCurrentMonth ? ESPRESSO : MUTED, lineHeight: 1 }}>
                       {day.format('D')}
@@ -824,12 +812,11 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
               })}
 
               {/* Spanning rental bars */}
-              {sortedWeekRentals.filter((r) => !hiddenStartRentalIds.has(r.id)).map((r) => {
+              {sortedWeekRentals.filter((r) => (slotMap[r.id] ?? 0) < MAX_VISIBLE_ROWS).map((r) => {
                 const rStart   = dayjs(r.rent_date_start);
                 const rEnd     = dayjs(r.rent_date_end);
                 const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
                 const colEnd   = rEnd.isAfter(weekEnd, 'day')      ? 6 : rEnd.day();
-                const spanCols = colEnd - colStart + 1;
                 const isStart  = rStart.isSameOrAfter(weekStart, 'day') && rStart.isSameOrBefore(weekEnd, 'day');
                 const isEnd    = rEnd.isSameOrAfter(weekStart, 'day')   && rEnd.isSameOrBefore(weekEnd, 'day');
                 const slot     = slotMap[r.id] ?? 0;
@@ -842,24 +829,37 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                     onClick={() => setSelectedRental(r)}
                     sx={{
                       position: 'absolute',
-                      top:   `${26 + FIRST_ITEM_TOP_MARGIN_PX + slot * 19}px`,
-                      left:  `calc(${(colStart / 7) * 100}% + 2px)`,
-                      width: `calc(${(spanCols  / 7) * 100}% - 4px)`,
+                      top: `${36 + slot * 19}px`,
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(7, 1fr)',
+                      left: 0,
+                      right: 0,
+                      px: '2px',
                       height: 16,
-                      background: meta.bg,
-                      border: `1px solid ${meta.border}`,
-                      borderRadius: isStart && isEnd ? '5px' : isStart ? '5px 0 0 5px' : isEnd ? '0 5px 5px 0' : '0',
                       cursor: 'pointer', zIndex: 5,
-                      display: 'flex', alignItems: 'center', px: 0.75, overflow: 'hidden',
                       '&:hover': { filter: 'brightness(0.9)', zIndex: 10 },
                       transition: 'filter 0.12s',
                     }}
                   >
-                    {isStart && (
-                      <Typography sx={{ fontSize: '0.6rem', color: meta.color, fontFamily: '"Sora", sans-serif', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {firstName}
-                      </Typography>
-                    )}
+                    <Box
+                      sx={{
+                        gridColumn: `${colStart + 1} / ${colEnd + 2}`,
+                        background: meta.bg,
+                        border: `1px solid ${meta.border}`,
+                        borderRadius: isStart && isEnd ? '5px' : isStart ? '5px 0 0 5px' : isEnd ? '0 5px 5px 0' : '0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        px: 0.75,
+                        overflow: 'hidden',
+                        minWidth: 0,
+                      }}
+                    >
+                      {isStart && (
+                        <Typography sx={{ fontSize: '0.6rem', color: meta.color, fontFamily: '"Sora", sans-serif', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {firstName}
+                        </Typography>
+                      )}
+                    </Box>
                   </Box>
                 );
               })}
@@ -874,7 +874,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                   }}
                   sx={{
                     position: 'absolute',
-                    top: '62px',
+                    top: '92px',
                     left: `calc(${(day.day() / 7) * 100}% + 6px)`,
                     minWidth: 0,
                     px: 0.8,
