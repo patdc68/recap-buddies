@@ -140,7 +140,7 @@ const StepCamera: React.FC<StepCameraProps> = ({ items, form, onSelect, errors }
       {errors.cam_name_id_fk && <FormHelperText>{errors.cam_name_id_fk}</FormHelperText>}
     </FormControl>
     <Typography variant="body2" sx={{ color: '#7A6040', fontSize: '0.78rem' }}>
-      All inventory units are listed, including unavailable items. Each unit is identified by its unique code name.
+      Please select a device to proceed.
     </Typography>
   </Box>
 );
