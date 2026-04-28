@@ -22,6 +22,8 @@ import {
   DialogTitle,
   DialogContent,
   DialogActions,
+  IconButton,
+  Tooltip,
   FormControlLabel,
   Checkbox,
   type SelectChangeEvent,
@@ -33,6 +35,7 @@ import FaceIcon from '@mui/icons-material/Face';
 import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
+import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import type { RbSelfieVerificationInst } from '../service/supabaseClient';
@@ -96,6 +99,45 @@ const INIT_PREVIEWS: PreviewMap = {
   secondary_id_front: null, secondary_id_back: null,
   proof_of_billing: null, selfie_verification_img: null,
 };
+
+const PRIMARY_ID_LIST = [
+  'ACR/ICR',
+  'Driver’s License',
+  'GSIS e-Card',
+  'Integrated Bar of the Philippines',
+  'MARINA ID',
+  'NCDA ID',
+  'Passport',
+  'Postal ID (PVC)',
+  'School ID',
+  'Senior Citizen Card',
+  'SSS Card',
+  'UMID',
+  'Voter’s ID',
+  'PhilSys ID',
+];
+
+const SECONDARY_ID_LIST = [
+  'Barangay Certification',
+  'City Health Card',
+  'Company ID',
+  'DSWD Certification',
+  'GOCC ID (AFP, HDMF, etc.)',
+  'NBI Clearance',
+  'OFW ID',
+  'OWWA ID',
+  'Pag-IBIG Loyalty Card',
+  'PhilHealth Card',
+  'Police Clearance',
+  'Postal ID (Paper)',
+  'PRC ID',
+  'Seaman’s Book',
+  'TIN',
+];
+
+const PRIMARY_FRONT_SAMPLE = supabase.storage.from('sample-images').getPublicUrl('primary-id/primary-front.png').data.publicUrl;
+const PRIMARY_BACK_SAMPLE = supabase.storage.from('sample-images').getPublicUrl('primary-id/primary-back.png').data.publicUrl;
+const SECONDARY_SAMPLE = supabase.storage.from('sample-images').getPublicUrl('secondary-id/secondary.jpg').data.publicUrl;
 
 // ─── Layout primitives (replaces Grid entirely) ───────────────────────────────
 
@@ -212,12 +254,20 @@ const StepAccountSetup: React.FC<StepPersonalInfoProps> = ({ form, onText, error
 interface IDStepProps {
   previews: PreviewMap;
   onCapture: (field: ImageField, blob: Blob | null) => void;
+  onOpenGuide: () => void;
 }
 
-const StepPrimaryID: React.FC<IDStepProps> = ({ previews, onCapture }) => (
+const StepPrimaryID: React.FC<IDStepProps> = ({ previews, onCapture, onOpenGuide }) => (
   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
     <Box>
-      <SectionLabel>Primary Government-Issued ID</SectionLabel>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <SectionLabel>Primary Government-Issued ID</SectionLabel>
+        <Tooltip title="View accepted IDs and sample images">
+          <IconButton size="small" onClick={onOpenGuide} sx={{ mb: 1.2, color: '#9A6F24' }}>
+            <InfoOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
       <Typography variant="body2">
         Valid government ID (passport, driver's licence, PhilSys, etc.).
         Photos must be taken live — no uploads allowed.
@@ -244,10 +294,17 @@ const StepPrimaryID: React.FC<IDStepProps> = ({ previews, onCapture }) => (
   </Box>
 );
 
-const StepSecondaryID: React.FC<IDStepProps> = ({ previews, onCapture }) => (
+const StepSecondaryID: React.FC<IDStepProps> = ({ previews, onCapture, onOpenGuide }) => (
   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
     <Box>
-      <SectionLabel>Secondary ID</SectionLabel>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+        <SectionLabel>Secondary ID</SectionLabel>
+        <Tooltip title="View accepted IDs and sample images">
+          <IconButton size="small" onClick={onOpenGuide} sx={{ mb: 1.2, color: '#9A6F24' }}>
+            <InfoOutlinedIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
+      </Box>
       <Typography variant="body2">SSS, TIN card, company ID, etc. — live capture only.</Typography>
     </Box>
     <Row>
@@ -388,6 +445,8 @@ const RenterRegistration: React.FC = () => {
   const [countdown, setCountdown]                   = useState(3);
   const [termsOpen, setTermsOpen]                   = useState(false);
   const [acceptedTerms, setAcceptedTerms]           = useState(false);
+  const [primaryGuideOpen, setPrimaryGuideOpen]     = useState(false);
+  const [secondaryGuideOpen, setSecondaryGuideOpen] = useState(false);
 
   useEffect(() => {
     supabase
@@ -675,8 +734,8 @@ const RenterRegistration: React.FC = () => {
 
         {activeStep === 0 && <StepPersonalInfo form={form} onText={onText} errors={errors} />}
         {activeStep === 1 && <StepAccountSetup form={form} onText={onText} errors={errors} />}
-        {activeStep === 2 && <StepPrimaryID   previews={previews} onCapture={onCapture} />}
-        {activeStep === 3 && <StepSecondaryID previews={previews} onCapture={onCapture} />}
+        {activeStep === 2 && <StepPrimaryID   previews={previews} onCapture={onCapture} onOpenGuide={() => setPrimaryGuideOpen(true)} />}
+        {activeStep === 3 && <StepSecondaryID previews={previews} onCapture={onCapture} onOpenGuide={() => setSecondaryGuideOpen(true)} />}
         {activeStep === 4 && <StepBilling billingFile={billingFile} onBillingFile={setBillingFile} />}
         {activeStep === 5 && (
           <StepSelfie
@@ -756,6 +815,45 @@ const RenterRegistration: React.FC = () => {
           >
             Agree & Submit
           </Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={primaryGuideOpen} onClose={() => setPrimaryGuideOpen(false)} fullWidth maxWidth="md">
+        <DialogTitle sx={{ fontFamily: '"Playfair Display", serif', color: '#1A1008' }}>Primary ID</DialogTitle>
+        <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          <Box component="ul" sx={{ m: 0, pl: 2.5, color: '#3A2A12', display: 'grid', gap: 0.5 }}>
+            {PRIMARY_ID_LIST.map((item) => (
+              <Typography component="li" key={item} variant="body2">{item}</Typography>
+            ))}
+          </Box>
+          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, justifyContent: 'center', alignItems: 'center' }}>
+            {[{ label: 'Front Sample', src: PRIMARY_FRONT_SAMPLE }, { label: 'Back Sample', src: PRIMARY_BACK_SAMPLE }].map((sample) => (
+              <Box key={sample.label} sx={{ textAlign: 'center' }}>
+                <Typography sx={{ fontSize: '0.78rem', color: '#7A6040', mb: 0.75 }}>{sample.label}</Typography>
+                <Box component="img" src={sample.src} alt={sample.label} sx={{ width: '100%', maxWidth: 280, height: 'auto', borderRadius: 2, border: '1px solid rgba(201,151,58,0.25)', boxShadow: '0 6px 20px rgba(26,16,8,0.08)' }} />
+              </Box>
+            ))}
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setPrimaryGuideOpen(false)} variant="contained">Got it</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Dialog open={secondaryGuideOpen} onClose={() => setSecondaryGuideOpen(false)} fullWidth maxWidth="sm">
+        <DialogTitle sx={{ fontFamily: '"Playfair Display", serif', color: '#1A1008' }}>Secondary ID</DialogTitle>
+        <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+          <Box component="ul" sx={{ m: 0, pl: 2.5, color: '#3A2A12', display: 'grid', gap: 0.5 }}>
+            {SECONDARY_ID_LIST.map((item) => (
+              <Typography component="li" key={item} variant="body2">{item}</Typography>
+            ))}
+          </Box>
+          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
+            <Box component="img" src={SECONDARY_SAMPLE} alt="Secondary ID sample" sx={{ width: '100%', maxWidth: 300, height: 'auto', borderRadius: 2, border: '1px solid rgba(201,151,58,0.25)', boxShadow: '0 6px 20px rgba(26,16,8,0.08)' }} />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ px: 3, pb: 2.5 }}>
+          <Button onClick={() => setSecondaryGuideOpen(false)} variant="contained">Got it</Button>
         </DialogActions>
       </Dialog>
 

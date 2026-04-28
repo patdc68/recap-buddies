@@ -111,7 +111,7 @@ const StepCamera: React.FC<StepCameraProps> = ({ items, form, onSelect, errors }
     <SectionLabel>Select the camera you want to rent</SectionLabel>
     {items.length === 0 && (
       <Alert severity="info" sx={{ background: 'rgba(107,142,107,0.06)', border: '1px solid rgba(107,142,107,0.2)', color: '#4A6A4A' }}>
-        No cameras are currently available. Please check back later.
+        No cameras found in inventory.
       </Alert>
     )}
     <FormControl fullWidth error={!!errors.cam_name_id_fk}>
@@ -136,7 +136,19 @@ const StepCamera: React.FC<StepCameraProps> = ({ items, form, onSelect, errors }
                   {item.gps_installed && <GpsFixedIcon sx={{ fontSize: 11, color: '#2E7D32' }} />}
                 </Box>
               </Box>
-              <Chip label="Available" size="small" sx={{ flexShrink: 0, background: 'rgba(105,219,124,0.1)', color: '#2E7D32', border: '1px solid rgba(105,219,124,0.25)', fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', fontWeight: 600 }} />
+              <Chip
+                label={item.status}
+                size="small"
+                sx={{
+                  flexShrink: 0,
+                  background: item.status === 'Available' ? 'rgba(105,219,124,0.1)' : 'rgba(211,47,47,0.08)',
+                  color: item.status === 'Available' ? '#2E7D32' : '#B71C1C',
+                  border: item.status === 'Available' ? '1px solid rgba(105,219,124,0.25)' : '1px solid rgba(211,47,47,0.25)',
+                  fontSize: '0.68rem',
+                  fontFamily: '"Sora", sans-serif',
+                  fontWeight: 600,
+                }}
+              />
             </Box>
           </MenuItem>
         ))}
@@ -144,7 +156,7 @@ const StepCamera: React.FC<StepCameraProps> = ({ items, form, onSelect, errors }
       {errors.cam_name_id_fk && <FormHelperText>{errors.cam_name_id_fk}</FormHelperText>}
     </FormControl>
     <Typography variant="body2" sx={{ color: '#7A6040', fontSize: '0.78rem' }}>
-      Only <strong>Available</strong> units are listed. Each unit is identified by its unique code name.
+      All inventory units are listed, including unavailable items. Each unit is identified by its unique code name.
     </Typography>
   </Box>
 );
@@ -173,14 +185,10 @@ const StepPeriod: React.FC<{ form: RentalForm; setForm: React.Dispatch<React.Set
       {form.rent_date_start && form.rent_date_end && (
         <Paper sx={{ p: 2, background: 'rgba(201,151,58,0.10)', border: '1px solid rgba(201,151,58,0.2)', borderRadius: 2, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
           <Box>
-            <Typography variant="caption" sx={{ color: '#7A6040', textTransform: 'none', letterSpacing: 0 }}>Duration</Typography>
-            <Typography variant="h5" sx={{ color: '#C9973A' }}>{form.rent_date_end.diff(form.rent_date_start, 'day')} days</Typography>
-          </Box>
-          <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(201,151,58,0.15)' }} />
-          <Box>
             <Typography variant="caption" sx={{ color: '#7A6040', textTransform: 'none', letterSpacing: 0 }}>From</Typography>
             <Typography sx={{ color: '#1A1008', fontWeight: 500 }}>{form.rent_date_start.format('MMM D, YYYY')}</Typography>
           </Box>
+          <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(201,151,58,0.15)' }} />
           <Box>
             <Typography variant="caption" sx={{ color: '#7A6040', textTransform: 'none', letterSpacing: 0 }}>To</Typography>
             <Typography sx={{ color: '#1A1008', fontWeight: 500 }}>{form.rent_date_end.format('MMM D, YYYY')}</Typography>
@@ -416,11 +424,9 @@ const RenterForm: React.FC = () => {
 
   useEffect(() => {
     Promise.all([
-      // ── KEY FIX: filter by status='Available' at DB level ──
       supabase
         .from('RB_ITEM')
         .select('*, device:RB_DEVICES(id, cam_name, device_img)')
-        .eq('status', 'Available')          // ← only Available units
         .order('created_at', { ascending: false }),
       supabase.from('RB_BRANCHES').select('*').order('location_name'),
     ]).then(([itemsRes, branchesRes]) => {

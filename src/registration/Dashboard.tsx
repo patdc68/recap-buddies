@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, Paper, Chip, Button, CircularProgress,
-  Alert, Divider, Tabs, Tab, Avatar, Dialog, DialogTitle,
-  DialogContent, DialogActions,
+  Alert, Divider, Tabs, Tab, Avatar,
 } from '@mui/material';
 import CameraAltIcon          from '@mui/icons-material/CameraAlt';
 import CalendarTodayIcon      from '@mui/icons-material/CalendarToday';
@@ -100,54 +99,15 @@ const STATUS_CONFIG: Record<RentalStatus, { label: string; bg: string; color: st
 const isOngoing = (s: RentalStatus) =>
   s !== 'completed' && s !== 'canceled' && s !== 'declined';
 
-// ─── Cancel Confirm Dialog ────────────────────────────────────────────────────
-
-const CancelDialog: React.FC<{
-  open: boolean;
-  onClose: () => void;
-  onConfirm: () => void;
-  canceling: boolean;
-}> = ({ open, onClose, onConfirm, canceling }) => (
-  <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth
-    PaperProps={{ sx: { borderRadius: 3, border: '1px solid rgba(201,151,58,0.18)' } }}>
-    <DialogTitle sx={{ display: 'flex', alignItems: 'center', gap: 1.5, pb: 1 }}>
-      <WarningAmberIcon sx={{ color: '#B71C1C' }} />
-      <Typography sx={{ fontFamily: '"Playfair Display", serif', fontWeight: 700, color: '#1A1008' }}>
-        Cancel Rental?
-      </Typography>
-    </DialogTitle>
-    <DialogContent>
-      <Typography sx={{ color: '#7A6040', fontSize: '0.88rem' }}>
-        This will cancel your rental request. This action cannot be undone.
-      </Typography>
-    </DialogContent>
-    <DialogActions sx={{ px: 3, pb: 2.5, gap: 1 }}>
-      <Button onClick={onClose} variant="outlined" size="small" disabled={canceling}>Keep It</Button>
-      <Button
-        onClick={onConfirm} variant="contained" size="small" color="error"
-        disabled={canceling}
-        startIcon={canceling ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <CancelIcon />}
-        sx={{ background: '#B71C1C', '&:hover': { background: '#8B0000' } }}
-      >
-        {canceling ? 'Canceling…' : 'Yes, Cancel'}
-      </Button>
-    </DialogActions>
-  </Dialog>
-);
-
 // ─── Rental Card ──────────────────────────────────────────────────────────────
 
 const RentalCard: React.FC<{
   rental: EnrichedRental;
-  onCanceled: (id: string) => void;
-}> = ({ rental, onCanceled }) => {
-  const [confirmOpen, setConfirmOpen] = useState(false);
-  const [canceling, setCanceling]     = useState(false);
+}> = ({ rental }) => {
 
   const status = STATUS_CONFIG[rental.status] ?? STATUS_CONFIG.submitted;
   const start  = dayjs(rental.rent_date_start).format('MMM D, YYYY');
   const end    = dayjs(rental.rent_date_end).format('MMM D, YYYY');
-  const days   = dayjs(rental.rent_date_end).diff(dayjs(rental.rent_date_start), 'day');
 
   const pickupLabel      = rental.pickupBranch?.location_name ?? rental.delivery_addr ?? '—';
   const returnLabel      = rental.returnBranch?.location_name ?? rental.return_addr ?? '—';
@@ -159,23 +119,8 @@ const RentalCard: React.FC<{
   const deviceImg  = rental.item?.device?.device_img ?? null;
   const hasGps     = rental.item?.gps_installed ?? false;
 
-  // Only submitted / in-review can be canceled by the renter
-  const canCancel = rental.status === 'submitted' || rental.status === 'in-review';
-
-  const handleConfirmCancel = async () => {
-    setCanceling(true);
-    const { error } = await supabase
-      .from('RB_RENTAL_FORM')
-      .update({ status: 'canceled' })
-      .eq('id', rental.id);
-    setCanceling(false);
-    setConfirmOpen(false);
-    if (!error) onCanceled(rental.id);
-  };
-
   return (
-    <>
-      <Paper
+    <Paper
         elevation={0}
         sx={{
           border: '1px solid rgba(201,151,58,0.15)', borderRadius: 3, overflow: 'hidden',
@@ -216,7 +161,6 @@ const RentalCard: React.FC<{
             <Box>
               <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Rental Period</Typography>
               <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500 }}>{start} – {end}</Typography>
-              <Typography sx={{ fontSize: '0.75rem', color: '#7A6040' }}>{days} day{days !== 1 ? 's' : ''}</Typography>
             </Box>
           </Box>
 
@@ -261,26 +205,8 @@ const RentalCard: React.FC<{
           <Typography sx={{ fontSize: '0.72rem', color: '#B8A080', fontFamily: '"Sora", sans-serif' }}>
             Submitted {dayjs(rental.created_at).format('MMMM D, YYYY [at] h:mm A')}
           </Typography>
-          {canCancel && (
-            <Button
-              size="small" variant="outlined"
-              startIcon={<CancelIcon sx={{ fontSize: '0.85rem' }} />}
-              onClick={() => setConfirmOpen(true)}
-              sx={{ fontSize: '0.72rem', py: 0.25, px: 1.25, minWidth: 0, borderColor: 'rgba(211,47,47,0.35)', color: '#B71C1C', '&:hover': { background: 'rgba(211,47,47,0.05)', borderColor: '#B71C1C' } }}
-            >
-              Cancel
-            </Button>
-          )}
         </Box>
       </Paper>
-
-      <CancelDialog
-        open={confirmOpen}
-        onClose={() => setConfirmOpen(false)}
-        onConfirm={handleConfirmCancel}
-        canceling={canceling}
-      />
-    </>
   );
 };
 
@@ -367,13 +293,6 @@ const Dashboard: React.FC = () => {
     setLoggingOut(true);
     await supabase.auth.signOut();
     navigate('/login');
-  };
-
-  // Optimistic cancel — flip status locally so UI updates immediately
-  const handleCanceled = (id: string) => {
-    setRentals((prev) =>
-      prev.map((r) => r.id === id ? { ...r, status: 'canceled' as RentalStatus } : r)
-    );
   };
 
   const filtered = rentals.filter((r) => {
@@ -464,7 +383,7 @@ const Dashboard: React.FC = () => {
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {filtered.map((rental) => (
-            <RentalCard key={rental.id} rental={rental} onCanceled={handleCanceled} />
+            <RentalCard key={rental.id} rental={rental} />
           ))}
         </Box>
       )}
