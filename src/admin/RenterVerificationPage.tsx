@@ -469,14 +469,42 @@ const RenterVerificationPage: React.FC = () => {
       </Box>
 
       {/* ── Image zoom dialog ── */}
-      <Dialog open={!!zoomSrc} onClose={() => setZoomSrc(null)} maxWidth="lg"
-        PaperProps={{ sx: { background: 'transparent', boxShadow: 'none', overflow: 'visible' } }}>
-        <Box sx={{ position: 'relative' }}>
-          <IconButton onClick={() => setZoomSrc(null)}
-            sx={{ position: 'absolute', top: -16, right: -16, background: 'rgba(0,0,0,0.6)', color: '#fff', zIndex: 10, '&:hover': { background: 'rgba(0,0,0,0.85)' } }}>
+      <Dialog
+        open={!!zoomSrc}
+        onClose={() => setZoomSrc(null)}
+        maxWidth={false}
+        PaperProps={{
+          sx: {
+            background: 'transparent',
+            boxShadow: 'none',
+            overflow: 'hidden',
+            maxHeight: '100vh',
+            maxWidth: '100vw',
+            m: 0,
+          },
+        }}
+      >
+        <Box sx={{ position: 'relative', overflow: 'hidden' }}>
+          <IconButton
+            onClick={() => setZoomSrc(null)}
+            sx={{ position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.6)', color: '#fff', zIndex: 10, '&:hover': { background: 'rgba(0,0,0,0.85)' } }}
+          >
             <CloseIcon />
           </IconButton>
-          {zoomSrc && <img src={zoomSrc} alt="Full size" style={{ maxWidth: '90vw', maxHeight: '88vh', objectFit: 'contain', borderRadius: 12, display: 'block' }} />}
+          {zoomSrc && (
+            <img
+              src={zoomSrc}
+              alt="Full size"
+              style={{
+                width: 'auto',
+                maxWidth: '96vw',
+                maxHeight: '96vh',
+                objectFit: 'contain',
+                borderRadius: 12,
+                display: 'block',
+              }}
+            />
+          )}
         </Box>
       </Dialog>
     </Box>
