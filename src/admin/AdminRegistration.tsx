@@ -122,8 +122,8 @@ const AdminRegistration: React.FC = () => {
           }}>
             <CheckCircleIcon sx={{ fontSize: 48, color: '#69DB7C' }} />
           </Box>
-          <Typography variant="h3" sx={{ color: '#1A1008', mb: 1 }}>Account Created!</Typography>
-          <Typography variant="body1" sx={{ color: '#7A6040', mb: 4 }}>
+          <Typography variant="h3" sx={{ color: '#111111', mb: 1 }}>Account Created!</Typography>
+          <Typography variant="body1" sx={{ color: '#666666', mb: 4 }}>
             The {form.role} account for <strong>{form.user_fname} {form.user_lname}</strong> has been created.
           </Typography>
           <Button variant="contained" startIcon={<LoginIcon />} onClick={() => navigate('/admin/login')}>
@@ -146,13 +146,13 @@ const AdminRegistration: React.FC = () => {
             label="ADMIN / STAFF REGISTRATION"
             size="small"
             sx={{
-              background: 'rgba(201,151,58,0.15)', color: '#C9973A',
+              background: 'rgba(201,151,58,0.15)', color: '#111111',
               border: '1px solid rgba(201,151,58,0.25)',
               fontFamily: '"Sora", sans-serif', letterSpacing: '0.08em', mb: 1.5,
             }}
           />
-          <Typography variant="h3" sx={{ color: '#1A1008', mb: 0.5 }}>Staff Registration</Typography>
-          <Typography variant="body1" sx={{ color: '#7A6040' }}>
+          <Typography variant="h3" sx={{ color: '#111111', mb: 0.5 }}>Staff Registration</Typography>
+          <Typography variant="body1" sx={{ color: '#666666' }}>
             Create an admin or staff account. An invite code is required.
           </Typography>
         </Box>
@@ -162,7 +162,7 @@ const AdminRegistration: React.FC = () => {
 
             {/* Invite code */}
             <Box>
-              <Typography variant="caption" sx={{ color: '#C9973A', letterSpacing: '0.1em', mb: 1, display: 'block' }}>
+              <Typography variant="caption" sx={{ color: '#111111', letterSpacing: '0.1em', mb: 1, display: 'block' }}>
                 ACCESS CODE
               </Typography>
               <TextField
@@ -176,7 +176,7 @@ const AdminRegistration: React.FC = () => {
 
             {/* Role */}
             <Box>
-              <Typography variant="caption" sx={{ color: '#C9973A', letterSpacing: '0.1em', mb: 1, display: 'block' }}>
+              <Typography variant="caption" sx={{ color: '#111111', letterSpacing: '0.1em', mb: 1, display: 'block' }}>
                 ROLE & BRANCH
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
@@ -186,13 +186,13 @@ const AdminRegistration: React.FC = () => {
                     <Select value={form.role} onChange={onSelect('role')} label="Role">
                       <MenuItem value="admin">
                         <Box>
-                          <Typography sx={{ fontWeight: 600, fontSize: '0.88rem', color: '#1A1008' }}>Admin</Typography>
+                          <Typography sx={{ fontWeight: 600, fontSize: '0.88rem', color: '#111111' }}>Admin</Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.72rem' }}>Full access · can manage devices</Typography>
                         </Box>
                       </MenuItem>
                       <MenuItem value="staff">
                         <Box>
-                          <Typography sx={{ fontWeight: 600, fontSize: '0.88rem', color: '#1A1008' }}>Staff</Typography>
+                          <Typography sx={{ fontWeight: 600, fontSize: '0.88rem', color: '#111111' }}>Staff</Typography>
                           <Typography variant="body2" sx={{ fontSize: '0.72rem' }}>Can manage items & rentals</Typography>
                         </Box>
                       </MenuItem>
@@ -218,7 +218,7 @@ const AdminRegistration: React.FC = () => {
 
             {/* Personal info */}
             <Box>
-              <Typography variant="caption" sx={{ color: '#C9973A', letterSpacing: '0.1em', mb: 1, display: 'block' }}>
+              <Typography variant="caption" sx={{ color: '#111111', letterSpacing: '0.1em', mb: 1, display: 'block' }}>
                 PERSONAL INFORMATION
               </Typography>
               <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
@@ -241,7 +241,7 @@ const AdminRegistration: React.FC = () => {
 
             {/* Account credentials */}
             <Box>
-              <Typography variant="caption" sx={{ color: '#C9973A', letterSpacing: '0.1em', mb: 1, display: 'block' }}>
+              <Typography variant="caption" sx={{ color: '#111111', letterSpacing: '0.1em', mb: 1, display: 'block' }}>
                 ACCOUNT CREDENTIALS
               </Typography>
               <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -283,7 +283,7 @@ const AdminRegistration: React.FC = () => {
 
         <Box sx={{ textAlign: 'center', mt: 3 }}>
           <Button variant="text" size="small" onClick={() => navigate('/admin/login')}
-            sx={{ color: '#9A6F24', fontFamily: '"Sora", sans-serif', fontSize: '0.8rem' }}>
+            sx={{ color: '#111111', fontFamily: '"Sora", sans-serif', fontSize: '0.8rem' }}>
             Already have an account? Sign in
           </Button>
         </Box>

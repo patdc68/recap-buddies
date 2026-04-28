@@ -31,13 +31,13 @@ import { supabase } from '../service/supabaseClient';
 import type { RbRenter, RbRentalForm, RbItem, RbDevice, RbBranch, RbSelfieVerificationInst } from '../service/supabaseClient';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
-const AMBER      = '#C9973A';
-const AMBER_DARK = '#9A6F24';
-const CREAM      = '#FFFBF4';
+const AMBER      = '#111111';
+const AMBER_DARK = '#111111';
+const CREAM      = '#FFFFFF';
 const CARD_BG    = '#FFFFFF';
-const ESPRESSO   = '#1A1008';
-const INK        = '#3D2B0F';
-const MUTED      = '#7A6040';
+const ESPRESSO   = '#111111';
+const INK        = '#111111';
+const MUTED      = '#666666';
 const BORDER     = 'rgba(201,151,58,0.18)';
 
 const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -206,7 +206,7 @@ const RenterVerificationPage: React.FC = () => {
   const days = dayjs(rental.rent_date_end).diff(dayjs(rental.rent_date_start), 'day');
 
   return (
-    <Box sx={{ minHeight: '100vh', background: '#F5EFE4' }}>
+    <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
 
       {/* ── Sticky header ── */}
       <Box sx={{
@@ -273,7 +273,7 @@ const RenterVerificationPage: React.FC = () => {
           <Paper elevation={0} sx={{ flex: '1 1 320px', p: 3, border: `1px solid ${BORDER}`, borderRadius: 3, background: CARD_BG }}>
             <SectionTitle icon={<PhoneIcon sx={{ fontSize: 17 }} />} title="Personal Information" />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2.5, p: 2, background: 'rgba(201,151,58,0.04)', borderRadius: 2, border: `1px solid ${BORDER}` }}>
-              <Box sx={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg, #C9973A, #E5B85C)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Sora", sans-serif', fontWeight: 800, fontSize: '1.3rem', color: '#fff', flexShrink: 0 }}>
+              <Box sx={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg, #111111, #E5B85C)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Sora", sans-serif', fontWeight: 800, fontSize: '1.3rem', color: '#fff', flexShrink: 0 }}>
                 {renter.renter_fname[0]?.toUpperCase()}
               </Box>
               <Box>

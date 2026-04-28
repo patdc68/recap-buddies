@@ -160,7 +160,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
   const borderColor = result
     ? '#2E7D32'
     : dragOver
-    ? '#C9973A'
+    ? '#111111'
     : 'rgba(201,151,58,0.3)';
 
   return (
@@ -176,7 +176,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
       {/* Label */}
       <Typography
         variant="caption"
-        sx={{ color: '#7A6040', mb: 1, display: 'block', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '0.7rem' }}
+        sx={{ color: '#666666', mb: 1, display: 'block', letterSpacing: '0.08em', textTransform: 'uppercase', fontSize: '0.7rem' }}
       >
         {label}
       </Typography>
@@ -228,10 +228,10 @@ const FileUpload: React.FC<FileUploadProps> = ({
             >
               <PictureAsPdfIcon sx={{ fontSize: 40, color: '#C0392B' }} />
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 600, fontSize: '0.85rem', color: '#3D2B0F', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                <Typography sx={{ fontWeight: 600, fontSize: '0.85rem', color: '#111111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                   {result.fileName}
                 </Typography>
-                <Typography sx={{ fontSize: '0.75rem', color: '#7A6040' }}>
+                <Typography sx={{ fontSize: '0.75rem', color: '#666666' }}>
                   PDF · {(result.blob.size / 1024).toFixed(0)} KB
                 </Typography>
               </Box>
@@ -275,11 +275,11 @@ const FileUpload: React.FC<FileUploadProps> = ({
               onChange={(_, v) => { setTab(v); stopStream(); setCameraActive(false); setCameraError(''); }}
               sx={{
                 mb: 1.5, minHeight: 36,
-                '& .MuiTabs-indicator': { background: '#C9973A', height: 2 },
+                '& .MuiTabs-indicator': { background: '#111111', height: 2 },
                 '& .MuiTab-root': {
                   minHeight: 36, textTransform: 'none', fontSize: '0.8rem',
-                  fontFamily: '"Sora", sans-serif', fontWeight: 600, color: '#7A6040',
-                  '&.Mui-selected': { color: '#9A6F24' },
+                  fontFamily: '"Sora", sans-serif', fontWeight: 600, color: '#666666',
+                  '&.Mui-selected': { color: '#111111' },
                 },
               }}
             >
@@ -296,7 +296,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
                   variant="outlined" size="small" fullWidth
                   startIcon={cameraLoading ? <CircularProgress size={14} /> : <CameraAltIcon />}
                   onClick={startCamera} disabled={cameraLoading}
-                  sx={{ borderColor: 'rgba(201,151,58,0.4)', color: '#9A6F24', '&:hover': { borderColor: '#C9973A', background: 'rgba(201,151,58,0.06)' } }}
+                  sx={{ borderColor: 'rgba(201,151,58,0.4)', color: '#111111', '&:hover': { borderColor: '#111111', background: 'rgba(201,151,58,0.06)' } }}
                 >
                   {cameraLoading ? 'Starting…' : 'Open Camera'}
                 </Button>
@@ -328,7 +328,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
                 onDrop={handleDrop}
                 onClick={() => fileInputRef.current?.click()}
                 sx={{
-                  border: `2px dashed ${dragOver ? '#C9973A' : 'rgba(201,151,58,0.3)'}`,
+                  border: `2px dashed ${dragOver ? '#111111' : 'rgba(201,151,58,0.3)'}`,
                   borderRadius: 2,
                   p: 3,
                   textAlign: 'center',
@@ -339,13 +339,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
                 }}
               >
                 <Box sx={{ display: 'flex', justifyContent: 'center', gap: 1.5, mb: 1 }}>
-                  <ImageIcon sx={{ fontSize: 28, color: '#C9973A', opacity: 0.7 }} />
+                  <ImageIcon sx={{ fontSize: 28, color: '#111111', opacity: 0.7 }} />
                   <PictureAsPdfIcon sx={{ fontSize: 28, color: '#C0392B', opacity: 0.7 }} />
                 </Box>
-                <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: '#3D2B0F', mb: 0.5 }}>
+                <Typography sx={{ fontSize: '0.85rem', fontWeight: 600, color: '#111111', mb: 0.5 }}>
                   Click to browse or drag & drop
                 </Typography>
-                <Typography sx={{ fontSize: '0.75rem', color: '#7A6040' }}>
+                <Typography sx={{ fontSize: '0.75rem', color: '#666666' }}>
                   JPG, PNG, WEBP or PDF · Max 20MB
                 </Typography>
               </Box>
@@ -360,7 +360,7 @@ const FileUpload: React.FC<FileUploadProps> = ({
           variant="outlined" size="small" fullWidth
           startIcon={result.fileType === 'image' && tab === 'camera' ? <ReplayIcon /> : <DeleteOutlineIcon />}
           onClick={retake}
-          sx={{ mt: 1, borderColor: 'rgba(201,151,58,0.3)', color: '#7A6040', '&:hover': { borderColor: '#C9973A', color: '#9A6F24' } }}
+          sx={{ mt: 1, borderColor: 'rgba(201,151,58,0.3)', color: '#666666', '&:hover': { borderColor: '#111111', color: '#111111' } }}
         >
           {result.fileType === 'image' && tab === 'camera' ? 'Retake Photo' : 'Remove File'}
         </Button>

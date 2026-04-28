@@ -114,7 +114,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
         transition: 'border-color 0.3s',
       }}
     >
-      <Typography variant="caption" sx={{ color: '#7A6040', mb: 1, display: 'block' }}>
+      <Typography variant="caption" sx={{ color: '#666666', mb: 1, display: 'block' }}>
         {label}
       </Typography>
 
@@ -216,7 +216,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
             disabled={loading}
             size="small"
             fullWidth
-            sx={{ borderColor: 'rgba(201,151,58,0.5)', color: '#C9973A' }}
+            sx={{ borderColor: 'rgba(201,151,58,0.5)', color: '#111111' }}
           >
             {loading ? 'Starting Camera…' : 'Open Camera'}
           </Button>
@@ -238,7 +238,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
             startIcon={<ReplayIcon />}
             onClick={retake}
             size="small"
-            sx={{ borderColor: 'rgba(201,151,58,0.35)', color: '#7A6040' }}
+            sx={{ borderColor: 'rgba(201,151,58,0.35)', color: '#666666' }}
           >
             Retake
           </Button>
