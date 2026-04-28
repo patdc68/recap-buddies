@@ -3,7 +3,7 @@ import {
   Box, Typography, Paper, Chip, Button, CircularProgress, Avatar,
   Tabs, Tab, Divider, IconButton, Dialog, DialogTitle, DialogContent,
   DialogActions, Select, MenuItem, FormControl, InputLabel, FormHelperText,
-  Switch, FormControlLabel, Tooltip, type SelectChangeEvent,
+  Switch, FormControlLabel, Tooltip, TextField, type SelectChangeEvent,
 } from '@mui/material';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
@@ -142,7 +142,17 @@ interface RentalDetailDialogProps {
   rental: EnrichedRental | null;
   open: boolean;
   onClose: () => void;
-  onSave: (id: string, updates: { status: string; remarks: string; messenger_link: string; rent_price: string }) => Promise<void>;
+  onSave: (id: string, updates: RentalUpdatePayload) => Promise<void>;
+}
+
+interface RentalUpdatePayload {
+  status: string;
+  remarks: string;
+  messenger_link: string;
+  rent_price: string;
+  cam_name_id_fk: string;
+  rent_date_start: string;
+  rent_date_end: string;
 }
 
 const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, onClose, onSave }) => {
@@ -150,6 +160,11 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
   const [remarks, setRemarks] = useState('');
   const [messengerLink, setMessengerLink] = useState('');
   const [rentPrice, setRentPrice] = useState('');
+  const [cameraId, setCameraId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [cameraOptions, setCameraOptions] = useState<EnrichedItem[]>([]);
+  const [isRepeatRenter, setIsRepeatRenter] = useState(false);
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
   
@@ -160,18 +175,57 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
     setRemarks(rental.remarks ?? '');
     setMessengerLink(rental.messenger_link ?? '');
     setRentPrice(rental.rent_price != null ? String(rental.rent_price) : '');
+    setCameraId(rental.cam_name_id_fk ?? '');
+    setStartDate(dayjs(rental.rent_date_start).format('YYYY-MM-DD'));
+    setEndDate(dayjs(rental.rent_date_end).format('YYYY-MM-DD'));
   }, [rental]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const loadDialogData = async () => {
+      const { data: itemsRaw } = await supabase
+        .from('RB_ITEM')
+        .select('*, device:RB_DEVICES(id,cam_name,device_img)')
+        .order('created_at', { ascending: false });
+      setCameraOptions((itemsRaw ?? []) as EnrichedItem[]);
+
+      if (!rental?.renter_id_fk) {
+        setIsRepeatRenter(false);
+        return;
+      }
+
+      const { count } = await supabase
+        .from('RB_RENTAL_FORM')
+        .select('id', { head: true, count: 'exact' })
+        .eq('renter_id_fk', rental.renter_id_fk)
+        .eq('status', 'completed')
+        .neq('id', rental.id);
+
+      setIsRepeatRenter((count ?? 0) > 0);
+    };
+
+    void loadDialogData();
+  }, [open, rental?.id, rental?.renter_id_fk]);
   if (!rental) return null;
+  const selectedCamera = cameraOptions.find((it) => it.id === cameraId) ?? rental.item;
 
   const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META.submitted;
 
+  const isDateRangeInvalid = !!startDate && !!endDate && dayjs(endDate).isBefore(dayjs(startDate), 'day');
+  const isSaveDisabled = saving || !cameraId || !startDate || !endDate || isDateRangeInvalid;
+
   const handleSave = async () => {
+    if (isDateRangeInvalid) return;
     setSaving(true);
     await onSave(rental.id, {
       status,
       remarks,
       messenger_link: messengerLink,
       rent_price: rentPrice,
+      cam_name_id_fk: cameraId,
+      rent_date_start: startDate,
+      rent_date_end: endDate,
     });
     setSaving(false);
     onClose();
@@ -193,15 +247,25 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
 
         {/* Camera */}
         <InfoBox label="Camera">
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            {rental.item?.device?.device_img
-              ? <img src={rental.item.device.device_img} alt="" style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 6, border: `1px solid ${BORDER}` }} />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+            {selectedCamera?.device?.device_img
+              ? <img src={selectedCamera.device.device_img} alt="" style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 6, border: `1px solid ${BORDER}` }} />
               : <Box sx={{ width: 56, height: 42, borderRadius: 1.5, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 20, color: AMBER }} /></Box>}
             <Box>
-              <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.95rem' }}>{rental.item?.device?.cam_name ?? '—'}</Typography>
-              <Typography sx={{ color: MUTED, fontSize: '0.75rem', fontFamily: '"Sora", sans-serif' }}>{rental.item?.code_name ?? '—'} · S/N {rental.item?.serial_no ?? '—'}</Typography>
+              <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.95rem' }}>{selectedCamera?.device?.cam_name ?? '—'}</Typography>
+              <Typography sx={{ color: MUTED, fontSize: '0.75rem', fontFamily: '"Sora", sans-serif' }}>{selectedCamera?.code_name ?? '—'} · S/N {selectedCamera?.serial_no ?? '—'}</Typography>
             </Box>
           </Box>
+          <FormControl size="small" fullWidth>
+            <InputLabel>Select Camera</InputLabel>
+            <Select value={cameraId} onChange={(e: SelectChangeEvent) => setCameraId(e.target.value)} label="Select Camera">
+              {cameraOptions.map((item) => (
+                <MenuItem key={item.id} value={item.id}>
+                  {item.device?.cam_name ?? '—'}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </InfoBox>
 
         {/* Renter */}
@@ -225,16 +289,50 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
                 <Typography sx={{ color: MUTED, fontSize: '0.78rem' }}>{rental.username}</Typography>
               </Box>
             )}
+            <Chip
+              size="small"
+              label={isRepeatRenter ? 'Repeat Renter: Yes' : 'Repeat Renter: No'}
+              sx={{
+                background: isRepeatRenter ? 'rgba(105,219,124,0.12)' : 'rgba(120,120,120,0.12)',
+                color: isRepeatRenter ? '#2E7D32' : '#666',
+                border: isRepeatRenter ? '1px solid rgba(105,219,124,0.35)' : '1px solid rgba(120,120,120,0.3)',
+                fontWeight: 700,
+                fontSize: '0.68rem',
+                fontFamily: '"Sora", sans-serif',
+              }}
+            />
           </Box>
         </InfoBox>
 
         {/* Dates */}
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <Box sx={{ flex: '1 1 180px', p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.6 }}>Start Date</Typography>
+            <TextField
+              size="small"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
+          <Box sx={{ flex: '1 1 180px', p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.6 }}>End Date</Typography>
+            <TextField
+              size="small"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              inputProps={{ min: startDate || undefined }}
+              fullWidth
+              error={isDateRangeInvalid}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
           {[
-            { label: 'Start Date', val: dayjs(rental.rent_date_start).format('MMM D, YYYY') },
-            { label: 'End Date',   val: dayjs(rental.rent_date_end).format('MMM D, YYYY') },
             { label: 'Actual Returned', val: rental.actual_return_date ? dayjs(rental.actual_return_date).format('MMM D, YYYY') : 'Not returned yet' },
-            { label: 'Duration',   val: `${getRentalDayCount(rental.rent_date_start, rental.rent_date_end)} days` },
+            { label: 'Duration',   val: `${getRentalDayCount(startDate || rental.rent_date_start, endDate || rental.rent_date_end)} days` },
           ].map((d) => (
             <Box key={d.label} sx={{ flex: 1, p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
               <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.25 }}>{d.label}</Typography>
@@ -242,6 +340,9 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
             </Box>
           ))}
         </Box>
+        {isDateRangeInvalid && (
+          <FormHelperText error>End date must be on or after start date.</FormHelperText>
+        )}
 
         {/* Logistics */}
         <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -350,7 +451,7 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
         <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
-        <Button onClick={handleSave} variant="contained" size="small" disabled={saving}
+        <Button onClick={handleSave} variant="contained" size="small" disabled={isSaveDisabled}
           startIcon={saving ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <SaveIcon />}>
           Save Changes
         </Button>
@@ -366,7 +467,7 @@ interface RentalListDialogProps {
   rentals: EnrichedRental[];
   open: boolean;
   onClose: () => void;
-  onSave: (id: string, updates: { status: string; remarks: string; messenger_link: string; rent_price: string }) => Promise<void>;
+  onSave: (id: string, updates: RentalUpdatePayload) => Promise<void>;
 }
 
 const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, open, onClose, onSave }) => {
@@ -468,7 +569,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
 // TAB 0 — OVERVIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, updates: { status: string; remarks: string; messenger_link: string; rent_price: string }) => Promise<void> }> = ({ rentals, onSave }) => {
+const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, updates: RentalUpdatePayload) => Promise<void> }> = ({ rentals, onSave }) => {
   const today = dayjs();
   const navigate = useNavigate();
   const [listDialog, setListDialog]         = useState<{ title: string; items: EnrichedRental[] } | null>(null);
@@ -685,7 +786,7 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
 // TAB 1 — CALENDAR (Teams-style continuous span bars, first name label)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; onSave: (id: string, updates: { status: string; remarks: string; messenger_link: string; rent_price: string }) => Promise<void> }> = ({ rentals, items, onSave }) => {
+const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; onSave: (id: string, updates: RentalUpdatePayload) => Promise<void> }> = ({ rentals, items, onSave }) => {
   const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
   const [selectedCamera, setSelectedCamera] = useState('all');
   const [selectedRental, setSelectedRental] = useState<EnrichedRental | null>(null);
@@ -1616,14 +1717,26 @@ const AdminDashboard: React.FC = () => {
 
   const handleSaveStatus = useCallback(async (
     id: string,
-    updates: { status: string; remarks: string; messenger_link: string; rent_price: string }
+    updates: RentalUpdatePayload
   ) => {
     const parsedRentPrice = updates.rent_price.trim() === '' ? null : Number(updates.rent_price);
-    const payload: { status: string; actual_return_date?: string | null; remarks: string | null; messenger_link: string | null; rent_price: number | null } = {
+    const payload: {
+      status: string;
+      actual_return_date?: string | null;
+      remarks: string | null;
+      messenger_link: string | null;
+      rent_price: number | null;
+      cam_name_id_fk: string;
+      rent_date_start: string;
+      rent_date_end: string;
+    } = {
       status: updates.status,
       remarks: updates.remarks.trim() || null,
       messenger_link: updates.messenger_link.trim() || null,
       rent_price: parsedRentPrice == null || Number.isNaN(parsedRentPrice) ? null : Math.max(parsedRentPrice, 0),
+      cam_name_id_fk: updates.cam_name_id_fk,
+      rent_date_start: updates.rent_date_start,
+      rent_date_end: updates.rent_date_end,
     };
     if (updates.status === 'completed') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
     if (updates.status === 'for-penalty') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
@@ -1632,11 +1745,17 @@ const AdminDashboard: React.FC = () => {
 
     const targetRental = rentals.find((r) => r.id === id);
     const itemStatus = RENTAL_TO_ITEM_STATUS[updates.status];
-    if (targetRental?.cam_name_id_fk && itemStatus) {
+    if (targetRental?.cam_name_id_fk && itemStatus && targetRental.cam_name_id_fk !== updates.cam_name_id_fk) {
+      await supabase
+        .from('RB_ITEM')
+        .update({ status: 'Available' })
+        .eq('id', targetRental.cam_name_id_fk);
+    }
+    if (updates.cam_name_id_fk && itemStatus) {
       await supabase
         .from('RB_ITEM')
         .update({ status: itemStatus })
-        .eq('id', targetRental.cam_name_id_fk);
+        .eq('id', updates.cam_name_id_fk);
     }
 
     await fetchAll();
