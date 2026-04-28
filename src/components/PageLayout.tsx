@@ -32,7 +32,7 @@ const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
           sx={{
             flex: 1,
             width: '100%',
-            maxWidth: '900px',
+            maxWidth: '500px',
             textAlign: 'left',
             order: 1,
           }}
@@ -52,9 +52,8 @@ const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
 
         <Box
           sx={{
-            flex: '0 0 auto',
+            flex: 1,
             width: '100%',
-            maxWidth: '400px',
             display: 'flex',
             justifyContent: 'center',
             alignItems: 'center',
@@ -67,7 +66,9 @@ const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
             alt="Recap Buddies character"
             sx={{
               width: '100%',
-              maxWidth: '400px',
+              maxWidth: { xs: '350px', md: '550px' },
+              transform: { xs: 'scale(1)', md: 'scale(1.1)' },
+              transformOrigin: 'center',
               objectFit: 'contain',
             }}
           />
