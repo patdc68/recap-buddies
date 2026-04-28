@@ -130,25 +130,9 @@ const StepCamera: React.FC<StepCameraProps> = ({ items, form, onSelect, errors }
                   {item.device?.cam_name ?? '—'}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <Typography variant="body2" sx={{ fontSize: '0.72rem', color: '#7A6040' }}>
-                    {item.code_name} · S/N {item.serial_no}
-                  </Typography>
                   {item.gps_installed && <GpsFixedIcon sx={{ fontSize: 11, color: '#2E7D32' }} />}
                 </Box>
               </Box>
-              <Chip
-                label={item.status}
-                size="small"
-                sx={{
-                  flexShrink: 0,
-                  background: item.status === 'Available' ? 'rgba(105,219,124,0.1)' : 'rgba(211,47,47,0.08)',
-                  color: item.status === 'Available' ? '#2E7D32' : '#B71C1C',
-                  border: item.status === 'Available' ? '1px solid rgba(105,219,124,0.25)' : '1px solid rgba(211,47,47,0.25)',
-                  fontSize: '0.68rem',
-                  fontFamily: '"Sora", sans-serif',
-                  fontWeight: 600,
-                }}
-              />
             </Box>
           </MenuItem>
         ))}
@@ -156,7 +140,7 @@ const StepCamera: React.FC<StepCameraProps> = ({ items, form, onSelect, errors }
       {errors.cam_name_id_fk && <FormHelperText>{errors.cam_name_id_fk}</FormHelperText>}
     </FormControl>
     <Typography variant="body2" sx={{ color: '#7A6040', fontSize: '0.78rem' }}>
-      All inventory units are listed, including unavailable items. Each unit is identified by its unique code name.
+      Please select a device to proceed.
     </Typography>
   </Box>
 );
