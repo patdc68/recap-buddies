@@ -27,3 +27,50 @@ body {
   width: 100%;
   background-color: #ffffff;
 }
+
+.page-root {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+}
+
+.left-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 40px 60px;
+}
+
+.right-image {
+  flex: 1;
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: flex-end;
+  overflow: hidden;
+}
+
+.right-image-asset {
+  height: 65vh;
+  max-height: 700px;
+  width: auto;
+  object-fit: contain;
+  transform: translateY(40px) scale(1.15);
+  filter: drop-shadow(0 15px 30px rgba(0, 0, 0, 0.15));
+}
+
+@media (max-width: 768px) {
+  .page-root {
+    height: auto;
+    min-height: 100vh;
+    overflow: visible;
+  }
+
+  .left-content {
+    padding: 24px;
+    overflow: visible;
+  }
+
+  .right-image {
+    display: none;
+  }
+}

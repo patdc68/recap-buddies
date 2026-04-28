@@ -14,27 +14,14 @@ interface PageLayoutProps {
 
 const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
-      <Box
-        sx={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: { xs: 4, md: 6 },
-          px: { xs: 3, md: '60px' },
-          py: { xs: 4, md: '40px' },
-          flexDirection: { xs: 'column', md: 'row' },
-        }}
-      >
+    <Box className="page-root" sx={{ backgroundColor: '#ffffff' }}>
+      <Box className="left-content">
         <Box
           sx={{
-            flex: 1,
-            width: '100%',
             maxWidth: '900px',
+            margin: '0 auto',
             textAlign: 'left',
-            order: 1,
+            py: { xs: 4, md: 5 },
           }}
         >
           {renter && (
@@ -49,29 +36,15 @@ const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
           )}
           {children}
         </Box>
+      </Box>
 
+      <Box className="right-image">
         <Box
-          sx={{
-            flex: '0 0 auto',
-            width: '100%',
-            maxWidth: '400px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            order: { xs: 2, md: 2 },
-          }}
-        >
-          <Box
-            component="img"
-            src={recapCharacter}
-            alt="Recap Buddies character"
-            sx={{
-              width: '100%',
-              maxWidth: '400px',
-              objectFit: 'contain',
-            }}
-          />
-        </Box>
+          component="img"
+          src={recapCharacter}
+          alt="Recap Buddies character"
+          className="right-image-asset"
+        />
       </Box>
     </Box>
   );
