@@ -130,9 +130,6 @@ const StepCamera: React.FC<StepCameraProps> = ({ items, form, onSelect, errors }
                   {item.device?.cam_name ?? '—'}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <Typography variant="body2" sx={{ fontSize: '0.72rem', color: '#7A6040' }}>
-                    {item.code_name} · S/N {item.serial_no}
-                  </Typography>
                   {item.gps_installed && <GpsFixedIcon sx={{ fontSize: 11, color: '#2E7D32' }} />}
                 </Box>
               </Box>
