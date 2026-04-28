@@ -136,19 +136,6 @@ const StepCamera: React.FC<StepCameraProps> = ({ items, form, onSelect, errors }
                   {item.gps_installed && <GpsFixedIcon sx={{ fontSize: 11, color: '#2E7D32' }} />}
                 </Box>
               </Box>
-              <Chip
-                label={item.status}
-                size="small"
-                sx={{
-                  flexShrink: 0,
-                  background: item.status === 'Available' ? 'rgba(105,219,124,0.1)' : 'rgba(211,47,47,0.08)',
-                  color: item.status === 'Available' ? '#2E7D32' : '#B71C1C',
-                  border: item.status === 'Available' ? '1px solid rgba(105,219,124,0.25)' : '1px solid rgba(211,47,47,0.25)',
-                  fontSize: '0.68rem',
-                  fontFamily: '"Sora", sans-serif',
-                  fontWeight: 600,
-                }}
-              />
             </Box>
           </MenuItem>
         ))}
