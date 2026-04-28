@@ -28,7 +28,7 @@ const AdminProtectedRoute: React.FC<{ children: React.ReactNode }> = ({ children
   if (checking) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '100vh', background: '#0A0F1E' }}>
-        <CircularProgress sx={{ color: '#C9973A' }} />
+        <CircularProgress sx={{ color: '#111111' }} />
       </Box>
     );
   }

@@ -135,12 +135,12 @@ const RentalCard: React.FC<{
             {deviceImg
               ? <img src={deviceImg} alt={cameraName} style={{ width: 44, height: 34, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(201,151,58,0.2)', flexShrink: 0 }} />
               : <Box sx={{ width: 44, height: 34, borderRadius: 1.5, background: 'rgba(201,151,58,0.10)', border: '1px solid rgba(201,151,58,0.2)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  <CameraAltIcon sx={{ fontSize: 18, color: '#C9973A' }} />
+                  <CameraAltIcon sx={{ fontSize: 18, color: '#111111' }} />
                 </Box>}
             <Box>
-              <Typography sx={{ fontWeight: 700, color: '#1A1008', fontSize: '0.95rem', lineHeight: 1.2 }}>{cameraName}</Typography>
+              <Typography sx={{ fontWeight: 700, color: '#111111', fontSize: '0.95rem', lineHeight: 1.2 }}>{cameraName}</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                <Typography sx={{ fontSize: '0.72rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif' }}>{codeName}</Typography>
+                <Typography sx={{ fontSize: '0.72rem', color: '#111111', fontFamily: '"Sora", sans-serif' }}>{codeName}</Typography>
                 {hasGps && <GpsFixedIcon sx={{ fontSize: 11, color: '#2E7D32' }} />}
               </Box>
             </Box>
@@ -157,32 +157,32 @@ const RentalCard: React.FC<{
         {/* Body */}
         <Box sx={{ px: 3, py: 2, display: 'flex', flexWrap: 'wrap', gap: 2.5 }}>
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 160 }}>
-            <CalendarTodayIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} />
+            <CalendarTodayIcon sx={{ fontSize: 16, color: '#111111', mt: 0.3 }} />
             <Box>
-              <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Rental Period</Typography>
-              <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500 }}>{start} – {end}</Typography>
+              <Typography sx={{ fontSize: '0.7rem', color: '#111111', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Rental Period</Typography>
+              <Typography sx={{ fontSize: '0.85rem', color: '#111111', fontWeight: 500 }}>{start} – {end}</Typography>
             </Box>
           </Box>
 
           <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(201,151,58,0.12)', display: { xs: 'none', sm: 'block' } }} />
 
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 140 }}>
-            {isDeliveryPickup ? <LocalShippingIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} /> : <StorefrontIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} />}
+            {isDeliveryPickup ? <LocalShippingIcon sx={{ fontSize: 16, color: '#111111', mt: 0.3 }} /> : <StorefrontIcon sx={{ fontSize: 16, color: '#111111', mt: 0.3 }} />}
             <Box>
-              <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Pick-up</Typography>
-              <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500 }}>{pickupLabel}</Typography>
-              <Typography sx={{ fontSize: '0.72rem', color: '#7A6040' }}>{isDeliveryPickup ? 'Door delivery' : 'Hub pick-up'}</Typography>
+              <Typography sx={{ fontSize: '0.7rem', color: '#111111', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Pick-up</Typography>
+              <Typography sx={{ fontSize: '0.85rem', color: '#111111', fontWeight: 500 }}>{pickupLabel}</Typography>
+              <Typography sx={{ fontSize: '0.72rem', color: '#666666' }}>{isDeliveryPickup ? 'Door delivery' : 'Hub pick-up'}</Typography>
             </Box>
           </Box>
 
           <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(201,151,58,0.12)', display: { xs: 'none', sm: 'block' } }} />
 
           <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, minWidth: 140 }}>
-            {isDeliveryReturn ? <LocalShippingIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} /> : <StorefrontIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} />}
+            {isDeliveryReturn ? <LocalShippingIcon sx={{ fontSize: 16, color: '#111111', mt: 0.3 }} /> : <StorefrontIcon sx={{ fontSize: 16, color: '#111111', mt: 0.3 }} />}
             <Box>
-              <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Return</Typography>
-              <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500 }}>{returnLabel}</Typography>
-              <Typography sx={{ fontSize: '0.72rem', color: '#7A6040' }}>{isDeliveryReturn ? 'Door return' : 'Hub return'}</Typography>
+              <Typography sx={{ fontSize: '0.7rem', color: '#111111', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Return</Typography>
+              <Typography sx={{ fontSize: '0.85rem', color: '#111111', fontWeight: 500 }}>{returnLabel}</Typography>
+              <Typography sx={{ fontSize: '0.72rem', color: '#666666' }}>{isDeliveryReturn ? 'Door return' : 'Hub return'}</Typography>
             </Box>
           </Box>
 
@@ -190,10 +190,10 @@ const RentalCard: React.FC<{
             <>
               <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(201,151,58,0.12)', display: { xs: 'none', sm: 'block' } }} />
               <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                <LocationOnIcon sx={{ fontSize: 16, color: '#C9973A', mt: 0.3 }} />
+                <LocationOnIcon sx={{ fontSize: 16, color: '#111111', mt: 0.3 }} />
                 <Box>
-                  <Typography sx={{ fontSize: '0.7rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Usage</Typography>
-                  <Typography sx={{ fontSize: '0.85rem', color: '#1A1008', fontWeight: 500, textTransform: 'capitalize' }}>{rental.loc_usage}</Typography>
+                  <Typography sx={{ fontSize: '0.7rem', color: '#111111', fontFamily: '"Sora", sans-serif', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Usage</Typography>
+                  <Typography sx={{ fontSize: '0.85rem', color: '#111111', fontWeight: 500, textTransform: 'capitalize' }}>{rental.loc_usage}</Typography>
                 </Box>
               </Box>
             </>
@@ -202,7 +202,7 @@ const RentalCard: React.FC<{
 
         {/* Footer */}
         <Box sx={{ px: 3, py: 1, borderTop: '1px solid rgba(201,151,58,0.08)', background: 'rgba(201,151,58,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
-          <Typography sx={{ fontSize: '0.72rem', color: '#B8A080', fontFamily: '"Sora", sans-serif' }}>
+          <Typography sx={{ fontSize: '0.72rem', color: '#666666', fontFamily: '"Sora", sans-serif' }}>
             Submitted {dayjs(rental.created_at).format('MMMM D, YYYY [at] h:mm A')}
           </Typography>
         </Box>
@@ -215,8 +215,8 @@ const RentalCard: React.FC<{
 const EmptyState: React.FC<{ onBook: () => void }> = ({ onBook }) => (
   <Box sx={{ textAlign: 'center', py: 8, px: 4, border: '1.5px dashed rgba(201,151,58,0.25)', borderRadius: 3, background: 'rgba(201,151,58,0.02)' }}>
     <CameraAltIcon sx={{ fontSize: 52, color: 'rgba(201,151,58,0.35)', mb: 2 }} />
-    <Typography variant="h5" sx={{ color: '#3D2B0F', mb: 1 }}>No rentals yet</Typography>
-    <Typography variant="body2" sx={{ color: '#7A6040', mb: 3, maxWidth: 320, mx: 'auto' }}>
+    <Typography variant="h5" sx={{ color: '#111111', mb: 1 }}>No rentals yet</Typography>
+    <Typography variant="body2" sx={{ color: '#666666', mb: 3, maxWidth: 320, mx: 'auto' }}>
       You haven't submitted any rental requests. Start by booking a camera for your next project.
     </Typography>
     <Button variant="contained" startIcon={<AddCircleOutlineIcon />} onClick={onBook}>Book a Camera</Button>
@@ -307,8 +307,8 @@ const Dashboard: React.FC = () => {
     return (
       <PageLayout>
         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', minHeight: '60vh', flexDirection: 'column', gap: 2 }}>
-          <CircularProgress sx={{ color: '#C9973A' }} />
-          <Typography sx={{ color: '#7A6040', fontFamily: '"Sora", sans-serif', fontSize: '0.85rem' }}>Loading your rentals…</Typography>
+          <CircularProgress sx={{ color: '#111111' }} />
+          <Typography sx={{ color: '#666666', fontFamily: '"Sora", sans-serif', fontSize: '0.85rem' }}>Loading your rentals…</Typography>
         </Box>
       </PageLayout>
     );
@@ -321,12 +321,12 @@ const Dashboard: React.FC = () => {
       <Box sx={{ mb: 4 }}>
         <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-            <Avatar sx={{ width: 52, height: 52, background: 'linear-gradient(135deg, #C9973A, #E5B85C)', color: '#fff', fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '1.3rem', boxShadow: '0 3px 12px rgba(201,151,58,0.35)' }}>
+            <Avatar sx={{ width: 52, height: 52, background: 'linear-gradient(135deg, #111111, #E5B85C)', color: '#fff', fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '1.3rem', boxShadow: '0 3px 12px rgba(201,151,58,0.35)' }}>
               {renter?.renter_fname[0]?.toUpperCase()}
             </Avatar>
             <Box>
-              <Typography variant="h3" sx={{ color: '#1A1008', lineHeight: 1.1, mb: 0.25 }}>Hi, {renter?.renter_fname}!</Typography>
-              <Typography variant="body2" sx={{ color: '#7A6040' }}>{renter?.email}</Typography>
+              <Typography variant="h3" sx={{ color: '#111111', lineHeight: 1.1, mb: 0.25 }}>Hi, {renter?.renter_fname}!</Typography>
+              <Typography variant="body2" sx={{ color: '#666666' }}>{renter?.email}</Typography>
             </Box>
           </Box>
 
@@ -348,13 +348,13 @@ const Dashboard: React.FC = () => {
       {/* Stats */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mb: 4 }}>
         {[
-          { label: 'Total Rentals', value: rentals.length, color: '#C9973A' },
+          { label: 'Total Rentals', value: rentals.length, color: '#111111' },
           { label: 'Ongoing',       value: ongoingCount,   color: '#1565C0' },
           { label: 'Completed',     value: completedCount, color: '#2E7D32' },
         ].map((stat) => (
           <Paper key={stat.label} elevation={0} sx={{ flex: '1 1 120px', p: 2.5, border: '1px solid rgba(201,151,58,0.13)', borderRadius: 3, textAlign: 'center', background: '#fff' }}>
             <Typography sx={{ fontSize: '2rem', fontWeight: 700, color: stat.color, fontFamily: '"Sora", sans-serif', lineHeight: 1, mb: 0.5 }}>{stat.value}</Typography>
-            <Typography sx={{ fontSize: '0.75rem', color: '#7A6040', fontFamily: '"Sora", sans-serif' }}>{stat.label}</Typography>
+            <Typography sx={{ fontSize: '0.75rem', color: '#666666', fontFamily: '"Sora", sans-serif' }}>{stat.label}</Typography>
           </Paper>
         ))}
       </Box>
@@ -365,8 +365,8 @@ const Dashboard: React.FC = () => {
           value={tab} onChange={(_, v) => setTab(v)}
           sx={{
             borderBottom: '1px solid rgba(201,151,58,0.12)',
-            '& .MuiTabs-indicator': { background: '#C9973A', height: 2.5, borderRadius: 2 },
-            '& .MuiTab-root': { textTransform: 'none', fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.88rem', color: '#7A6040', minHeight: 44, '&.Mui-selected': { color: '#9A6F24' } },
+            '& .MuiTabs-indicator': { background: '#111111', height: 2.5, borderRadius: 2 },
+            '& .MuiTab-root': { textTransform: 'none', fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.88rem', color: '#666666', minHeight: 44, '&.Mui-selected': { color: '#111111' } },
           }}
         >
           <Tab value="all"       label={`All (${rentals.length})`} />

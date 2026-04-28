@@ -6,11 +6,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import type { RbBranch, RbDevice, RbItem, RbRentalForm } from '../service/supabaseClient';
 
-const AMBER = '#C9973A';
-const CREAM = '#FFFBF4';
+const AMBER = '#111111';
+const CREAM = '#FFFFFF';
 const CARD_BG = '#FFFFFF';
-const ESPRESSO = '#1A1008';
-const MUTED = '#7A6040';
+const ESPRESSO = '#111111';
+const MUTED = '#666666';
 const BORDER = 'rgba(201,151,58,0.18)';
 
 interface EnrichedItem extends RbItem {
@@ -117,7 +117,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', background: '#F5EFE4', px: { xs: 2, md: 4 }, py: 4 }}>
+    <Box sx={{ minHeight: '100vh', background: '#FFFFFF', px: { xs: 2, md: 4 }, py: 4 }}>
       <Box sx={{ maxWidth: 1200, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <IconButton onClick={() => navigate('/admin/dashboard')} sx={{ border: `1px solid ${BORDER}`, color: MUTED }}>

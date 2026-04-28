@@ -110,15 +110,15 @@ const LoginPage: React.FC = () => {
               boxShadow: '0 4px 20px rgba(201,151,58,0.12)',
             }}
           >
-            <LockOutlinedIcon sx={{ fontSize: 28, color: '#C9973A' }} />
+            <LockOutlinedIcon sx={{ fontSize: 28, color: '#111111' }} />
           </Box>
           <Typography
             variant="h3"
-            sx={{ color: '#1A1008', lineHeight: 1.2, mb: 0.75 }}
+            sx={{ color: '#111111', lineHeight: 1.2, mb: 0.75 }}
           >
             Welcome Back
           </Typography>
-          <Typography variant="body1" sx={{ color: '#7A6040' }}>
+          <Typography variant="body1" sx={{ color: '#666666' }}>
             Sign in to view your rentals and manage your account.
           </Typography>
         </Box>
@@ -186,7 +186,7 @@ const LoginPage: React.FC = () => {
           </Box>
 
           <Divider sx={{ my: 3, borderColor: 'rgba(201,151,58,0.12)' }}>
-            <Typography sx={{ color: '#B8A080', fontSize: '0.75rem', px: 1 }}>
+            <Typography sx={{ color: '#666666', fontSize: '0.75rem', px: 1 }}>
               Don't have an account?
             </Typography>
           </Divider>
@@ -208,7 +208,7 @@ const LoginPage: React.FC = () => {
             textAlign: 'center',
             mt: 3,
             fontSize: '0.75rem',
-            color: '#B8A080',
+            color: '#666666',
             fontFamily: '"Sora", sans-serif',
           }}
         >
