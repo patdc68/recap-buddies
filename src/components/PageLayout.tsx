@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Typography, useMediaQuery, useTheme } from '@mui/material';
 import recapCharacter from '../assets/recap-char-logo.png';
 
 interface RenterInfo {
@@ -13,28 +13,30 @@ interface PageLayoutProps {
 }
 
 const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
+    <Box sx={{ height: '100vh', backgroundColor: '#ffffff', overflow: 'hidden' }}>
       <Box
         sx={{
+          height: '100vh',
           maxWidth: '1200px',
           margin: '0 auto',
           display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: { xs: 4, md: 6 },
-          px: { xs: 3, md: '60px' },
-          py: { xs: 4, md: '40px' },
-          flexDirection: { xs: 'column', md: 'row' },
+          overflow: 'hidden',
+          px: { xs: 3, md: 0 },
         }}
       >
         <Box
           sx={{
             flex: 1,
             width: '100%',
-            maxWidth: '900px',
+            overflowY: 'auto',
+            minWidth: 0,
+            px: { xs: 0, md: '60px' },
+            py: { xs: 4, md: '40px' },
             textAlign: 'left',
-            order: 1,
           }}
         >
           {renter && (
@@ -50,28 +52,37 @@ const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
           {children}
         </Box>
 
-        <Box
-          sx={{
-            flex: '0 0 auto',
-            width: '100%',
-            maxWidth: '400px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            order: { xs: 2, md: 2 },
-          }}
-        >
+        {!isMobile && (
           <Box
-            component="img"
-            src={recapCharacter}
-            alt="Recap Buddies character"
             sx={{
-              width: '100%',
-              maxWidth: '400px',
-              objectFit: 'contain',
+              flex: 1,
+              position: 'sticky',
+              top: 0,
+              height: '100vh',
+              display: 'flex',
+              justifyContent: 'center',
+              alignItems: 'flex-end',
+              overflow: 'visible',
+              minWidth: 0,
             }}
-          />
-        </Box>
+          >
+            <Box
+              component="img"
+              src={recapCharacter}
+              alt="Recap Buddies character"
+              sx={{
+                height: '50vh',
+                maxHeight: '600px',
+                width: 'auto',
+                objectFit: 'contain',
+                transform: 'scale(1.1) translateY(20px)',
+                filter: 'drop-shadow(0 10px 25px rgba(0,0,0,0.15))',
+                marginBottom: 0,
+                paddingBottom: 0,
+              }}
+            />
+          </Box>
+        )}
       </Box>
     </Box>
   );
