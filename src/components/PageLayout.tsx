@@ -1,7 +1,8 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { useLocation } from 'react-router-dom';
-import recapCharacter from '../assets/recap-buddies-char-rotated.png';
+import recapCharacter from '../assets/recap-buddies-char-rotated.PNG';
+
 
 interface RenterInfo {
   fname: string;
