@@ -28,20 +28,20 @@ body {
   background-color: #ffffff;
 }
 
-/* 🔥 FIXED LAYOUT (no inner scrollbar) */
+
 .page-root {
   display: flex;
   min-height: 100vh; /* changed from height */
 }
 
-/* 🔥 LEFT SIDE (no more inner scroll) */
+
 .left-content {
   flex: 1;
   min-width: 0;
   padding: 40px 60px;
 }
 
-/* 🔥 RIGHT SIDE (sticky, not scrollable, stays in place) */
+
 .right-hero {
   flex: 1;
   min-width: 0;
@@ -51,9 +51,9 @@ body {
 
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start; /* 🔥 changed from center */
 
-  padding: 60px;
+  padding: 60px 60px 60px 80px; /* 🔥 extra left padding */
   overflow: hidden;
 }
 
@@ -61,7 +61,8 @@ body {
 .hero-text {
   position: relative;
   z-index: 2;
-  max-width: 420px;
+  max-width: 380px;   /* slightly tighter */
+  margin-right: 80px; /* 🔥 pushes away from image */
 }
 
 .hero-text h1 {
