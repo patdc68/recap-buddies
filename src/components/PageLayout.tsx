@@ -43,7 +43,6 @@ const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
             <h3>Camera Rental and Creatives</h3>
             <br></br>
             <br></br>
-            <br></br>
             <p>
               Do you have what it takes to be
               #RBuddy?
