@@ -27,3 +27,61 @@ body {
   width: 100%;
   background-color: #ffffff;
 }
+
+.right-hero {
+  flex: 1;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 60px;
+  overflow: hidden;
+  min-height: 520px;
+}
+
+.hero-text {
+  position: relative;
+  z-index: 2;
+  max-width: 400px;
+}
+
+.hero-text h1 {
+  font-size: 48px;
+  font-weight: 700;
+  margin: 0;
+  color: #111111;
+}
+
+.hero-text h3 {
+  font-size: 20px;
+  color: #666;
+  margin-top: 10px;
+  margin-bottom: 0;
+}
+
+.hero-text p {
+  font-size: 16px;
+  margin-top: 12px;
+  margin-bottom: 0;
+  color: #444;
+}
+
+.hero-peek-img {
+  position: absolute;
+  right: -120px;
+  bottom: -40px;
+  height: 70vh;
+  max-height: 750px;
+  width: auto;
+  object-fit: contain;
+  z-index: 1;
+  pointer-events: none;
+  transform: rotate(0deg) scale(1.1);
+  filter: drop-shadow(0 20px 40px rgba(0, 0, 0, 0.15));
+}
+
+@media (max-width: 768px) {
+  .right-hero {
+    display: none;
+  }
+}

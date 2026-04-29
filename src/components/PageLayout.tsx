@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
-import recapCharacter from '../assets/recap-char-logo.png';
+import recapChar from '../assets/recap-buddies-char-rotated.png';
 
 interface RenterInfo {
   fname: string;
@@ -16,6 +16,7 @@ const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
   return (
     <Box sx={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
       <Box
+        className="page-root"
         sx={{
           maxWidth: '1200px',
           margin: '0 auto',
@@ -29,6 +30,7 @@ const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
         }}
       >
         <Box
+          className="left-content"
           sx={{
             flex: 1,
             width: '100%',
@@ -50,27 +52,13 @@ const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
           {children}
         </Box>
 
-        <Box
-          sx={{
-            flex: '0 0 auto',
-            width: '100%',
-            maxWidth: '400px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            order: { xs: 2, md: 2 },
-          }}
-        >
-          <Box
-            component="img"
-            src={recapCharacter}
-            alt="Recap Buddies character"
-            sx={{
-              width: '100%',
-              maxWidth: '400px',
-              objectFit: 'contain',
-            }}
-          />
+        <Box className="right-hero">
+          <div className="hero-text">
+            <h1>recap buddies</h1>
+            <h3>Camera Rental and Creatives</h3>
+            <p>Professional cameras for every creative vision. Capture your story.</p>
+          </div>
+          <img src={recapChar} className="hero-peek-img" alt="decorative character" />
         </Box>
       </Box>
     </Box>
