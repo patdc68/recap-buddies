@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
-import recapCharacter from '../assets/recap-char-logo.png';
+import { useLocation } from 'react-router-dom';
+import recapCharacter from '../assets/recap-buddies-char-rotated.png';
 
 interface RenterInfo {
   fname: string;
@@ -13,30 +14,13 @@ interface PageLayoutProps {
 }
 
 const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
+  const location = useLocation();
+  const isLoginPage = location.pathname === '/login';
+
   return (
-    <Box sx={{ minHeight: '100vh', backgroundColor: '#ffffff' }}>
-      <Box
-        sx={{
-          maxWidth: '1200px',
-          margin: '0 auto',
-          display: 'flex',
-          justifyContent: 'space-between',
-          alignItems: 'center',
-          gap: { xs: 4, md: 6 },
-          px: { xs: 3, md: '60px' },
-          py: { xs: 4, md: '40px' },
-          flexDirection: { xs: 'column', md: 'row' },
-        }}
-      >
-        <Box
-          sx={{
-            flex: 1,
-            width: '100%',
-            maxWidth: '900px',
-            textAlign: 'left',
-            order: 1,
-          }}
-        >
+ <div className="page-root">
+      <div className="left-content">
+        <Box sx={{ maxWidth: '900px', textAlign: 'left', mx: 'auto' }}>
           {renter && (
             <Box sx={{ mb: 3 }}>
               <Typography variant="body2" sx={{ color: '#666666' }}>
@@ -49,31 +33,22 @@ const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
           )}
           {children}
         </Box>
+      </div>
 
-        <Box
-          sx={{
-            flex: '0 0 auto',
-            width: '100%',
-            maxWidth: '400px',
-            display: 'flex',
-            justifyContent: 'center',
-            alignItems: 'center',
-            order: { xs: 2, md: 2 },
-          }}
-        >
-          <Box
-            component="img"
-            src={recapCharacter}
-            alt="Recap Buddies character"
-            sx={{
-              width: '100%',
-              maxWidth: '400px',
-              objectFit: 'contain',
-            }}
-          />
-        </Box>
-      </Box>
-    </Box>
+      <div className="right-hero" aria-hidden="true">
+        {isLoginPage && (
+          <div className="hero-text" aria-hidden="false">
+            <h1>recap buddies</h1>
+            <h3>Camera Rental and Creatives</h3>
+            <p>
+              Professional cameras for every creative vision.
+              {' '}Capture your story.
+            </p>
+          </div>
+        )}
+        <img src={recapCharacter} className="hero-peek-img" alt="" />
+      </div>
+    </div>
   );
 };
 
