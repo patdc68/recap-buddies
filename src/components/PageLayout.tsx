@@ -41,9 +41,12 @@ const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
           <div className="hero-text" aria-hidden="false">
             <h1>recap buddies</h1>
             <h3>Camera Rental and Creatives</h3>
+            <br></br>
+            <br></br>
+            <br></br>
             <p>
-              Professional cameras for every creative vision.
-              {' '}Capture your story.
+              Do you have what it takes to be
+              #RBuddy?
             </p>
           </div>
         )}
