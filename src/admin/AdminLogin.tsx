@@ -50,15 +50,15 @@ const AdminLogin: React.FC = () => {
             display: 'flex', alignItems: 'center', justifyContent: 'center',
             boxShadow: '0 4px 20px rgba(201,151,58,0.12)',
           }}>
-            <AdminPanelSettingsIcon sx={{ fontSize: 32, color: '#C9973A' }} />
+            <AdminPanelSettingsIcon sx={{ fontSize: 32, color: '#111111' }} />
           </Box>
           <Chip
             label="ADMIN PORTAL"
             size="small"
-            sx={{ background: 'rgba(201,151,58,0.12)', color: '#9A6F24', border: '1px solid rgba(201,151,58,0.25)', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', mb: 1.5 }}
+            sx={{ background: 'rgba(201,151,58,0.12)', color: '#111111', border: '1px solid rgba(201,151,58,0.25)', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', mb: 1.5 }}
           />
-          <Typography variant="h3" sx={{ color: '#1A1008', mb: 0.5 }}>Staff Sign In</Typography>
-          <Typography variant="body2" sx={{ color: '#7A6040' }}>
+          <Typography variant="h3" sx={{ color: '#111111', mb: 0.5 }}>Staff Sign In</Typography>
+          <Typography variant="body2" sx={{ color: '#666666' }}>
             Access the Recap Buddies management portal.
           </Typography>
         </Box>
@@ -89,7 +89,7 @@ const AdminLogin: React.FC = () => {
           <Button
             variant="text" size="small" startIcon={<PersonAddIcon />}
             onClick={() => navigate('/admin/register')}
-            sx={{ color: '#9A6F24', fontFamily: '"Sora", sans-serif', fontSize: '0.8rem' }}
+            sx={{ color: '#111111', fontFamily: '"Sora", sans-serif', fontSize: '0.8rem' }}
           >
             Register new staff account
           </Button>

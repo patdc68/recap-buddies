@@ -52,15 +52,15 @@ dayjs.extend(isSameOrAfter);
 
 // ─── Warm palette (matches renter pages) ─────────────────────────────────────
 
-const AMBER       = '#C9973A';
-const AMBER_LIGHT = '#E5B85C';
-const AMBER_DARK  = '#9A6F24';
-const CREAM       = '#FFFBF4';
+const AMBER       = '#111111';
+const AMBER_LIGHT = '#222222';
+const AMBER_DARK  = '#111111';
+const CREAM       = '#FFFFFF';
 const CARD_BG     = '#FFFFFF';
-const ESPRESSO    = '#1A1008';
-const INK         = '#3D2B0F';
-const MUTED       = '#7A6040';
-const BORDER      = 'rgba(201,151,58,0.18)';
+const ESPRESSO    = '#111111';
+const INK         = '#111111';
+const MUTED       = '#666666';
+const BORDER      = 'rgba(17,17,17,0.12)';
 
 // ─── Status tables ────────────────────────────────────────────────────────────
 
@@ -1778,7 +1778,7 @@ const AdminDashboard: React.FC = () => {
   if (!rbUser) return null;
 
   return (
-    <Box sx={{ minHeight: '100vh', background: '#F5EFE4' }}>
+    <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
       <TopBar rbUser={rbUser} tab={tab} onTab={setTab} onLogout={handleLogout} />
       <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1400, mx: 'auto' }}>
         {tab === 0 && <OverviewTab  rentals={rentals} onSave={handleSaveStatus} />}

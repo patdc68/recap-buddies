@@ -170,7 +170,7 @@ const Col: React.FC<{ children: React.ReactNode; half?: boolean }> = ({ children
 );
 
 const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Typography variant="caption" sx={{ color: '#C9973A', letterSpacing: '0.1em', mb: 1.5, display: 'block' }}>
+  <Typography variant="caption" sx={{ color: '#111111', letterSpacing: '0.1em', mb: 1.5, display: 'block' }}>
     {children}
   </Typography>
 );
@@ -263,7 +263,7 @@ const StepPrimaryID: React.FC<IDStepProps> = ({ previews, onCapture, onOpenGuide
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
         <SectionLabel>Primary Government-Issued ID</SectionLabel>
         <Tooltip title="View accepted IDs and sample images">
-          <IconButton size="small" onClick={onOpenGuide} sx={{ mb: 1.2, color: '#9A6F24' }}>
+          <IconButton size="small" onClick={onOpenGuide} sx={{ mb: 1.2, color: '#111111' }}>
             <InfoOutlinedIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -300,7 +300,7 @@ const StepSecondaryID: React.FC<IDStepProps> = ({ previews, onCapture, onOpenGui
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
         <SectionLabel>Secondary ID</SectionLabel>
         <Tooltip title="View accepted IDs and sample images">
-          <IconButton size="small" onClick={onOpenGuide} sx={{ mb: 1.2, color: '#9A6F24' }}>
+          <IconButton size="small" onClick={onOpenGuide} sx={{ mb: 1.2, color: '#111111' }}>
             <InfoOutlinedIcon fontSize="small" />
           </IconButton>
         </Tooltip>
@@ -385,7 +385,7 @@ const StepSelfie: React.FC<StepSelfieProps> = ({
           {selfieInstructions.map((inst) => (
             <MenuItem key={inst.id} value={inst.id}>
               <Box>
-                <Typography sx={{ fontWeight: 600, color: '#C9973A', fontFamily: '"Sora", sans-serif', fontSize: '0.9rem' }}>
+                <Typography sx={{ fontWeight: 600, color: '#111111', fontFamily: '"Sora", sans-serif', fontSize: '0.9rem' }}>
                   {inst.instruction_name}
                 </Typography>
                 <Typography variant="body2" sx={{ fontSize: '0.78rem' }}>
@@ -406,8 +406,8 @@ const StepSelfie: React.FC<StepSelfieProps> = ({
           sx={{
             background: 'rgba(201,151,58,0.10)',
             border: '1px solid rgba(201,151,58,0.35)',
-            color: '#9A6F24',
-            '& .MuiAlert-icon': { color: '#C9973A' },
+            color: '#111111',
+            '& .MuiAlert-icon': { color: '#111111' },
           }}
         >
           <Typography sx={{ fontWeight: 600 }}>{selected.instruction_name}</Typography>
@@ -644,12 +644,12 @@ const RenterRegistration: React.FC = () => {
       <PageLayout>
         <Box sx={{ textAlign: 'center', py: 8 }}>
           <CheckCircleIcon sx={{ fontSize: 72, color: '#69DB7C', mb: 2 }} />
-          <Typography variant="h3" sx={{ color: '#1A1008', mb: 1 }}>Registration Complete!</Typography>
-          <Typography variant="body1" sx={{ color: '#7A6040', mb: 2 }}>Your account has been created successfully.</Typography>
-          <Typography variant="body1" sx={{ color: '#C9973A', mb: 3, fontWeight: 600 }}>
+          <Typography variant="h3" sx={{ color: '#111111', mb: 1 }}>Registration Complete!</Typography>
+          <Typography variant="body1" sx={{ color: '#666666', mb: 2 }}>Your account has been created successfully.</Typography>
+          <Typography variant="body1" sx={{ color: '#111111', mb: 3, fontWeight: 600 }}>
             Redirecting to rental form in {countdown}…
           </Typography>
-          <CircularProgress sx={{ color: '#C9973A' }} size={32} />
+          <CircularProgress sx={{ color: '#111111' }} size={32} />
           <Box sx={{ mt: 3 }}>
             <Button variant="outlined" onClick={() => navigate('/renterForm')}>Go Now</Button>
           </Box>
@@ -669,15 +669,15 @@ const RenterRegistration: React.FC = () => {
           label="RENTER REGISTRATION"
           size="small"
           sx={{
-            background: 'rgba(201,151,58,0.15)', color: '#C9973A',
+            background: 'rgba(201,151,58,0.15)', color: '#111111',
             border: '1px solid rgba(201,151,58,0.25)',
             fontFamily: '"Sora", sans-serif', letterSpacing: '0.08em', mb: 1.5,
           }}
         />
-        <Typography variant="h3" sx={{ color: '#1A1008', lineHeight: 1.2, mb: 0.5 }}>
+        <Typography variant="h3" sx={{ color: '#111111', lineHeight: 1.2, mb: 0.5 }}>
           Create Your Renter Account
         </Typography>
-        <Typography variant="body1" sx={{ color: '#7A6040' }}>
+        <Typography variant="body1" sx={{ color: '#666666' }}>
           Complete all steps to verify your identity and access our rental service.
         </Typography>
       </Box>
@@ -685,14 +685,14 @@ const RenterRegistration: React.FC = () => {
       {/* Progress bar */}
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-          <Typography sx={{ color: '#7A6040', fontSize: '0.8rem' }}>Step {activeStep + 1} of {STEPS.length}</Typography>
-          <Typography sx={{ color: '#C9973A', fontSize: '0.8rem' }}>{Math.round(progress)}% complete</Typography>
+          <Typography sx={{ color: '#666666', fontSize: '0.8rem' }}>Step {activeStep + 1} of {STEPS.length}</Typography>
+          <Typography sx={{ color: '#111111', fontSize: '0.8rem' }}>{Math.round(progress)}% complete</Typography>
         </Box>
         <LinearProgress
           variant="determinate" value={progress}
           sx={{
             height: 4, borderRadius: 2, background: 'rgba(201,151,58,0.10)',
-            '& .MuiLinearProgress-bar': { background: 'linear-gradient(90deg, #C9973A, #9A6F24)', borderRadius: 2 },
+            '& .MuiLinearProgress-bar': { background: 'linear-gradient(90deg, #111111, #111111)', borderRadius: 2 },
           }}
         />
       </Box>
@@ -720,13 +720,13 @@ const RenterRegistration: React.FC = () => {
             width: 40, height: 40, borderRadius: '10px',
             background: 'linear-gradient(135deg, rgba(201,151,58,0.15), rgba(201,151,58,0.05))',
             border: '1px solid rgba(201,151,58,0.25)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#C9973A',
+            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#111111',
           }}>
             {STEPS[activeStep].icon}
           </Box>
           <Box>
-            <Typography sx={{ color: '#7A6040', fontSize: '0.78rem' }}>Step {activeStep + 1}</Typography>
-            <Typography variant="h6" sx={{ color: '#1A1008', lineHeight: 1 }}>{STEPS[activeStep].label}</Typography>
+            <Typography sx={{ color: '#666666', fontSize: '0.78rem' }}>Step {activeStep + 1}</Typography>
+            <Typography variant="h6" sx={{ color: '#111111', lineHeight: 1 }}>{STEPS[activeStep].label}</Typography>
           </Box>
         </Box>
 
@@ -819,7 +819,7 @@ const RenterRegistration: React.FC = () => {
       </Dialog>
 
       <Dialog open={primaryGuideOpen} onClose={() => setPrimaryGuideOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle sx={{ fontFamily: '"Playfair Display", serif', color: '#1A1008' }}>Primary ID</DialogTitle>
+        <DialogTitle sx={{ fontFamily: '"Playfair Display", serif', color: '#111111' }}>Primary ID</DialogTitle>
         <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
           <Box component="ul" sx={{ m: 0, pl: 2.5, color: '#3A2A12', display: 'grid', gap: 0.5 }}>
             {PRIMARY_ID_LIST.map((item) => (
@@ -829,7 +829,7 @@ const RenterRegistration: React.FC = () => {
           <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, justifyContent: 'center', alignItems: 'center' }}>
             {[{ label: 'Front Sample', src: PRIMARY_FRONT_SAMPLE }, { label: 'Back Sample', src: PRIMARY_BACK_SAMPLE }].map((sample) => (
               <Box key={sample.label} sx={{ textAlign: 'center' }}>
-                <Typography sx={{ fontSize: '0.78rem', color: '#7A6040', mb: 0.75 }}>{sample.label}</Typography>
+                <Typography sx={{ fontSize: '0.78rem', color: '#666666', mb: 0.75 }}>{sample.label}</Typography>
                 <Box component="img" src={sample.src} alt={sample.label} sx={{ width: '100%', maxWidth: 280, height: 'auto', borderRadius: 2, border: '1px solid rgba(201,151,58,0.25)', boxShadow: '0 6px 20px rgba(26,16,8,0.08)' }} />
               </Box>
             ))}
@@ -841,7 +841,7 @@ const RenterRegistration: React.FC = () => {
       </Dialog>
 
       <Dialog open={secondaryGuideOpen} onClose={() => setSecondaryGuideOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ fontFamily: '"Playfair Display", serif', color: '#1A1008' }}>Secondary ID</DialogTitle>
+        <DialogTitle sx={{ fontFamily: '"Playfair Display", serif', color: '#111111' }}>Secondary ID</DialogTitle>
         <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
           <Box component="ul" sx={{ m: 0, pl: 2.5, color: '#3A2A12', display: 'grid', gap: 0.5 }}>
             {SECONDARY_ID_LIST.map((item) => (
@@ -862,7 +862,7 @@ const RenterRegistration: React.FC = () => {
         {STEPS.map((_, i) => (
           <Box key={i} sx={{
             width: i === activeStep ? 20 : 8, height: 8, borderRadius: 4,
-            background: i < activeStep ? '#69DB7C' : i === activeStep ? '#C9973A' : 'rgba(201,151,58,0.15)',
+            background: i < activeStep ? '#69DB7C' : i === activeStep ? '#111111' : 'rgba(201,151,58,0.15)',
             transition: 'all 0.3s ease',
           }} />
         ))}
