@@ -1222,7 +1222,6 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
     if (!validate()) return;
     setSaving(true); setSubmitErr('');
     try {
-<<<<<<< codex/add-remarks-textbox-in-add/edit-item
           const { error } = await supabase.from('RB_ITEM').insert({
             device_id_fk: deviceId,
             code_name: codeName,
@@ -1237,12 +1236,6 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
       if (error) throw new Error(error.message);
       onSaved(); onClose();
       setDeviceId(''); setCodeName(''); setSerialNo(''); setBranchId(''); setGps(false); setRemarks('');
-=======
-          const { error } = await supabase.from('RB_ITEM').insert({ device_id_fk: deviceId, code_name: codeName, serial_no: serialNo, remarks: remarks.trim() || null, branch_id_fk: branchId || null, gps_installed: gps, current_condition: 'working', status: 'Available', created_by: createdBy });
-      if (error) throw new Error(error.message);
-      onSaved(); onClose();
-      setDeviceId(''); setCodeName(''); setSerialNo(''); setRemarks(''); setBranchId(''); setGps(false);
->>>>>>> pre-prod-2
     } catch (e: unknown) { setSubmitErr(e instanceof Error ? e.message : 'Error'); }
     finally { setSaving(false); }
   };
