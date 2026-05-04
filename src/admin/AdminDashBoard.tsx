@@ -110,7 +110,10 @@ const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface EnrichedItem extends RbItem { device?: RbDevice; }
+interface EnrichedItem extends RbItem {
+  device?: RbDevice;
+  remarks?: string | null;
+}
 
 interface EnrichedRental extends RbRentalForm {
   item?:         EnrichedItem;
