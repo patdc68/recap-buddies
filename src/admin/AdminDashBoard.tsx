@@ -1202,6 +1202,7 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
   const [deviceId, setDeviceId]   = useState('');
   const [codeName, setCodeName]   = useState('');
   const [serialNo, setSerialNo]   = useState('');
+  const [remarks, setRemarks]     = useState('');
   const [branchId, setBranchId]   = useState('');
   const [gps, setGps]             = useState(false);
   const [remarks, setRemarks]     = useState('');
@@ -1221,6 +1222,7 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
     if (!validate()) return;
     setSaving(true); setSubmitErr('');
     try {
+<<<<<<< codex/add-remarks-textbox-in-add/edit-item
           const { error } = await supabase.from('RB_ITEM').insert({
             device_id_fk: deviceId,
             code_name: codeName,
@@ -1235,6 +1237,12 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
       if (error) throw new Error(error.message);
       onSaved(); onClose();
       setDeviceId(''); setCodeName(''); setSerialNo(''); setBranchId(''); setGps(false); setRemarks('');
+=======
+          const { error } = await supabase.from('RB_ITEM').insert({ device_id_fk: deviceId, code_name: codeName, serial_no: serialNo, remarks: remarks.trim() || null, branch_id_fk: branchId || null, gps_installed: gps, current_condition: 'working', status: 'Available', created_by: createdBy });
+      if (error) throw new Error(error.message);
+      onSaved(); onClose();
+      setDeviceId(''); setCodeName(''); setSerialNo(''); setRemarks(''); setBranchId(''); setGps(false);
+>>>>>>> pre-prod-2
     } catch (e: unknown) { setSubmitErr(e instanceof Error ? e.message : 'Error'); }
     finally { setSaving(false); }
   };
@@ -1271,6 +1279,13 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
             </Box>
           ))}
         </Box>
+        <textarea
+          placeholder="Remarks (optional)"
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+          rows={3}
+          style={{ ...inputSx, border: `1px solid ${BORDER}`, resize: 'vertical' }}
+        />
         <FormControl fullWidth size="small">
           <InputLabel>Branch (optional)</InputLabel>
           <Select value={branchId} onChange={(e: SelectChangeEvent) => setBranchId(e.target.value)} label="Branch (optional)">
@@ -1307,6 +1322,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
   const [condition, setCondition] = useState<ItemCondition>('working');
   const [codeName, setCodeName]   = useState('');
   const [serialNo, setSerialNo]   = useState('');
+  const [remarks, setRemarks]     = useState('');
   const [gps, setGps]             = useState(false);
   const [remarks, setRemarks]     = useState('');
   const [rentPrice, setRentPrice] = useState('');
@@ -1320,6 +1336,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
       setCondition(item.current_condition);
       setCodeName(item.code_name);
       setSerialNo(item.serial_no);
+      setRemarks(item.remarks ?? '');
       setGps(item.gps_installed);
       setRemarks(item.remarks ?? '');
       setRentPrice(item.rent_price?.toString() ?? '');
@@ -1345,6 +1362,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
         current_condition: condition,
         code_name: codeName,
         serial_no: serialNo,
+        remarks: remarks.trim() || null,
         gps_installed: gps,
         remarks: remarks.trim() || null,
         rent_price: rentPrice ? Number(rentPrice) : null,
@@ -1401,6 +1419,13 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
             </FormControl>
           </Box>
         </Box>
+        <textarea
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+          rows={3}
+          placeholder="Remarks (optional)"
+          style={{ ...inputSx, resize: 'vertical' }}
+        />
 
         {/* Status — read-only display */}
         <Box sx={{ p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.04)', border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 1.5 }}>

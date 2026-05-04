@@ -56,6 +56,7 @@ export interface RbItem {
   device_id_fk: string;
   code_name: string;
   serial_no: string;
+  remarks: string | null;
   branch_id_fk: string | null;
   status: ItemStatus;
   gps_installed: boolean;
