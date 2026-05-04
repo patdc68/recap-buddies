@@ -1201,6 +1201,7 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
   const [serialNo, setSerialNo]   = useState('');
   const [branchId, setBranchId]   = useState('');
   const [gps, setGps]             = useState(false);
+  const [remarks, setRemarks]     = useState('');
   const [saving, setSaving]       = useState(false);
   const [errors, setErrors]       = useState<Record<string, string>>({});
   const [submitErr, setSubmitErr] = useState('');
@@ -1217,10 +1218,20 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
     if (!validate()) return;
     setSaving(true); setSubmitErr('');
     try {
-          const { error } = await supabase.from('RB_ITEM').insert({ device_id_fk: deviceId, code_name: codeName, serial_no: serialNo, branch_id_fk: branchId || null, gps_installed: gps, current_condition: 'working', status: 'Available', created_by: createdBy });
+          const { error } = await supabase.from('RB_ITEM').insert({
+            device_id_fk: deviceId,
+            code_name: codeName,
+            serial_no: serialNo,
+            branch_id_fk: branchId || null,
+            gps_installed: gps,
+            remarks: remarks.trim() || null,
+            current_condition: 'working',
+            status: 'Available',
+            created_by: createdBy
+          });
       if (error) throw new Error(error.message);
       onSaved(); onClose();
-      setDeviceId(''); setCodeName(''); setSerialNo(''); setBranchId(''); setGps(false);
+      setDeviceId(''); setCodeName(''); setSerialNo(''); setBranchId(''); setGps(false); setRemarks('');
     } catch (e: unknown) { setSubmitErr(e instanceof Error ? e.message : 'Error'); }
     finally { setSaving(false); }
   };
@@ -1268,6 +1279,16 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
           control={<Switch checked={gps} onChange={(e) => setGps(e.target.checked)} />}
           label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}><GpsFixedIcon sx={{ fontSize: 16, color: AMBER }} /><Typography sx={{ color: INK, fontSize: '0.85rem' }}>GPS Installed</Typography></Box>}
         />
+        <Box>
+          <Typography sx={{ color: AMBER_DARK, fontSize: '0.62rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', mb: 0.5 }}>Remarks</Typography>
+          <textarea
+            value={remarks}
+            onChange={(e) => setRemarks(e.target.value)}
+            placeholder="Add remarks"
+            rows={3}
+            style={{ ...inputSx, resize: 'vertical', minHeight: 70, border: `1px solid ${BORDER}` }}
+          />
+        </Box>
         {submitErr && <Typography sx={{ color: '#C0392B', fontSize: '0.8rem' }}>{submitErr}</Typography>}
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3 }}>
@@ -1284,6 +1305,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
   const [codeName, setCodeName]   = useState('');
   const [serialNo, setSerialNo]   = useState('');
   const [gps, setGps]             = useState(false);
+  const [remarks, setRemarks]     = useState('');
   const [rentPrice, setRentPrice] = useState('');
   const [imgFile, setImgFile]     = useState<File | null>(null);
   const [preview, setPreview]     = useState('');
@@ -1296,6 +1318,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
       setCodeName(item.code_name);
       setSerialNo(item.serial_no);
       setGps(item.gps_installed);
+      setRemarks(item.remarks ?? '');
       setRentPrice(item.rent_price?.toString() ?? '');
       setPreview(item.device?.device_img ?? '');
       setImgFile(null);
@@ -1320,6 +1343,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
         code_name: codeName,
         serial_no: serialNo,
         gps_installed: gps,
+        remarks: remarks.trim() || null,
         rent_price: rentPrice ? Number(rentPrice) : null,
       }).eq('id', item.id);
       onSaved(); onClose();
@@ -1385,6 +1409,16 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
           control={<Switch checked={gps} onChange={(e) => setGps(e.target.checked)} />}
           label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}><GpsFixedIcon sx={{ fontSize: 16, color: AMBER }} /><Typography sx={{ color: INK, fontSize: '0.85rem' }}>GPS Installed</Typography></Box>}
         />
+        <Box>
+          <Typography sx={{ color: AMBER_DARK, fontSize: '0.62rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', mb: 0.5 }}>Remarks</Typography>
+          <textarea
+            value={remarks}
+            onChange={(e) => setRemarks(e.target.value)}
+            placeholder="Add remarks"
+            rows={3}
+            style={{ ...inputSx, resize: 'vertical', minHeight: 70 }}
+          />
+        </Box>
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3 }}>
         <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
