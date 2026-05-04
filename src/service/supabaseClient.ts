@@ -56,6 +56,7 @@ export interface RbItem {
   device_id_fk: string;
   code_name: string;
   serial_no: string;
+  remarks: string | null;
   branch_id_fk: string | null;
   status: ItemStatus;
   gps_installed: boolean;
@@ -126,6 +127,9 @@ export interface RbRentalForm {
   delivery_addr: string | null;
   hub_return_addr: string | null;    // FK → RB_BRANCHES.id
   return_addr: string | null;
+  remarks: string | null;
+  messenger_link: string | null;
+  rent_price: number | null;
   status: RentalStatus;
   created_at: string;
 }

@@ -6,11 +6,11 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import type { RbBranch, RbDevice, RbItem, RbRentalForm } from '../service/supabaseClient';
 
-const AMBER = '#C9973A';
-const CREAM = '#FFFBF4';
+const AMBER = '#111111';
+const CREAM = '#FFFFFF';
 const CARD_BG = '#FFFFFF';
-const ESPRESSO = '#1A1008';
-const MUTED = '#7A6040';
+const ESPRESSO = '#111111';
+const MUTED = '#666666';
 const BORDER = 'rgba(201,151,58,0.18)';
 
 interface EnrichedItem extends RbItem {
@@ -20,12 +20,6 @@ interface EnrichedItem extends RbItem {
 interface EnrichedRental extends RbRentalForm {
   item?: EnrichedItem;
 }
-
-const getRentalDayCount = (startDate: string, endDate: string) => {
-  const start = dayjs(startDate).startOf('day');
-  const end = dayjs(endDate).startOf('day');
-  return Math.max(end.diff(start, 'day'), 1);
-};
 
 const AdminRevenueAnalyticsPage: React.FC = () => {
   const navigate = useNavigate();
@@ -74,23 +68,21 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
   }, [fetchAnalyticsData]);
 
   const analytics = useMemo(() => {
-    const byCamera: Record<string, { camera: string; rentals: number; totalDays: number; revenue: number }> = {};
+    const byCamera: Record<string, { camera: string; rentals: number; revenue: number }> = {};
     const branchRentals: Record<string, number> = {};
 
     rentals.forEach((r) => {
       const camKey = r.item?.device_id_fk ?? r.cam_name_id_fk;
       const camName = r.item?.device?.cam_name ?? 'Unknown Camera';
-      const rate = Number(r.item?.rent_price ?? 0);
-      const effectiveEndDate = r.actual_return_date ?? r.rent_date_end;
-      const rentalDays = getRentalDayCount(r.rent_date_start, effectiveEndDate);
-      const revenue = rate * rentalDays;
+      const unitPrice = Number(r.rent_price ?? 0) || 0;
+      const rentalDays = Math.max(dayjs(r.rent_date_end).diff(dayjs(r.rent_date_start), 'day'), 0);
+      const revenue = unitPrice * rentalDays;
 
       if (!byCamera[camKey]) {
-        byCamera[camKey] = { camera: camName, rentals: 0, totalDays: 0, revenue: 0 };
+        byCamera[camKey] = { camera: camName, rentals: 0, revenue: 0 };
       }
 
       byCamera[camKey].rentals += 1;
-      byCamera[camKey].totalDays += rentalDays;
       byCamera[camKey].revenue += revenue;
 
       const branchId = r.item?.branch_id_fk ?? 'unassigned';
@@ -125,7 +117,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', background: '#F5EFE4', px: { xs: 2, md: 4 }, py: 4 }}>
+    <Box sx={{ minHeight: '100vh', background: '#FFFFFF', px: { xs: 2, md: 4 }, py: 4 }}>
       <Box sx={{ maxWidth: 1200, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <IconButton onClick={() => navigate('/admin/dashboard')} sx={{ border: `1px solid ${BORDER}`, color: MUTED }}>
@@ -135,7 +127,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
             <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '1.2rem' }}>
               Monthly Revenue Analytics — {dayjs(`${selectedYear}-${selectedMonth}-01`).format('MMMM YYYY')}
             </Typography>
-            <Typography sx={{ color: MUTED, fontSize: '0.82rem' }}>Per-camera revenue using price × rental days.</Typography>
+            <Typography sx={{ color: MUTED, fontSize: '0.82rem' }}>Per-camera revenue computed as rent price × rental duration.</Typography>
           </Box>
         </Box>
 
@@ -168,8 +160,8 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
         </Box>
 
         <Paper elevation={0} sx={{ borderRadius: 3, border: `1px solid ${BORDER}`, overflow: 'hidden' }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1.2fr 90px 110px 120px', px: 2, py: 1.2, background: 'rgba(201,151,58,0.05)' }}>
-            {['Camera', 'Rented', 'Days', 'Revenue'].map((header) => (
+          <Box sx={{ display: 'grid', gridTemplateColumns: '1.2fr 90px 120px', px: 2, py: 1.2, background: 'rgba(201,151,58,0.05)' }}>
+            {['Camera', 'Rented', 'Revenue'].map((header) => (
               <Typography key={header} sx={{ color: MUTED, fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{header}</Typography>
             ))}
           </Box>
@@ -178,10 +170,9 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
               <Typography sx={{ color: MUTED }}>No rentals found for this month.</Typography>
             </Box>
           ) : analytics.rows.map((row, idx) => (
-            <Box key={`${row.camera}-${idx}`} sx={{ display: 'grid', gridTemplateColumns: '1.2fr 90px 110px 120px', px: 2, py: 1.3, borderTop: `1px solid ${BORDER}` }}>
+            <Box key={`${row.camera}-${idx}`} sx={{ display: 'grid', gridTemplateColumns: '1.2fr 90px 120px', px: 2, py: 1.3, borderTop: `1px solid ${BORDER}` }}>
               <Typography sx={{ color: ESPRESSO, fontWeight: 600, fontSize: '0.86rem' }}>{row.camera}</Typography>
               <Typography sx={{ color: MUTED, fontSize: '0.84rem' }}>{row.rentals}</Typography>
-              <Typography sx={{ color: MUTED, fontSize: '0.84rem' }}>{row.totalDays}</Typography>
               <Typography sx={{ color: '#2E7D32', fontWeight: 700, fontSize: '0.84rem' }}>₱{row.revenue.toLocaleString()}</Typography>
             </Box>
           ))}

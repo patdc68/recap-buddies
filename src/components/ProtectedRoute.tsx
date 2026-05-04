@@ -27,10 +27,10 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ children }) => {
           justifyContent: 'center',
           alignItems: 'center',
           minHeight: '100vh',
-          background: '#FFFBF4',
+          background: '#FFFFFF',
         }}
       >
-        <CircularProgress sx={{ color: '#C9973A' }} />
+        <CircularProgress sx={{ color: '#111111' }} />
       </Box>
     );
   }

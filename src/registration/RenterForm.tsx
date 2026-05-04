@@ -75,10 +75,10 @@ const INIT_FORM: RentalForm = {
 const TOGGLE_BTN_SX = {
   border: '1px solid rgba(201,151,58,0.2) !important',
   borderRadius: '8px !important',
-  color: '#7A6040', gap: 1,
+  color: '#666666', gap: 1,
   textTransform: 'none' as const,
   fontFamily: '"Sora", sans-serif', fontWeight: 600,
-  '&.Mui-selected': { background: 'rgba(201,151,58,0.15)', borderColor: '#C9973A !important', color: '#C9973A' },
+  '&.Mui-selected': { background: 'rgba(201,151,58,0.15)', borderColor: '#111111 !important', color: '#111111' },
   '&:hover': { background: 'rgba(201,151,58,0.10)' },
 };
 
@@ -93,7 +93,7 @@ const Col: React.FC<{ children: React.ReactNode; half?: boolean }> = ({ children
   </Box>
 );
 const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Typography variant="caption" sx={{ color: '#C9973A', letterSpacing: '0.1em', mb: 1.5, display: 'block' }}>{children}</Typography>
+  <Typography variant="caption" sx={{ color: '#111111', letterSpacing: '0.1em', mb: 1.5, display: 'block' }}>{children}</Typography>
 );
 
 // ─── Step 1: Camera Selection ─────────────────────────────────────────────────
@@ -111,7 +111,7 @@ const StepCamera: React.FC<StepCameraProps> = ({ items, form, onSelect, errors }
     <SectionLabel>Select the camera you want to rent</SectionLabel>
     {items.length === 0 && (
       <Alert severity="info" sx={{ background: 'rgba(107,142,107,0.06)', border: '1px solid rgba(107,142,107,0.2)', color: '#4A6A4A' }}>
-        No cameras are currently available. Please check back later.
+        No cameras found in inventory.
       </Alert>
     )}
     <FormControl fullWidth error={!!errors.cam_name_id_fk}>
@@ -126,25 +126,21 @@ const StepCamera: React.FC<StepCameraProps> = ({ items, form, onSelect, errors }
                     <CameraAltIcon sx={{ fontSize: 18, color: 'rgba(201,151,58,0.4)' }} />
                   </Box>}
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Typography sx={{ fontWeight: 600, color: '#1A1008', fontSize: '0.9rem', lineHeight: 1.3 }}>
+                <Typography sx={{ fontWeight: 600, color: '#111111', fontSize: '0.9rem', lineHeight: 1.3 }}>
                   {item.device?.cam_name ?? '—'}
                 </Typography>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                  <Typography variant="body2" sx={{ fontSize: '0.72rem', color: '#7A6040' }}>
-                    {item.code_name} · S/N {item.serial_no}
-                  </Typography>
                   {item.gps_installed && <GpsFixedIcon sx={{ fontSize: 11, color: '#2E7D32' }} />}
                 </Box>
               </Box>
-              <Chip label="Available" size="small" sx={{ flexShrink: 0, background: 'rgba(105,219,124,0.1)', color: '#2E7D32', border: '1px solid rgba(105,219,124,0.25)', fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', fontWeight: 600 }} />
             </Box>
           </MenuItem>
         ))}
       </Select>
       {errors.cam_name_id_fk && <FormHelperText>{errors.cam_name_id_fk}</FormHelperText>}
     </FormControl>
-    <Typography variant="body2" sx={{ color: '#7A6040', fontSize: '0.78rem' }}>
-      Only <strong>Available</strong> units are listed. Each unit is identified by its unique code name.
+    <Typography variant="body2" sx={{ color: '#666666', fontSize: '0.78rem' }}>
+      Please select a device to proceed.
     </Typography>
   </Box>
 );
@@ -173,17 +169,13 @@ const StepPeriod: React.FC<{ form: RentalForm; setForm: React.Dispatch<React.Set
       {form.rent_date_start && form.rent_date_end && (
         <Paper sx={{ p: 2, background: 'rgba(201,151,58,0.10)', border: '1px solid rgba(201,151,58,0.2)', borderRadius: 2, display: 'flex', flexWrap: 'wrap', gap: 3 }}>
           <Box>
-            <Typography variant="caption" sx={{ color: '#7A6040', textTransform: 'none', letterSpacing: 0 }}>Duration</Typography>
-            <Typography variant="h5" sx={{ color: '#C9973A' }}>{form.rent_date_end.diff(form.rent_date_start, 'day')} days</Typography>
+            <Typography variant="caption" sx={{ color: '#666666', textTransform: 'none', letterSpacing: 0 }}>From</Typography>
+            <Typography sx={{ color: '#111111', fontWeight: 500 }}>{form.rent_date_start.format('MMM D, YYYY')}</Typography>
           </Box>
           <Divider orientation="vertical" flexItem sx={{ borderColor: 'rgba(201,151,58,0.15)' }} />
           <Box>
-            <Typography variant="caption" sx={{ color: '#7A6040', textTransform: 'none', letterSpacing: 0 }}>From</Typography>
-            <Typography sx={{ color: '#1A1008', fontWeight: 500 }}>{form.rent_date_start.format('MMM D, YYYY')}</Typography>
-          </Box>
-          <Box>
-            <Typography variant="caption" sx={{ color: '#7A6040', textTransform: 'none', letterSpacing: 0 }}>To</Typography>
-            <Typography sx={{ color: '#1A1008', fontWeight: 500 }}>{form.rent_date_end.format('MMM D, YYYY')}</Typography>
+            <Typography variant="caption" sx={{ color: '#666666', textTransform: 'none', letterSpacing: 0 }}>To</Typography>
+            <Typography sx={{ color: '#111111', fontWeight: 500 }}>{form.rent_date_end.format('MMM D, YYYY')}</Typography>
           </Box>
         </Paper>
       )}
@@ -237,10 +229,10 @@ const StepPurpose: React.FC<StepPurposeProps> = ({ form, onText, onLocUsage, err
     {/* ── Refund info — MANDATORY ── */}
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-        <AccountBalanceIcon sx={{ fontSize: 16, color: '#C9973A' }} />
+        <AccountBalanceIcon sx={{ fontSize: 16, color: '#111111' }} />
         <SectionLabel>Bank / Refund Information</SectionLabel>
       </Box>
-      <Alert severity="info" sx={{ mb: 1.5, py: 0.5, fontSize: '0.8rem', background: 'rgba(201,151,58,0.06)', color: '#7A6040', border: '1px solid rgba(201,151,58,0.2)', '& .MuiAlert-icon': { color: '#C9973A' } }}>
+      <Alert severity="info" sx={{ mb: 1.5, py: 0.5, fontSize: '0.8rem', background: 'rgba(201,151,58,0.06)', color: '#666666', border: '1px solid rgba(201,151,58,0.2)', '& .MuiAlert-icon': { color: '#111111' } }}>
         Required — this is used to process refunds if your rental is cancelled or if there are any adjustments.
       </Alert>
       <TextField
@@ -283,7 +275,7 @@ const DeliverySection: React.FC<DeliverySectionProps> = ({ title, modeKey, addrK
             {branches.map((b) => (
               <MenuItem key={b.id} value={b.id}>
                 <Box>
-                  <Typography sx={{ fontWeight: 600, fontSize: '0.88rem', color: '#1A1008' }}>{b.location_name}</Typography>
+                  <Typography sx={{ fontWeight: 600, fontSize: '0.88rem', color: '#111111' }}>{b.location_name}</Typography>
                   <Typography variant="body2" sx={{ fontSize: '0.75rem' }}>{b.location_addr}</Typography>
                 </Box>
               </MenuItem>
@@ -314,9 +306,9 @@ const StepDelivery: React.FC<{ form: RentalForm; setForm: React.Dispatch<React.S
 
 const ReviewRow: React.FC<{ label: string; value?: string | null }> = ({ label, value }) => (
   <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 1.2, borderBottom: '1px solid rgba(255,243,220,0.8)' }}>
-    <Typography variant="body2" sx={{ color: '#7A6040', minWidth: 160 }}>{label}</Typography>
-    <Typography variant="body2" sx={{ color: '#1A1008', textAlign: 'right', fontWeight: 500 }}>
-      {value ?? <span style={{ color: '#B8A080', fontStyle: 'italic' }}>Not provided</span>}
+    <Typography variant="body2" sx={{ color: '#666666', minWidth: 160 }}>{label}</Typography>
+    <Typography variant="body2" sx={{ color: '#111111', textAlign: 'right', fontWeight: 500 }}>
+      {value ?? <span style={{ color: '#666666', fontStyle: 'italic' }}>Not provided</span>}
     </Typography>
   </Box>
 );
@@ -346,8 +338,8 @@ const StepReview: React.FC<StepReviewProps> = ({ form, items, branches, purposeP
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, p: 2, background: 'rgba(201,151,58,0.04)', border: '1px solid rgba(201,151,58,0.12)', borderRadius: 2 }}>
           <img src={item.device.device_img} alt={item.device.cam_name} style={{ width: 72, height: 54, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(201,151,58,0.2)' }} />
           <Box>
-            <Typography sx={{ fontWeight: 700, color: '#1A1008', fontSize: '1rem' }}>{item.device.cam_name}</Typography>
-            <Typography sx={{ fontSize: '0.78rem', color: '#9A6F24', fontFamily: '"Sora", sans-serif' }}>{item.code_name} · S/N {item.serial_no}</Typography>
+            <Typography sx={{ fontWeight: 700, color: '#111111', fontSize: '1rem' }}>{item.device.cam_name}</Typography>
+            <Typography sx={{ fontSize: '0.78rem', color: '#111111', fontFamily: '"Sora", sans-serif' }}>{item.code_name} · S/N {item.serial_no}</Typography>
             {item.gps_installed && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.25 }}>
                 <GpsFixedIcon sx={{ fontSize: 12, color: '#2E7D32' }} />
@@ -359,37 +351,37 @@ const StepReview: React.FC<StepReviewProps> = ({ form, items, branches, purposeP
       )}
 
       <Paper sx={{ p: 2.5, background: 'rgba(201,151,58,0.04)', border: '1px solid rgba(201,151,58,0.15)', borderRadius: 2 }}>
-        <Typography variant="caption" sx={{ color: '#C9973A', mb: 1, display: 'block' }}>EQUIPMENT</Typography>
+        <Typography variant="caption" sx={{ color: '#111111', mb: 1, display: 'block' }}>EQUIPMENT</Typography>
         <ReviewRow label="Camera"     value={item?.device?.cam_name} />
         <ReviewRow label="Code Name"  value={item?.code_name} />
         <ReviewRow label="Serial No." value={item?.serial_no} />
 
-        <Typography variant="caption" sx={{ color: '#C9973A', mt: 2, mb: 1, display: 'block' }}>RENTAL PERIOD</Typography>
+        <Typography variant="caption" sx={{ color: '#111111', mt: 2, mb: 1, display: 'block' }}>RENTAL PERIOD</Typography>
         <ReviewRow label="Start Date" value={form.rent_date_start?.format('MMMM D, YYYY')} />
         <ReviewRow label="End Date"   value={form.rent_date_end?.format('MMMM D, YYYY')} />
         <ReviewRow label="Duration"   value={duration} />
 
-        <Typography variant="caption" sx={{ color: '#C9973A', mt: 2, mb: 1, display: 'block' }}>PURPOSE</Typography>
+        <Typography variant="caption" sx={{ color: '#111111', mt: 2, mb: 1, display: 'block' }}>PURPOSE</Typography>
         <ReviewRow label="Usage Location"  value={form.loc_usage ? form.loc_usage.charAt(0).toUpperCase() + form.loc_usage.slice(1) : undefined} />
         <ReviewRow label="Social Handle"   value={form.username || undefined} />
         <ReviewRow label="Discount Code"   value={form.discount_code || undefined} />
 
-        <Typography variant="caption" sx={{ color: '#C9973A', mt: 2, mb: 1, display: 'block' }}>BANK / REFUND INFO</Typography>
+        <Typography variant="caption" sx={{ color: '#111111', mt: 2, mb: 1, display: 'block' }}>BANK / REFUND INFO</Typography>
         <ReviewRow label="Bank Details" value={form.refund_info} />
 
-        <Typography variant="caption" sx={{ color: '#C9973A', mt: 2, mb: 1, display: 'block' }}>LOGISTICS</Typography>
+        <Typography variant="caption" sx={{ color: '#111111', mt: 2, mb: 1, display: 'block' }}>LOGISTICS</Typography>
         <ReviewRow label="Pick-up" value={form.pickup_mode === 'hub' ? hubPickup?.location_name : form.delivery_addr} />
         <ReviewRow label="Return"  value={form.return_mode === 'hub' ? hubReturn?.location_name : form.return_addr} />
       </Paper>
 
       {(purposePreview || purposeFileName) && (
         <Box>
-          <Typography sx={{ color: '#7A6040', fontSize: '0.8rem', mb: 1 }}>Proof of Purpose</Typography>
+          <Typography sx={{ color: '#666666', fontSize: '0.8rem', mb: 1 }}>Proof of Purpose</Typography>
           {purposePreview
             ? <img src={purposePreview} alt="proof" style={{ width: '100%', maxHeight: 160, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(201,151,58,0.15)' }} />
             : <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1.5, background: 'rgba(201,151,58,0.06)', border: '1px solid rgba(201,151,58,0.2)', borderRadius: 2 }}>
                 <span style={{ fontSize: 28 }}>📄</span>
-                <Typography sx={{ fontSize: '0.85rem', color: '#3D2B0F', fontWeight: 500 }}>{purposeFileName}</Typography>
+                <Typography sx={{ fontSize: '0.85rem', color: '#111111', fontWeight: 500 }}>{purposeFileName}</Typography>
               </Box>}
         </Box>
       )}
@@ -416,11 +408,9 @@ const RenterForm: React.FC = () => {
 
   useEffect(() => {
     Promise.all([
-      // ── KEY FIX: filter by status='Available' at DB level ──
       supabase
         .from('RB_ITEM')
         .select('*, device:RB_DEVICES(id, cam_name, device_img)')
-        .eq('status', 'Available')          // ← only Available units
         .order('created_at', { ascending: false }),
       supabase.from('RB_BRANCHES').select('*').order('location_name'),
     ]).then(([itemsRes, branchesRes]) => {
@@ -541,8 +531,8 @@ const RenterForm: React.FC = () => {
           <Box sx={{ width: 88, height: 88, borderRadius: '50%', background: 'rgba(105,219,124,0.12)', border: '2px solid rgba(105,219,124,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 3 }}>
             <CheckCircleIcon sx={{ fontSize: 52, color: '#69DB7C' }} />
           </Box>
-          <Typography variant="h3" sx={{ color: '#1A1008', mb: 1 }}>Rental Submitted!</Typography>
-          <Typography variant="body1" sx={{ color: '#7A6040', mb: 0.5, maxWidth: 420 }}>
+          <Typography variant="h3" sx={{ color: '#111111', mb: 1 }}>Rental Submitted!</Typography>
+          <Typography variant="body1" sx={{ color: '#666666', mb: 0.5, maxWidth: 420 }}>
             Your rental request is now under review. Our team will reach out to you shortly.
           </Typography>
           <Chip label="Status: Submitted" sx={{ mt: 1.5, mb: 4, background: 'rgba(255,212,59,0.10)', color: '#B8860B', border: '1px solid rgba(255,212,59,0.30)', fontFamily: '"Sora", sans-serif', fontWeight: 600 }} />
@@ -554,8 +544,8 @@ const RenterForm: React.FC = () => {
             </Button>
           </Box>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <CircularProgress size={16} sx={{ color: '#C9973A' }} variant="determinate" value={((5 - countdown) / 5) * 100} />
-            <Typography sx={{ color: '#B8A080', fontSize: '0.8rem', fontFamily: '"Sora", sans-serif' }}>Redirecting to dashboard in {countdown}s…</Typography>
+            <CircularProgress size={16} sx={{ color: '#111111' }} variant="determinate" value={((5 - countdown) / 5) * 100} />
+            <Typography sx={{ color: '#666666', fontSize: '0.8rem', fontFamily: '"Sora", sans-serif' }}>Redirecting to dashboard in {countdown}s…</Typography>
           </Box>
         </Box>
       </PageLayout>
@@ -566,18 +556,18 @@ const RenterForm: React.FC = () => {
     <PageLayout renter={renter ? { fname: renter.renter_fname, lname: renter.renter_lname } : null}>
       <Box sx={{ mb: 4 }}>
         <Chip icon={<CameraAltIcon sx={{ fontSize: '0.9rem !important' }} />} label="RENTAL REQUEST" size="small"
-          sx={{ background: 'rgba(201,151,58,0.15)', color: '#C9973A', border: '1px solid rgba(201,151,58,0.25)', fontFamily: '"Sora", sans-serif', letterSpacing: '0.08em', mb: 1.5 }} />
-        <Typography variant="h3" sx={{ color: '#1A1008', lineHeight: 1.2, mb: 0.5 }}>Book Your Equipment</Typography>
-        <Typography variant="body1" sx={{ color: '#7A6040' }}>Complete this form to submit your camera rental request.</Typography>
+          sx={{ background: 'rgba(201,151,58,0.15)', color: '#111111', border: '1px solid rgba(201,151,58,0.25)', fontFamily: '"Sora", sans-serif', letterSpacing: '0.08em', mb: 1.5 }} />
+        <Typography variant="h3" sx={{ color: '#111111', lineHeight: 1.2, mb: 0.5 }}>Book Your Equipment</Typography>
+        <Typography variant="body1" sx={{ color: '#666666' }}>Complete this form to submit your camera rental request.</Typography>
       </Box>
 
       <Box sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-          <Typography sx={{ color: '#7A6040', fontSize: '0.8rem' }}>Step {activeStep + 1} of {STEPS.length}</Typography>
-          <Typography sx={{ color: '#C9973A', fontSize: '0.8rem' }}>{Math.round(progress)}% complete</Typography>
+          <Typography sx={{ color: '#666666', fontSize: '0.8rem' }}>Step {activeStep + 1} of {STEPS.length}</Typography>
+          <Typography sx={{ color: '#111111', fontSize: '0.8rem' }}>{Math.round(progress)}% complete</Typography>
         </Box>
         <LinearProgress variant="determinate" value={progress}
-          sx={{ height: 4, borderRadius: 2, background: 'rgba(201,151,58,0.10)', '& .MuiLinearProgress-bar': { background: 'linear-gradient(90deg, #C9973A, #9A6F24)', borderRadius: 2 } }} />
+          sx={{ height: 4, borderRadius: 2, background: 'rgba(201,151,58,0.10)', '& .MuiLinearProgress-bar': { background: 'linear-gradient(90deg, #111111, #111111)', borderRadius: 2 } }} />
       </Box>
 
       <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4, display: { xs: 'none', md: 'flex' }, '& .MuiStepConnector-line': { borderColor: 'rgba(201,151,58,0.15)' } }}>
@@ -586,12 +576,12 @@ const RenterForm: React.FC = () => {
 
       <Paper elevation={0} sx={{ p: { xs: 2.5, sm: 4 }, background: '#FFFFFF', border: '1px solid rgba(201,151,58,0.15)', borderRadius: 3, mb: 2 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
-          <Box sx={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, rgba(201,151,58,0.15), rgba(201,151,58,0.05))', border: '1px solid rgba(201,151,58,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#C9973A' }}>
+          <Box sx={{ width: 40, height: 40, borderRadius: '10px', background: 'linear-gradient(135deg, rgba(201,151,58,0.15), rgba(201,151,58,0.05))', border: '1px solid rgba(201,151,58,0.25)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#111111' }}>
             {STEPS[activeStep].icon}
           </Box>
           <Box>
-            <Typography sx={{ color: '#7A6040', fontSize: '0.78rem' }}>Step {activeStep + 1}</Typography>
-            <Typography variant="h6" sx={{ color: '#1A1008', lineHeight: 1 }}>{STEPS[activeStep].label}</Typography>
+            <Typography sx={{ color: '#666666', fontSize: '0.78rem' }}>Step {activeStep + 1}</Typography>
+            <Typography variant="h6" sx={{ color: '#111111', lineHeight: 1 }}>{STEPS[activeStep].label}</Typography>
           </Box>
         </Box>
         <Divider sx={{ borderColor: 'rgba(201,151,58,0.15)', mb: 3 }} />
@@ -620,7 +610,7 @@ const RenterForm: React.FC = () => {
 
       <Box sx={{ display: { xs: 'flex', md: 'none' }, justifyContent: 'center', gap: 0.75, mt: 3 }}>
         {STEPS.map((_, i) => (
-          <Box key={i} sx={{ width: i === activeStep ? 20 : 8, height: 8, borderRadius: 4, background: i < activeStep ? '#69DB7C' : i === activeStep ? '#C9973A' : 'rgba(201,151,58,0.15)', transition: 'all 0.3s ease' }} />
+          <Box key={i} sx={{ width: i === activeStep ? 20 : 8, height: 8, borderRadius: 4, background: i < activeStep ? '#69DB7C' : i === activeStep ? '#111111' : 'rgba(201,151,58,0.15)', transition: 'all 0.3s ease' }} />
         ))}
       </Box>
     </PageLayout>

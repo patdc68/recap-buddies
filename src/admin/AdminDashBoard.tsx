@@ -3,7 +3,7 @@ import {
   Box, Typography, Paper, Chip, Button, CircularProgress, Avatar,
   Tabs, Tab, Divider, IconButton, Dialog, DialogTitle, DialogContent,
   DialogActions, Select, MenuItem, FormControl, InputLabel, FormHelperText,
-  Switch, FormControlLabel, Tooltip, type SelectChangeEvent,
+  Switch, FormControlLabel, Tooltip, TextField, type SelectChangeEvent,
 } from '@mui/material';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
@@ -52,15 +52,15 @@ dayjs.extend(isSameOrAfter);
 
 // ─── Warm palette (matches renter pages) ─────────────────────────────────────
 
-const AMBER       = '#C9973A';
-const AMBER_LIGHT = '#E5B85C';
-const AMBER_DARK  = '#9A6F24';
-const CREAM       = '#FFFBF4';
+const AMBER       = '#111111';
+const AMBER_LIGHT = '#222222';
+const AMBER_DARK  = '#111111';
+const CREAM       = '#FFFFFF';
 const CARD_BG     = '#FFFFFF';
-const ESPRESSO    = '#1A1008';
-const INK         = '#3D2B0F';
-const MUTED       = '#7A6040';
-const BORDER      = 'rgba(201,151,58,0.18)';
+const ESPRESSO    = '#111111';
+const INK         = '#111111';
+const MUTED       = '#666666';
+const BORDER      = 'rgba(17,17,17,0.12)';
 
 // ─── Status tables ────────────────────────────────────────────────────────────
 
@@ -142,23 +142,91 @@ interface RentalDetailDialogProps {
   rental: EnrichedRental | null;
   open: boolean;
   onClose: () => void;
-  onSave: (id: string, status: string) => Promise<void>;
+  onSave: (id: string, updates: RentalUpdatePayload) => Promise<void>;
+}
+
+interface RentalUpdatePayload {
+  status: string;
+  remarks: string;
+  messenger_link: string;
+  rent_price: string;
+  cam_name_id_fk: string;
+  rent_date_start: string;
+  rent_date_end: string;
 }
 
 const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, onClose, onSave }) => {
   const [status, setStatus] = useState<RentalStatus>(rental?.status ?? 'submitted');
+  const [remarks, setRemarks] = useState('');
+  const [messengerLink, setMessengerLink] = useState('');
+  const [rentPrice, setRentPrice] = useState('');
+  const [cameraId, setCameraId] = useState('');
+  const [startDate, setStartDate] = useState('');
+  const [endDate, setEndDate] = useState('');
+  const [cameraOptions, setCameraOptions] = useState<EnrichedItem[]>([]);
+  const [isRepeatRenter, setIsRepeatRenter] = useState(false);
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
   
 
-  useEffect(() => { if (rental) setStatus(rental.status); }, [rental]);
+  useEffect(() => {
+    if (!rental) return;
+    setStatus(rental.status);
+    setRemarks(rental.remarks ?? '');
+    setMessengerLink(rental.messenger_link ?? '');
+    setRentPrice(rental.rent_price != null ? String(rental.rent_price) : '');
+    setCameraId(rental.cam_name_id_fk ?? '');
+    setStartDate(dayjs(rental.rent_date_start).format('YYYY-MM-DD'));
+    setEndDate(dayjs(rental.rent_date_end).format('YYYY-MM-DD'));
+  }, [rental]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    const loadDialogData = async () => {
+      const { data: itemsRaw } = await supabase
+        .from('RB_ITEM')
+        .select('*, device:RB_DEVICES(id,cam_name,device_img)')
+        .order('created_at', { ascending: false });
+      setCameraOptions((itemsRaw ?? []) as EnrichedItem[]);
+
+      if (!rental?.renter_id_fk) {
+        setIsRepeatRenter(false);
+        return;
+      }
+
+      const { count } = await supabase
+        .from('RB_RENTAL_FORM')
+        .select('id', { head: true, count: 'exact' })
+        .eq('renter_id_fk', rental.renter_id_fk)
+        .eq('status', 'completed')
+        .neq('id', rental.id);
+
+      setIsRepeatRenter((count ?? 0) > 0);
+    };
+
+    void loadDialogData();
+  }, [open, rental?.id, rental?.renter_id_fk]);
   if (!rental) return null;
+  const selectedCamera = cameraOptions.find((it) => it.id === cameraId) ?? rental.item;
 
   const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META.submitted;
 
+  const isDateRangeInvalid = !!startDate && !!endDate && dayjs(endDate).isBefore(dayjs(startDate), 'day');
+  const isSaveDisabled = saving || !cameraId || !startDate || !endDate || isDateRangeInvalid;
+
   const handleSave = async () => {
+    if (isDateRangeInvalid) return;
     setSaving(true);
-    await onSave(rental.id, status);
+    await onSave(rental.id, {
+      status,
+      remarks,
+      messenger_link: messengerLink,
+      rent_price: rentPrice,
+      cam_name_id_fk: cameraId,
+      rent_date_start: startDate,
+      rent_date_end: endDate,
+    });
     setSaving(false);
     onClose();
   };
@@ -179,15 +247,25 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
 
         {/* Camera */}
         <InfoBox label="Camera">
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-            {rental.item?.device?.device_img
-              ? <img src={rental.item.device.device_img} alt="" style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 6, border: `1px solid ${BORDER}` }} />
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+            {selectedCamera?.device?.device_img
+              ? <img src={selectedCamera.device.device_img} alt="" style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 6, border: `1px solid ${BORDER}` }} />
               : <Box sx={{ width: 56, height: 42, borderRadius: 1.5, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 20, color: AMBER }} /></Box>}
             <Box>
-              <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.95rem' }}>{rental.item?.device?.cam_name ?? '—'}</Typography>
-              <Typography sx={{ color: MUTED, fontSize: '0.75rem', fontFamily: '"Sora", sans-serif' }}>{rental.item?.code_name ?? '—'} · S/N {rental.item?.serial_no ?? '—'}</Typography>
+              <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.95rem' }}>{selectedCamera?.device?.cam_name ?? '—'}</Typography>
+              <Typography sx={{ color: MUTED, fontSize: '0.75rem', fontFamily: '"Sora", sans-serif' }}>{selectedCamera?.code_name ?? '—'} · S/N {selectedCamera?.serial_no ?? '—'}</Typography>
             </Box>
           </Box>
+          <FormControl size="small" fullWidth>
+            <InputLabel>Select Camera</InputLabel>
+            <Select value={cameraId} onChange={(e: SelectChangeEvent) => setCameraId(e.target.value)} label="Select Camera">
+              {cameraOptions.map((item) => (
+                <MenuItem key={item.id} value={item.id}>
+                  {item.device?.cam_name ?? '—'}
+                </MenuItem>
+              ))}
+            </Select>
+          </FormControl>
         </InfoBox>
 
         {/* Renter */}
@@ -211,16 +289,50 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
                 <Typography sx={{ color: MUTED, fontSize: '0.78rem' }}>{rental.username}</Typography>
               </Box>
             )}
+            <Chip
+              size="small"
+              label={isRepeatRenter ? 'Repeat Renter: Yes' : 'Repeat Renter: No'}
+              sx={{
+                background: isRepeatRenter ? 'rgba(105,219,124,0.12)' : 'rgba(120,120,120,0.12)',
+                color: isRepeatRenter ? '#2E7D32' : '#666',
+                border: isRepeatRenter ? '1px solid rgba(105,219,124,0.35)' : '1px solid rgba(120,120,120,0.3)',
+                fontWeight: 700,
+                fontSize: '0.68rem',
+                fontFamily: '"Sora", sans-serif',
+              }}
+            />
           </Box>
         </InfoBox>
 
         {/* Dates */}
-        <Box sx={{ display: 'flex', gap: 1.5 }}>
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <Box sx={{ flex: '1 1 180px', p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.6 }}>Start Date</Typography>
+            <TextField
+              size="small"
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
+          <Box sx={{ flex: '1 1 180px', p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.6 }}>End Date</Typography>
+            <TextField
+              size="small"
+              type="date"
+              value={endDate}
+              onChange={(e) => setEndDate(e.target.value)}
+              inputProps={{ min: startDate || undefined }}
+              fullWidth
+              error={isDateRangeInvalid}
+              InputLabelProps={{ shrink: true }}
+            />
+          </Box>
           {[
-            { label: 'Start Date', val: dayjs(rental.rent_date_start).format('MMM D, YYYY') },
-            { label: 'End Date',   val: dayjs(rental.rent_date_end).format('MMM D, YYYY') },
             { label: 'Actual Returned', val: rental.actual_return_date ? dayjs(rental.actual_return_date).format('MMM D, YYYY') : 'Not returned yet' },
-            { label: 'Duration',   val: `${getRentalDayCount(rental.rent_date_start, rental.rent_date_end)} days` },
+            { label: 'Duration',   val: `${getRentalDayCount(startDate || rental.rent_date_start, endDate || rental.rent_date_end)} days` },
           ].map((d) => (
             <Box key={d.label} sx={{ flex: 1, p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
               <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.25 }}>{d.label}</Typography>
@@ -228,6 +340,9 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
             </Box>
           ))}
         </Box>
+        {isDateRangeInvalid && (
+          <FormHelperText error>End date must be on or after start date.</FormHelperText>
+        )}
 
         {/* Logistics */}
         <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -264,6 +379,50 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
           </Box>
         )}
 
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <Box sx={{ flex: '1 1 100%' }}>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.5 }}>
+              Remarks
+            </Typography>
+            <input
+              value={remarks}
+              onChange={(e) => setRemarks(e.target.value)}
+              placeholder="Add admin remarks"
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD_BG, color: ESPRESSO, fontFamily: '"DM Sans", sans-serif', fontSize: '0.85rem', boxSizing: 'border-box' }}
+            />
+          </Box>
+          <Box sx={{ flex: '1 1 220px' }}>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.5 }}>
+              Messenger Link
+            </Typography>
+            <input
+              value={messengerLink}
+              onChange={(e) => setMessengerLink(e.target.value)}
+              placeholder="https://m.me/..."
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD_BG, color: ESPRESSO, fontFamily: '"DM Sans", sans-serif', fontSize: '0.85rem', boxSizing: 'border-box' }}
+            />
+            {rental.messenger_link && (
+              <Typography component="a" href={rental.messenger_link} target="_blank" rel="noreferrer" sx={{ mt: 0.6, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: AMBER_DARK, fontSize: '0.74rem', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
+                Open saved link <OpenInNewIcon sx={{ fontSize: 13 }} />
+              </Typography>
+            )}
+          </Box>
+          <Box sx={{ flex: '1 1 160px' }}>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.5 }}>
+              Rent Price
+            </Typography>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={rentPrice}
+              onChange={(e) => setRentPrice(e.target.value)}
+              placeholder="0.00"
+              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD_BG, color: ESPRESSO, fontFamily: '"DM Sans", sans-serif', fontSize: '0.85rem', boxSizing: 'border-box' }}
+            />
+          </Box>
+        </Box>
+
         {/* Status editor */}
         <FormControl fullWidth size="small">
           <InputLabel sx={{ color: MUTED }}>Update Status</InputLabel>
@@ -292,7 +451,7 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
       </DialogContent>
       <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
         <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
-        <Button onClick={handleSave} variant="contained" size="small" disabled={saving}
+        <Button onClick={handleSave} variant="contained" size="small" disabled={isSaveDisabled}
           startIcon={saving ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <SaveIcon />}>
           Save Changes
         </Button>
@@ -308,7 +467,7 @@ interface RentalListDialogProps {
   rentals: EnrichedRental[];
   open: boolean;
   onClose: () => void;
-  onSave: (id: string, status: string) => Promise<void>;
+  onSave: (id: string, updates: RentalUpdatePayload) => Promise<void>;
 }
 
 const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, open, onClose, onSave }) => {
@@ -410,7 +569,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
 // TAB 0 — OVERVIEW
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, status: string) => Promise<void> }> = ({ rentals, onSave }) => {
+const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, updates: RentalUpdatePayload) => Promise<void> }> = ({ rentals, onSave }) => {
   const today = dayjs();
   const navigate = useNavigate();
   const [listDialog, setListDialog]         = useState<{ title: string; items: EnrichedRental[] } | null>(null);
@@ -627,10 +786,11 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, st
 // TAB 1 — CALENDAR (Teams-style continuous span bars, first name label)
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; onSave: (id: string, status: string) => Promise<void> }> = ({ rentals, items, onSave }) => {
+const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; onSave: (id: string, updates: RentalUpdatePayload) => Promise<void> }> = ({ rentals, items, onSave }) => {
   const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
   const [selectedCamera, setSelectedCamera] = useState('all');
   const [selectedRental, setSelectedRental] = useState<EnrichedRental | null>(null);
+  const [listDialog, setListDialog] = useState<{ date: Dayjs; rentals: EnrichedRental[] } | null>(null);
 
   const calStart = currentMonth.startOf('month').startOf('week');
   const calEnd   = currentMonth.endOf('month').endOf('week');
@@ -713,6 +873,24 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
             slotMap[r.id] = assignedSlot;
           });
 
+          const MAX_VISIBLE_ROWS = 3;
+          const hiddenByStartDay: Record<string, number> = {};
+          sortedWeekRentals.forEach((r) => {
+            const slot = slotMap[r.id] ?? 0;
+            if (slot < MAX_VISIBLE_ROWS) return;
+            const rentalStart = dayjs(r.rent_date_start);
+            if (!rentalStart.isSameOrAfter(weekStart, 'day') || !rentalStart.isSameOrBefore(weekEnd, 'day')) return;
+            const startKey = rentalStart.format('YYYY-MM-DD');
+            hiddenByStartDay[startKey] = (hiddenByStartDay[startKey] ?? 0) + 1;
+          });
+
+          const moreIndicators = week
+            .map((day) => {
+              const hiddenCount = hiddenByStartDay[day.format('YYYY-MM-DD')] ?? 0;
+              return hiddenCount > 0 ? { day, hiddenCount } : null;
+            })
+            .filter((entry): entry is { day: Dayjs; hiddenCount: number } => !!entry);
+
           return (
             <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', position: 'relative', mb: '2px' }}>
               {/* Day cells */}
@@ -721,11 +899,11 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                 const isToday        = day.isSame(dayjs(), 'day');
                 return (
                   <Box key={day.format('YYYY-MM-DD')} sx={{
-                    minHeight: 84,
+                    minHeight: 112,
                     borderRadius: 1.5,
                     border: isToday ? `2px solid ${AMBER}` : `1px solid ${BORDER}`,
                     background: isCurrentMonth ? CARD_BG : 'rgba(201,151,58,0.015)',
-                    pt: 0.75, px: 0.75, pb: '36px',
+                    pt: 0.75, px: 0.75, pb: '44px',
                   }}>
                     <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Sora", sans-serif', fontWeight: isToday ? 800 : 500, color: isToday ? AMBER : isCurrentMonth ? ESPRESSO : MUTED, lineHeight: 1 }}>
                       {day.format('D')}
@@ -735,12 +913,11 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
               })}
 
               {/* Spanning rental bars */}
-              {sortedWeekRentals.map((r) => {
+              {sortedWeekRentals.filter((r) => (slotMap[r.id] ?? 0) < MAX_VISIBLE_ROWS).map((r) => {
                 const rStart   = dayjs(r.rent_date_start);
                 const rEnd     = dayjs(r.rent_date_end);
                 const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
                 const colEnd   = rEnd.isAfter(weekEnd, 'day')      ? 6 : rEnd.day();
-                const spanCols = colEnd - colStart + 1;
                 const isStart  = rStart.isSameOrAfter(weekStart, 'day') && rStart.isSameOrBefore(weekEnd, 'day');
                 const isEnd    = rEnd.isSameOrAfter(weekStart, 'day')   && rEnd.isSameOrBefore(weekEnd, 'day');
                 const slot     = slotMap[r.id] ?? 0;
@@ -753,27 +930,71 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                     onClick={() => setSelectedRental(r)}
                     sx={{
                       position: 'absolute',
-                      top:   `${26 + slot * 19}px`,
-                      left:  `calc(${(colStart / 7) * 100}% + 2px)`,
-                      width: `calc(${(spanCols  / 7) * 100}% - 4px)`,
+                      top: `${36 + slot * 19}px`,
+                      display: 'grid',
+                      gridTemplateColumns: 'repeat(7, 1fr)',
+                      left: 0,
+                      right: 0,
+                      px: '2px',
                       height: 16,
-                      background: meta.bg,
-                      border: `1px solid ${meta.border}`,
-                      borderRadius: isStart && isEnd ? '5px' : isStart ? '5px 0 0 5px' : isEnd ? '0 5px 5px 0' : '0',
                       cursor: 'pointer', zIndex: 5,
-                      display: 'flex', alignItems: 'center', px: 0.75, overflow: 'hidden',
                       '&:hover': { filter: 'brightness(0.9)', zIndex: 10 },
                       transition: 'filter 0.12s',
                     }}
                   >
-                    {isStart && (
-                      <Typography sx={{ fontSize: '0.6rem', color: meta.color, fontFamily: '"Sora", sans-serif', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                        {firstName}
-                      </Typography>
-                    )}
+                    <Box
+                      sx={{
+                        gridColumn: `${colStart + 1} / ${colEnd + 2}`,
+                        background: meta.bg,
+                        border: `1px solid ${meta.border}`,
+                        borderRadius: isStart && isEnd ? '5px' : isStart ? '5px 0 0 5px' : isEnd ? '0 5px 5px 0' : '0',
+                        display: 'flex',
+                        alignItems: 'center',
+                        px: 0.75,
+                        overflow: 'hidden',
+                        minWidth: 0,
+                      }}
+                    >
+                      {isStart && (
+                        <Typography sx={{ fontSize: '0.6rem', color: meta.color, fontFamily: '"Sora", sans-serif', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                          {firstName}
+                        </Typography>
+                      )}
+                    </Box>
                   </Box>
                 );
               })}
+
+              {moreIndicators.map(({ day, hiddenCount }) => (
+                <Button
+                  key={`more-${day.format('YYYY-MM-DD')}`}
+                  size="small"
+                  onClick={() => {
+                    const dayRentals = filtered.filter((r) => dayjs(r.rent_date_start).isSame(day, 'day'));
+                    setListDialog({ date: day, rentals: dayRentals });
+                  }}
+                  sx={{
+                    position: 'absolute',
+                    top: '92px',
+                    left: `calc(${(day.day() / 7) * 100}% + 6px)`,
+                    minWidth: 0,
+                    px: 0.8,
+                    py: 0.1,
+                    lineHeight: 1.2,
+                    fontSize: '0.65rem',
+                    fontFamily: '"Sora", sans-serif',
+                    textTransform: 'none',
+                    color: AMBER_DARK,
+                    border: `1px solid ${BORDER}`,
+                    borderRadius: 1.5,
+                    background: 'rgba(201,151,58,0.10)',
+                    zIndex: 8,
+                    '&:hover': { background: 'rgba(201,151,58,0.18)' },
+                  }}
+                >
+                  +{hiddenCount} more
+                </Button>
+              ))}
             </Box>
           );
         })}
@@ -791,6 +1012,41 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
           );
         })}
       </Box>
+
+      {listDialog && (
+        <Dialog
+          open={!!listDialog}
+          onClose={() => setListDialog(null)}
+          maxWidth="sm"
+          fullWidth
+          PaperProps={{ sx: { background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 3 } }}
+        >
+          <DialogTitle sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            Bookings — {listDialog.date.format('MMM D, YYYY')}
+            <IconButton onClick={() => setListDialog(null)} size="small" sx={{ color: MUTED }}>
+              <CloseIcon fontSize="small" />
+            </IconButton>
+          </DialogTitle>
+          <DialogContent sx={{ pt: 1 }}>
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+              {listDialog.rentals.map((r) => (
+                <Box
+                  key={r.id}
+                  onClick={() => {
+                    setSelectedRental(r);
+                    setListDialog(null);
+                  }}
+                  sx={{ p: 1.4, borderRadius: 2, border: `1px solid ${BORDER}`, background: 'rgba(201,151,58,0.04)', cursor: 'pointer', '&:hover': { background: 'rgba(201,151,58,0.09)' } }}
+                >
+                  <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.86rem' }}>{r.item?.device?.cam_name ?? '—'}</Typography>
+                  <Typography sx={{ color: INK, fontSize: '0.8rem' }}>{r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—'}</Typography>
+                  <Typography sx={{ color: MUTED, fontSize: '0.76rem' }}>{r.renter?.mobile_no ?? 'No contact number'}</Typography>
+                </Box>
+              ))}
+            </Box>
+          </DialogContent>
+        </Dialog>
+      )}
 
       {/* Rental detail — opens verification page if pending */}
       {selectedRental && (
@@ -878,12 +1134,73 @@ const AddDeviceDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: (
   );
 };
 
+const CreateBranchDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () => void }> = ({ open, onClose, onSaved }) => {
+  const [locationName, setLocationName] = useState('');
+  const [locationAddr, setLocationAddr] = useState('');
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleSave = async () => {
+    if (!locationName.trim() || !locationAddr.trim()) {
+      setError('Location name and address are required.');
+      return;
+    }
+    setSaving(true);
+    setError('');
+    try {
+      const { error: insertError } = await supabase.from('RB_BRANCHES').insert({
+        location_name: locationName.trim(),
+        location_addr: locationAddr.trim(),
+      });
+      if (insertError) throw new Error(insertError.message);
+      onSaved();
+      onClose();
+      setLocationName('');
+      setLocationAddr('');
+    } catch (e: unknown) {
+      setError(e instanceof Error ? e.message : 'Unable to create branch');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth
+      PaperProps={{ sx: { background: CREAM, border: `1px solid ${BORDER}`, borderRadius: 3 } }}>
+      <DialogTitle sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        Create Branch
+        <IconButton onClick={onClose} size="small" sx={{ color: MUTED }}><CloseIcon fontSize="small" /></IconButton>
+      </DialogTitle>
+      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 1.5, pt: 1 }}>
+        <input
+          value={locationName}
+          onChange={(e) => { setLocationName(e.target.value); setError(''); }}
+          placeholder="Location Name"
+          style={{ padding: '10px 12px', borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD_BG, color: ESPRESSO, fontFamily: '"DM Sans", sans-serif', fontSize: '0.9rem' }}
+        />
+        <input
+          value={locationAddr}
+          onChange={(e) => { setLocationAddr(e.target.value); setError(''); }}
+          placeholder="Location Address"
+          style={{ padding: '10px 12px', borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD_BG, color: ESPRESSO, fontFamily: '"DM Sans", sans-serif', fontSize: '0.9rem' }}
+        />
+        {error && <Typography sx={{ color: '#C0392B', fontSize: '0.78rem' }}>{error}</Typography>}
+      </DialogContent>
+      <DialogActions sx={{ px: 3, pb: 3 }}>
+        <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
+        <Button onClick={handleSave} variant="contained" size="small" disabled={saving}
+          startIcon={saving ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <SaveIcon />}>Create</Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
 const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () => void; devices: RbDevice[]; branches: RbBranch[]; createdBy: string }> = ({ open, onClose, onSaved, devices, branches, createdBy }) => {
   const [deviceId, setDeviceId]   = useState('');
   const [codeName, setCodeName]   = useState('');
   const [serialNo, setSerialNo]   = useState('');
+  const [remarks, setRemarks]     = useState('');
   const [branchId, setBranchId]   = useState('');
-  const [rentPrice, setRentPrice] = useState('');
   const [gps, setGps]             = useState(false);
   const [saving, setSaving]       = useState(false);
   const [errors, setErrors]       = useState<Record<string, string>>({});
@@ -894,7 +1211,6 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
     if (!deviceId)        e.deviceId = 'Select a camera type';
     if (!codeName.trim()) e.codeName = 'Code name required';
     if (!serialNo.trim()) e.serialNo = 'Serial number required';
-    if (rentPrice && (Number.isNaN(Number(rentPrice)) || Number(rentPrice) < 0)) e.rentPrice = 'Enter a valid non-negative price';
     setErrors(e); return Object.keys(e).length === 0;
   };
 
@@ -902,10 +1218,10 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
     if (!validate()) return;
     setSaving(true); setSubmitErr('');
     try {
-          const { error } = await supabase.from('RB_ITEM').insert({ device_id_fk: deviceId, code_name: codeName, serial_no: serialNo, rent_price: rentPrice ? Number(rentPrice) : null, branch_id_fk: branchId || null, gps_installed: gps, current_condition: 'working', status: 'Available', created_by: createdBy });
+          const { error } = await supabase.from('RB_ITEM').insert({ device_id_fk: deviceId, code_name: codeName, serial_no: serialNo, remarks: remarks.trim() || null, branch_id_fk: branchId || null, gps_installed: gps, current_condition: 'working', status: 'Available', created_by: createdBy });
       if (error) throw new Error(error.message);
       onSaved(); onClose();
-      setDeviceId(''); setCodeName(''); setSerialNo(''); setRentPrice(''); setBranchId(''); setGps(false);
+      setDeviceId(''); setCodeName(''); setSerialNo(''); setRemarks(''); setBranchId(''); setGps(false);
     } catch (e: unknown) { setSubmitErr(e instanceof Error ? e.message : 'Error'); }
     finally { setSaving(false); }
   };
@@ -942,18 +1258,13 @@ const AddItemDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: () 
             </Box>
           ))}
         </Box>
-                <Box>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            placeholder="Price"
-            value={rentPrice}
-            onChange={(e) => { setRentPrice(e.target.value); setErrors((p) => ({ ...p, rentPrice: '' })); }}
-            style={{ ...inputSx, border: `1.5px solid ${errors.rentPrice ? '#C0392B' : BORDER}` }}
-          />
-          {errors.rentPrice && <Typography sx={{ color: '#C0392B', fontSize: '0.72rem', mt: 0.25 }}>{errors.rentPrice}</Typography>}
-        </Box>
+        <textarea
+          placeholder="Remarks (optional)"
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+          rows={3}
+          style={{ ...inputSx, border: `1px solid ${BORDER}`, resize: 'vertical' }}
+        />
         <FormControl fullWidth size="small">
           <InputLabel>Branch (optional)</InputLabel>
           <Select value={branchId} onChange={(e: SelectChangeEvent) => setBranchId(e.target.value)} label="Branch (optional)">
@@ -980,6 +1291,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
   const [condition, setCondition] = useState<ItemCondition>('working');
   const [codeName, setCodeName]   = useState('');
   const [serialNo, setSerialNo]   = useState('');
+  const [remarks, setRemarks]     = useState('');
   const [gps, setGps]             = useState(false);
   const [rentPrice, setRentPrice] = useState('');
   const [imgFile, setImgFile]     = useState<File | null>(null);
@@ -992,6 +1304,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
       setCondition(item.current_condition);
       setCodeName(item.code_name);
       setSerialNo(item.serial_no);
+      setRemarks(item.remarks ?? '');
       setGps(item.gps_installed);
       setRentPrice(item.rent_price?.toString() ?? '');
       setPreview(item.device?.device_img ?? '');
@@ -1016,6 +1329,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
         current_condition: condition,
         code_name: codeName,
         serial_no: serialNo,
+        remarks: remarks.trim() || null,
         gps_installed: gps,
         rent_price: rentPrice ? Number(rentPrice) : null,
       }).eq('id', item.id);
@@ -1071,6 +1385,13 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
             </FormControl>
           </Box>
         </Box>
+        <textarea
+          value={remarks}
+          onChange={(e) => setRemarks(e.target.value)}
+          rows={3}
+          placeholder="Remarks (optional)"
+          style={{ ...inputSx, resize: 'vertical' }}
+        />
 
         {/* Status — read-only display */}
         <Box sx={{ p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.04)', border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -1094,6 +1415,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
 
 const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branches: RbBranch[]; isAdmin: boolean; createdBy: string; onRefresh: () => void }> = ({ items, devices, branches, isAdmin, createdBy, onRefresh }) => {
   const [addDeviceOpen, setAddDeviceOpen] = useState(false);
+  const [addBranchOpen, setAddBranchOpen] = useState(false);
   const [addItemOpen, setAddItemOpen]     = useState(false);
   const [editItem, setEditItem]           = useState<EnrichedItem | null>(null);
   const [viewImg, setViewImg]             = useState<string | null>(null);
@@ -1113,8 +1435,8 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
     return matchStatus && matchSearch;
   });
 
-  const COLS = '90px 1fr 120px 100px 150px 110px 56px 52px 48px';
-  const HEADERS = ['Image', 'Camera · Code', 'Serial No.', 'Rent Price', 'Condition', 'GPS', '', ''];
+  const COLS = '90px 1fr 120px 150px 110px 56px 52px 48px';
+  const HEADERS = ['Image', 'Camera · Code', 'Serial No.', 'Condition', 'GPS', '', '', ''];
 
   return (
     <Box>
@@ -1124,6 +1446,7 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
         </Typography>
         <Box sx={{ display: 'flex', gap: 1.5 }}>
           {isAdmin && <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={() => setAddDeviceOpen(true)}>Add Camera Type</Button>}
+          {isAdmin && <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={() => setAddBranchOpen(true)}>Create Branch</Button>}
           <Button variant="contained" size="small" startIcon={<AddIcon />} onClick={() => setAddItemOpen(true)}>Add Unit</Button>
         </Box>
       </Box>
@@ -1183,12 +1506,6 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
                   </Box>
 
                   <Typography sx={{ color: MUTED, fontSize: '0.78rem', fontFamily: 'monospace' }}>{item.serial_no}</Typography>
-
-                  {/* Rent price */}
-                  <Typography sx={{ color: item.rent_price ? '#2E7D32' : MUTED, fontSize: '0.82rem', fontWeight: item.rent_price ? 600 : 400 }}>
-                    {item.rent_price ? `₱${item.rent_price.toLocaleString()}` : '—'}
-                  </Typography>
-
                   {/* Status — read-only chip */}
                   {/* <Chip label={item.status} size="small" sx={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.68rem', height: 22, width: 'fit-content' }} /> */}
 
@@ -1222,6 +1539,7 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
       </Paper>
 
       <AddDeviceDialog open={addDeviceOpen} onClose={() => setAddDeviceOpen(false)} onSaved={onRefresh} />
+      <CreateBranchDialog open={addBranchOpen} onClose={() => setAddBranchOpen(false)} onSaved={onRefresh} />
       <AddItemDialog   open={addItemOpen}   onClose={() => setAddItemOpen(false)}   onSaved={onRefresh} devices={devices} branches={branches} createdBy={createdBy} />
       <EditItemDialog  item={editItem}      open={!!editItem}                        onClose={() => setEditItem(null)} onSaved={onRefresh} />
       <ImageViewDialog src={viewImg}        onClose={() => setViewImg(null)} />
@@ -1415,20 +1733,47 @@ const AdminDashboard: React.FC = () => {
     }
   }, [loading, rentals, markOverdueRentalsForPenalty]);
 
-  const handleSaveStatus = useCallback(async (id: string, status: string) => {
-    const payload: { status: string; actual_return_date?: string | null } = { status };
-    if (status === 'completed') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
-    if (status === 'for-penalty') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
+  const handleSaveStatus = useCallback(async (
+    id: string,
+    updates: RentalUpdatePayload
+  ) => {
+    const parsedRentPrice = updates.rent_price.trim() === '' ? null : Number(updates.rent_price);
+    const payload: {
+      status: string;
+      actual_return_date?: string | null;
+      remarks: string | null;
+      messenger_link: string | null;
+      rent_price: number | null;
+      cam_name_id_fk: string;
+      rent_date_start: string;
+      rent_date_end: string;
+    } = {
+      status: updates.status,
+      remarks: updates.remarks.trim() || null,
+      messenger_link: updates.messenger_link.trim() || null,
+      rent_price: parsedRentPrice == null || Number.isNaN(parsedRentPrice) ? null : Math.max(parsedRentPrice, 0),
+      cam_name_id_fk: updates.cam_name_id_fk,
+      rent_date_start: updates.rent_date_start,
+      rent_date_end: updates.rent_date_end,
+    };
+    if (updates.status === 'completed') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
+    if (updates.status === 'for-penalty') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
 
     await supabase.from('RB_RENTAL_FORM').update(payload).eq('id', id);
 
     const targetRental = rentals.find((r) => r.id === id);
-    const itemStatus = RENTAL_TO_ITEM_STATUS[status];
-    if (targetRental?.cam_name_id_fk && itemStatus) {
+    const itemStatus = RENTAL_TO_ITEM_STATUS[updates.status];
+    if (targetRental?.cam_name_id_fk && itemStatus && targetRental.cam_name_id_fk !== updates.cam_name_id_fk) {
+      await supabase
+        .from('RB_ITEM')
+        .update({ status: 'Available' })
+        .eq('id', targetRental.cam_name_id_fk);
+    }
+    if (updates.cam_name_id_fk && itemStatus) {
       await supabase
         .from('RB_ITEM')
         .update({ status: itemStatus })
-        .eq('id', targetRental.cam_name_id_fk);
+        .eq('id', updates.cam_name_id_fk);
     }
 
     await fetchAll();
@@ -1451,7 +1796,7 @@ const AdminDashboard: React.FC = () => {
   if (!rbUser) return null;
 
   return (
-    <Box sx={{ minHeight: '100vh', background: '#F5EFE4' }}>
+    <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
       <TopBar rbUser={rbUser} tab={tab} onTab={setTab} onLogout={handleLogout} />
       <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1400, mx: 'auto' }}>
         {tab === 0 && <OverviewTab  rentals={rentals} onSave={handleSaveStatus} />}
