@@ -791,21 +791,26 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => 
   const monitoringRows = rentals.map((r, index) => {
     const totalDays = getRentalDayCount(r.rent_date_start, r.rent_date_end);
     const rentPrice = Number(r.rent_price ?? 0);
+    const renterName = r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—';
+    const isRepeatedRenter = rentals.some(
+      (rental) => rental.renter_id === r.renter_id && rental.status === 'Completed' && rental.id !== r.id,
+    );
+
     return {
       id: r.id,
       no: index + 1,
-      pd: r.created_at,
-      pt: r.created_at,
-      rd: r.rent_date_start,
-      name: r.item?.device?.cam_name ?? '—',
-      unit: r.item?.code_name ?? '—',
-      renter: r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—',
-      type: r.hub_pick_up_addr ? 'Hub' : 'Delivery',
+      pd: r.rent_date_start,
+      pt: r.pickup_time,
+      rd: r.rent_date_end,
+      name: renterName,
+      unit: r.item?.device?.cam_name ?? '—',
+      renter: r.renter_id ? (isRepeatedRenter ? 'Repeated' : 'New') : '—',
+      type: r.delivery_addr == null ? 'Pick-up' : 'Deliver',
       hub: r.pickupBranch?.location_name ?? r.delivery_addr ?? '—',
       groupChat: Boolean(r.messenger_link),
       rentalFee: Math.max(totalDays, 1) * rentPrice,
       status: RENTAL_STATUS_META[r.status]?.label ?? r.status,
-      availableUnit: r.item?.status ?? '—',
+      availableUnit: r.item?.code_name ?? '—',
     };
   });
 
