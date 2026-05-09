@@ -5,6 +5,7 @@ import {
   DialogActions, Select, MenuItem, FormControl, InputLabel, FormHelperText,
   Switch, FormControlLabel, Tooltip, TextField, type SelectChangeEvent,
 } from '@mui/material';
+import { DataGrid, GridToolbar, type GridColDef } from '@mui/x-data-grid';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
   ResponsiveContainer, Cell,
@@ -45,6 +46,9 @@ import VerifiedUserIcon       from '@mui/icons-material/VerifiedUser';
 import OpenInNewIcon          from '@mui/icons-material/OpenInNew';
 import DeleteIcon             from '@mui/icons-material/Delete';
 import FilterListIcon         from '@mui/icons-material/FilterList';
+import CheckCircleIcon        from '@mui/icons-material/CheckCircle';
+import CancelIcon             from '@mui/icons-material/Cancel';
+import MonitorHeartIcon       from '@mui/icons-material/MonitorHeart';
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
@@ -117,6 +121,7 @@ interface EnrichedRental extends RbRentalForm {
   renter?:       RbRenter;
   pickupBranch?: RbBranch;
   returnBranch?: RbBranch;
+  pickup_time?:  string | null;
 }
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
@@ -614,6 +619,7 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
     { label: 'Pending Review',   color: '#1565C0',   items: rentals.filter((r) => r.status === 'submitted' || r.status === 'in-review') },
   ];
 
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
 
@@ -779,6 +785,74 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
         />
       )}
     </Box>
+  );
+};
+
+const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => {
+  const monitoringRows = rentals.map((r, index) => {
+    const totalDays = getRentalDayCount(r.rent_date_start, r.rent_date_end);
+    const rentPrice = Number(r.rent_price ?? 0);
+    const renterName = r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—';
+    const isRepeatedRenter = rentals.some(
+      (rental) => rental.renter?.id === r.renter?.id && rental.status === 'completed' && rental.id !== r.id,
+    );
+
+    return {
+      id: r.id,
+      no: index + 1,
+      pd: r.rent_date_start,
+      pt: r.pickup_time,
+      rd: r.rent_date_end,
+      name: renterName,
+      unit: r.item?.device?.cam_name ?? '—',
+      renter: r.renter?.id ? (isRepeatedRenter ? 'Repeated' : 'New') : '—',
+      type: r.delivery_addr == null ? 'Pick-up' : 'Deliver',
+      hub: r.pickupBranch?.location_name ?? r.delivery_addr ?? '—',
+      groupChat: Boolean(r.messenger_link),
+      rentalFee: Math.max(totalDays, 1) * rentPrice,
+      status: RENTAL_STATUS_META[r.status]?.label ?? r.status,
+      availableUnit: r.item?.code_name ?? '—',
+    };
+  });
+
+  const monitoringColumns: GridColDef[] = [
+    { field: 'no', headerName: 'No.', width: 80, type: 'number' },
+    { field: 'pd', headerName: 'PD', width: 150, type: 'date', valueGetter: (value: unknown) => value ? dayjs(value as string).toDate() : null, valueFormatter: (value: unknown) => value ? dayjs(value as Date).format('MMM D, YYYY') : '—' },
+    { field: 'pt', headerName: 'PT', width: 120, type: 'dateTime', valueGetter: (value: unknown) => value ? dayjs(value as string).toDate() : null, valueFormatter: (value: unknown) => value ? dayjs(value as Date).format('h:mm A') : '—' },
+    { field: 'rd', headerName: 'RD', width: 150, type: 'date', valueGetter: (value: unknown) => value ? dayjs(value as string).toDate() : null, valueFormatter: (value: unknown) => value ? dayjs(value as Date).format('MMM D, YYYY') : '—' },
+    { field: 'name', headerName: 'Name', minWidth: 180, flex: 1 },
+    { field: 'unit', headerName: 'Unit', minWidth: 120, flex: 1 },
+    { field: 'renter', headerName: 'Renter', minWidth: 180, flex: 1 },
+    { field: 'type', headerName: 'Type', minWidth: 120 },
+    { field: 'hub', headerName: 'Hub', minWidth: 160, flex: 1 },
+    { field: 'groupChat', headerName: 'Group Chat', type: 'boolean', minWidth: 130, renderCell: (params: { value?: boolean }) => params.value ? <CheckCircleIcon sx={{ color: '#2E7D32' }} /> : <CancelIcon sx={{ color: '#B71C1C' }} /> },
+    { field: 'rentalFee', headerName: 'Rental Fee', type: 'number', minWidth: 140, valueFormatter: (value: unknown) => `₱${Number(value ?? 0).toLocaleString()}` },
+    { field: 'status', headerName: 'Status', minWidth: 150 },
+    { field: 'availableUnit', headerName: 'Available Unit', minWidth: 150 },
+  ];
+
+  return (
+    <Paper elevation={0} sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', background: '#fff', border: `1px solid ${BORDER}`, p: 2 }}>
+      <Typography sx={{ color: ESPRESSO, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '0.9rem', mb: 1.5, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        Admin Rental Monitoring
+      </Typography>
+      <DataGrid
+        rows={monitoringRows}
+        columns={monitoringColumns}
+        disableRowSelectionOnClick
+        pagination
+        pageSizeOptions={[10, 25, 50]}
+        initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
+        slots={{ toolbar: GridToolbar }}
+        sx={{
+          border: 0,
+          '& .MuiDataGrid-columnHeaders': { backgroundColor: '#fafafa' },
+          '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700 },
+          '& .MuiDataGrid-row': { transition: 'background-color 0.2s ease' },
+          '& .MuiDataGrid-row:hover': { backgroundColor: '#f8f8f8' },
+        }}
+      />
+    </Paper>
   );
 };
 
@@ -1603,6 +1677,11 @@ const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void
     label="Calendar"
   />
   <Tab
+    icon={<MonitorHeartIcon sx={{ fontSize: 16 }} />}
+    iconPosition="start"
+    label="Monitoring"
+  />
+  <Tab
     icon={<InventoryIcon sx={{ fontSize: 16 }} />}
     iconPosition="start"
     label="Inventory"
@@ -1801,7 +1880,8 @@ const AdminDashboard: React.FC = () => {
       <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1400, mx: 'auto' }}>
         {tab === 0 && <OverviewTab  rentals={rentals} onSave={handleSaveStatus} />}
         {tab === 1 && <CalendarTab  rentals={rentals} items={items} onSave={handleSaveStatus} />}
-        {tab === 2 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
+        {tab === 2 && <MonitoringTab rentals={rentals} />}
+        {tab === 3 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
       </Box>
     </Box>
   );
