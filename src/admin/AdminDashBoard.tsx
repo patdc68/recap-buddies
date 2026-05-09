@@ -4,6 +4,7 @@ import {
   Tabs, Tab, Divider, IconButton, Dialog, DialogTitle, DialogContent,
   DialogActions, Select, MenuItem, FormControl, InputLabel, FormHelperText,
   Switch, FormControlLabel, Tooltip, TextField, type SelectChangeEvent,
+  Table, TableHead, TableBody, TableRow, TableCell, TableContainer, TablePagination,
 } from '@mui/material';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
@@ -45,6 +46,8 @@ import VerifiedUserIcon       from '@mui/icons-material/VerifiedUser';
 import OpenInNewIcon          from '@mui/icons-material/OpenInNew';
 import DeleteIcon             from '@mui/icons-material/Delete';
 import FilterListIcon         from '@mui/icons-material/FilterList';
+import CheckCircleIcon        from '@mui/icons-material/CheckCircle';
+import CancelIcon             from '@mui/icons-material/Cancel';
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
@@ -1607,6 +1610,11 @@ const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void
     iconPosition="start"
     label="Inventory"
   />
+  <Tab
+    icon={<FilterListIcon sx={{ fontSize: 16 }} />}
+    iconPosition="start"
+    label="Monitoring"
+  />
 </Tabs>
 
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
@@ -1620,6 +1628,44 @@ const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void
     </Box>
   </Box>
 );
+
+const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => {
+  const [page, setPage] = useState(0);
+  const [rowsPerPage, setRowsPerPage] = useState(10);
+  const [nameFilter, setNameFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
+  const filtered = rentals.filter((r) => {
+    const name = `${r.renter?.renter_fname ?? ''} ${r.renter?.renter_lname ?? ''}`.toLowerCase();
+    return (!nameFilter || name.includes(nameFilter.toLowerCase())) && (!statusFilter || r.status === statusFilter);
+  });
+  return <Paper elevation={0} sx={{ p: 2, borderRadius: 3, border: `1px solid ${BORDER}` }}>
+    <Box sx={{ display: 'flex', gap: 1.5, mb: 2 }}>
+      <TextField size="small" label="Name" value={nameFilter} onChange={(e) => setNameFilter(e.target.value)} />
+      <FormControl size="small" sx={{ minWidth: 200 }}><InputLabel>Status</InputLabel>
+        <Select value={statusFilter} label="Status" onChange={(e) => setStatusFilter(e.target.value)}>
+          <MenuItem value="">All</MenuItem>
+          {Object.entries(RENTAL_STATUS_META).map(([key, meta]) => <MenuItem key={key} value={key}>{meta.label}</MenuItem>)}
+        </Select>
+      </FormControl>
+    </Box>
+    <TableContainer sx={{ maxHeight: 560 }}><Table stickyHeader size="small"><TableHead><TableRow>
+      {['No.', 'PD', 'PT', 'RD', 'Name', 'Unit', 'Renter', 'Type', 'Hub', 'Group Chat', 'Rental Fee', 'Status', 'Available Unit'].map((h) => <TableCell key={h}>{h}</TableCell>)}
+    </TableRow></TableHead><TableBody>
+      {filtered.slice(page * rowsPerPage, page * rowsPerPage + rowsPerPage).map((r, index) => {
+        const totalDays = getRentalDayCount(r.rent_date_start, r.rent_date_end);
+        const rentalFee = (r.rent_price ?? 0) * totalDays;
+        return <TableRow hover key={r.id}>
+          <TableCell>{(page * rowsPerPage) + index + 1}</TableCell><TableCell>{r.rent_date_start}</TableCell><TableCell>{r.pickup_time ?? '—'}</TableCell><TableCell>{r.rent_date_end}</TableCell>
+          <TableCell>{r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—'}</TableCell><TableCell>{r.item?.device?.cam_name ?? '—'}</TableCell>
+          <TableCell>{r.status === 'completed' ? 'Returnee' : 'New'}</TableCell><TableCell>{r.delivery_addr ? 'Deliver' : 'Pick-up'}</TableCell><TableCell>{r.pickupBranch?.location_name ?? '—'}</TableCell>
+          <TableCell>{r.messenger_link ? <CheckCircleIcon color="success" fontSize="small" /> : <CancelIcon color="disabled" fontSize="small" />}</TableCell><TableCell>{rentalFee}</TableCell>
+          <TableCell>{RENTAL_STATUS_META[r.status]?.label ?? r.status}</TableCell><TableCell>{r.item?.code_name ?? '—'}</TableCell>
+        </TableRow>;
+      })}
+    </TableBody></Table></TableContainer>
+    <TablePagination component="div" count={filtered.length} page={page} onPageChange={(_, p) => setPage(p)} rowsPerPage={rowsPerPage} onRowsPerPageChange={(e) => { setRowsPerPage(Number(e.target.value)); setPage(0); }} />
+  </Paper>;
+};
 
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -1802,6 +1848,7 @@ const AdminDashboard: React.FC = () => {
         {tab === 0 && <OverviewTab  rentals={rentals} onSave={handleSaveStatus} />}
         {tab === 1 && <CalendarTab  rentals={rentals} items={items} onSave={handleSaveStatus} />}
         {tab === 2 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
+        {tab === 3 && <MonitoringTab rentals={rentals} />}
       </Box>
     </Box>
   );
