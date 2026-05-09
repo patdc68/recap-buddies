@@ -818,7 +818,18 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => 
   const monitoringColumns: GridColDef[] = [
     { field: 'no', headerName: 'No.', width: 80, type: 'number' },
     { field: 'pd', headerName: 'PD', width: 150, type: 'date', valueGetter: (value: unknown) => value ? dayjs(value as string).toDate() : null, valueFormatter: (value: unknown) => value ? dayjs(value as Date).format('MMM D, YYYY') : '—' },
-    { field: 'pt', headerName: 'PT', width: 120, type: 'dateTime', valueGetter: (value: unknown) => value ? dayjs(value as string).toDate() : null, valueFormatter: (value: unknown) => value ? dayjs(value as Date).format('h:mm A') : '—' },
+    {
+  field: 'pt',
+  headerName: 'PT',
+  width: 120,
+  type: 'string',
+
+  valueFormatter: (value: unknown) => {
+    if (!value) return '—';
+
+    return dayjs(`2000-01-01 ${value}`).format('h:mm A');
+  },
+},
     { field: 'rd', headerName: 'RD', width: 150, type: 'date', valueGetter: (value: unknown) => value ? dayjs(value as string).toDate() : null, valueFormatter: (value: unknown) => value ? dayjs(value as Date).format('MMM D, YYYY') : '—' },
     { field: 'name', headerName: 'Name', minWidth: 180, flex: 1 },
     { field: 'unit', headerName: 'Unit', minWidth: 120, flex: 1 },
