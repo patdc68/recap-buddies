@@ -121,6 +121,7 @@ interface EnrichedRental extends RbRentalForm {
   renter?:       RbRenter;
   pickupBranch?: RbBranch;
   returnBranch?: RbBranch;
+  pickup_time?:  string | null;
 }
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
@@ -793,7 +794,7 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => 
     const rentPrice = Number(r.rent_price ?? 0);
     const renterName = r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—';
     const isRepeatedRenter = rentals.some(
-      (rental) => rental.renter_id === r.renter_id && rental.status === 'Completed' && rental.id !== r.id,
+      (rental) => rental.renter?.id === r.renter?.id && rental.status === 'completed' && rental.id !== r.id,
     );
 
     return {
@@ -804,7 +805,7 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => 
       rd: r.rent_date_end,
       name: renterName,
       unit: r.item?.device?.cam_name ?? '—',
-      renter: r.renter_id ? (isRepeatedRenter ? 'Repeated' : 'New') : '—',
+      renter: r.renter?.id ? (isRepeatedRenter ? 'Repeated' : 'New') : '—',
       type: r.delivery_addr == null ? 'Pick-up' : 'Deliver',
       hub: r.pickupBranch?.location_name ?? r.delivery_addr ?? '—',
       groupChat: Boolean(r.messenger_link),
