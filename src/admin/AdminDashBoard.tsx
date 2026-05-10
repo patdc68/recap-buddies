@@ -4,9 +4,11 @@ import {
   Tabs, Tab, Divider, IconButton, Dialog, DialogTitle, DialogContent,
   DialogActions, Select, MenuItem, FormControl, InputLabel, FormHelperText,
   Switch, FormControlLabel, Tooltip, TextField, type SelectChangeEvent,
-  Table, TableHead, TableBody, TableRow, TableCell, TableContainer, TablePagination,
+  Table, TableHead, TableBody, TableRow, TableCell, TableContainer, TablePagination, Snackbar, Alert,
 } from '@mui/material';
 import { DataGrid, GridToolbar, type GridColDef } from '@mui/x-data-grid';
+import { LocalizationProvider, TimePicker } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
   ResponsiveContainer, Cell,
@@ -50,6 +52,7 @@ import FilterListIcon         from '@mui/icons-material/FilterList';
 import CheckCircleIcon        from '@mui/icons-material/CheckCircle';
 import CancelIcon             from '@mui/icons-material/Cancel';
 import MonitorHeartIcon       from '@mui/icons-material/MonitorHeart';
+import SettingsSuggestIcon    from '@mui/icons-material/SettingsSuggest';
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
@@ -158,6 +161,8 @@ interface RentalUpdatePayload {
   cam_name_id_fk: string;
   rent_date_start: string;
   rent_date_end: string;
+  pickup_time: string;
+  return_time: string;
 }
 
 const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, onClose, onSave }) => {
@@ -169,6 +174,8 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [cameraOptions, setCameraOptions] = useState<EnrichedItem[]>([]);
+  const [pickupTime, setPickupTime] = useState<Dayjs | null>(null);
+  const [returnTime, setReturnTime] = useState<Dayjs | null>(null);
   const [isRepeatRenter, setIsRepeatRenter] = useState(false);
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
@@ -183,6 +190,8 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
     setCameraId(rental.cam_name_id_fk ?? '');
     setStartDate(dayjs(rental.rent_date_start).format('YYYY-MM-DD'));
     setEndDate(dayjs(rental.rent_date_end).format('YYYY-MM-DD'));
+    setPickupTime(rental.pickup_time ? dayjs(`2000-01-01 ${rental.pickup_time}`) : null);
+    setReturnTime(rental.return_time ? dayjs(`2000-01-01 ${rental.return_time}`) : null);
   }, [rental]);
 
   useEffect(() => {
@@ -231,6 +240,8 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
       cam_name_id_fk: cameraId,
       rent_date_start: startDate,
       rent_date_end: endDate,
+      pickup_time: pickupTime?.format('hh:mm A') ?? '',
+      return_time: returnTime?.format('hh:mm A') ?? '',
     });
     setSaving(false);
     onClose();
@@ -348,6 +359,20 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
         {isDateRangeInvalid && (
           <FormHelperText error>End date must be on or after start date.</FormHelperText>
         )}
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <Box sx={{ flex: '1 1 180px', p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.6 }}>Pickup Time</Typography>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <TimePicker value={pickupTime} onChange={setPickupTime} slotProps={{ textField: { size: 'small', fullWidth: true } }} />
+            </LocalizationProvider>
+          </Box>
+          <Box sx={{ flex: '1 1 180px', p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.6 }}>Return Time</Typography>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <TimePicker value={returnTime} onChange={setReturnTime} slotProps={{ textField: { size: 'small', fullWidth: true } }} />
+            </LocalizationProvider>
+          </Box>
+        </Box>
 
         {/* Logistics */}
         <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -802,6 +827,7 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => 
       no: index + 1,
       pd: r.rent_date_start,
       pt: r.pickup_time,
+      rt: r.return_time,
       rd: r.rent_date_end,
       name: renterName,
       unit: r.item?.device?.cam_name ?? '—',
@@ -830,6 +856,18 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => 
     return dayjs(`2000-01-01 ${value}`).format('h:mm A');
   },
 },
+    {
+      field: 'rt',
+      headerName: 'RT',
+      width: 120,
+      type: 'string',
+      valueFormatter: (value: unknown) => (value ? dayjs(`2000-01-01 ${value}`).format('h:mm A') : '—'),
+      sortComparator: (v1: string, v2: string) => {
+        const t1 = dayjs(`2000-01-01 ${v1}`);
+        const t2 = dayjs(`2000-01-01 ${v2}`);
+        return t1.valueOf() - t2.valueOf();
+      },
+    },
     { field: 'rd', headerName: 'RD', width: 150, type: 'date', valueGetter: (value: unknown) => value ? dayjs(value as string).toDate() : null, valueFormatter: (value: unknown) => value ? dayjs(value as Date).format('MMM D, YYYY') : '—' },
     { field: 'name', headerName: 'Name', minWidth: 180, flex: 1 },
     { field: 'unit', headerName: 'Unit', minWidth: 120, flex: 1 },
@@ -1697,6 +1735,11 @@ const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void
     iconPosition="start"
     label="Inventory"
   />
+  <Tab
+    icon={<SettingsSuggestIcon sx={{ fontSize: 16 }} />}
+    iconPosition="start"
+    label="Others"
+  />
 </Tabs>
 
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
@@ -1721,6 +1764,10 @@ const AdminDashboard: React.FC = () => {
   const [branches, setBranches] = useState<RbBranch[]>([]);
   const [loading, setLoading]   = useState(true);
   const [authUid, setAuthUid]   = useState('');
+  const [agreementMd, setAgreementMd] = useState('');
+  const [agreementLoading, setAgreementLoading] = useState(false);
+  const [agreementSaving, setAgreementSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' });
 
   const fetchAll = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -1779,6 +1826,20 @@ const AdminDashboard: React.FC = () => {
   }, [navigate]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+  const loadAgreement = useCallback(async () => {
+    setAgreementLoading(true);
+    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement.md');
+    if (error || !data) {
+      setSnackbar({ open: true, msg: `Failed to load agreement: ${error?.message ?? 'Unknown error'}`, severity: 'error' });
+      setAgreementLoading(false);
+      return;
+    }
+    setAgreementMd(await data.text());
+    setAgreementLoading(false);
+  }, []);
+  useEffect(() => {
+    if (tab === 4 && !agreementMd && !agreementLoading) void loadAgreement();
+  }, [tab, agreementMd, agreementLoading, loadAgreement]);
 
   const markOverdueRentalsForPenalty = useCallback(async () => {
     const today = dayjs().startOf('day');
@@ -1837,6 +1898,8 @@ const AdminDashboard: React.FC = () => {
       cam_name_id_fk: string;
       rent_date_start: string;
       rent_date_end: string;
+      pickup_time: string | null;
+      return_time: string | null;
     } = {
       status: updates.status,
       remarks: updates.remarks.trim() || null,
@@ -1845,6 +1908,8 @@ const AdminDashboard: React.FC = () => {
       cam_name_id_fk: updates.cam_name_id_fk,
       rent_date_start: updates.rent_date_start,
       rent_date_end: updates.rent_date_end,
+      pickup_time: updates.pickup_time || null,
+      return_time: updates.return_time || null,
     };
     if (updates.status === 'completed') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
     if (updates.status === 'for-penalty') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
@@ -1893,7 +1958,27 @@ const AdminDashboard: React.FC = () => {
         {tab === 1 && <CalendarTab  rentals={rentals} items={items} onSave={handleSaveStatus} />}
         {tab === 2 && <MonitoringTab rentals={rentals} />}
         {tab === 3 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
+        {tab === 4 && (
+          <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
+            <Typography sx={{ mb: 2, fontWeight: 700 }}>Terms & Conditions</Typography>
+            <TextField multiline minRows={14} fullWidth value={agreementMd} onChange={(e) => setAgreementMd(e.target.value)} placeholder="Write markdown content here..." />
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+              <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading}>Reload</Button>
+              <Button variant="contained" disabled={agreementSaving || !agreementMd.trim()} onClick={async () => {
+                setAgreementSaving(true);
+                const blob = new Blob([agreementMd], { type: 'text/markdown;charset=utf-8' });
+                const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
+                setAgreementSaving(false);
+                if (error) setSnackbar({ open: true, msg: `Save failed: ${error.message}`, severity: 'error' });
+                else setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
+              }}>Save Changes</Button>
+            </Box>
+          </Paper>
+        )}
       </Box>
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>{snackbar.msg}</Alert>
+      </Snackbar>
     </Box>
   );
 };
