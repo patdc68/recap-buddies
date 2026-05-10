@@ -1030,6 +1030,11 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
 
   const filtered = selectedCamera === 'all' ? rentals : rentals.filter((r) => r.cam_name_id_fk === selectedCamera);
 
+  const openRentalById = (rentalId: string) => {
+    const clickedRental = rentals.find((r) => r.id === rentalId);
+    if (clickedRental) setSelectedRental(clickedRental);
+  };
+
   return (
     <Box>
       {/* Controls */}
@@ -1153,7 +1158,6 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                 return (
                   <Box
                     key={r.id}
-                    onClick={() => setSelectedRental(r)}
                     sx={{
                       position: 'absolute',
                       top: `${36 + slot * 19}px`,
@@ -1163,12 +1167,12 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                       right: 0,
                       px: '2px',
                       height: 16,
-                      cursor: 'pointer', zIndex: 5,
-                      '&:hover': { filter: 'brightness(0.9)', zIndex: 10 },
-                      transition: 'filter 0.12s',
+                      zIndex: 5,
+                      pointerEvents: 'none',
                     }}
                   >
                     <Box
+                      onClick={() => openRentalById(r.id)}
                       sx={{
                         gridColumn: `${colStart + 1} / ${colEnd + 2}`,
                         background: meta.bg,
@@ -1179,6 +1183,10 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                         px: 0.75,
                         overflow: 'hidden',
                         minWidth: 0,
+                        cursor: 'pointer',
+                        pointerEvents: 'auto',
+                        transition: 'filter 0.12s',
+                        '&:hover': { filter: 'brightness(0.9)' },
                       }}
                     >
                       {isStart && (
@@ -1259,7 +1267,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                 <Box
                   key={r.id}
                   onClick={() => {
-                    setSelectedRental(r);
+                    openRentalById(r.id);
                     setListDialog(null);
                   }}
                   sx={{ p: 1.4, borderRadius: 2, border: `1px solid ${BORDER}`, background: 'rgba(201,151,58,0.04)', cursor: 'pointer', '&:hover': { background: 'rgba(201,151,58,0.09)' } }}
