@@ -434,9 +434,21 @@ const RenterForm: React.FC = () => {
         .from('RB_ITEM')
         .select('*, device:RB_DEVICES(id, cam_name, device_img)')
         .order('created_at', { ascending: false }),
+      supabase.from('RB_DEVICES').select('id, cam_name, device_img'),
       supabase.from('RB_BRANCHES').select('*').order('location_name'),
-    ]).then(([itemsRes, branchesRes]) => {
-      if (itemsRes.data)    setItems(itemsRes.data as EnrichedItem[]);
+    ]).then(([itemsRes, devicesRes, branchesRes]) => {
+      if (itemsRes.data && devicesRes.data) {
+        const allowedDeviceIds = new Set(devicesRes.data.map((d) => d.id));
+        const uniqueByCamera = new Set<string>();
+        const filtered = (itemsRes.data as EnrichedItem[]).filter((item) => {
+          const deviceId = item.device_id_fk;
+          const camName = item.device?.cam_name?.trim().toLowerCase();
+          if (!deviceId || !allowedDeviceIds.has(deviceId) || !camName || uniqueByCamera.has(camName)) return false;
+          uniqueByCamera.add(camName);
+          return true;
+        });
+        setItems(filtered);
+      }
       if (branchesRes.data) setBranches(branchesRes.data as RbBranch[]);
     });
 
