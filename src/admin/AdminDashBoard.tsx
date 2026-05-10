@@ -129,6 +129,90 @@ interface EnrichedRental extends RbRentalForm {
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
 
+
+
+interface BranchAnalyticsRow {
+  branch: string;
+  units: number;
+  revenue: number;
+}
+
+interface RenterTypeAnalytics {
+  rows: BranchAnalyticsRow[];
+  totalUnits: number;
+  totalRevenue: number;
+}
+
+const pesoFormatter = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 });
+
+const buildRenterAnalytics = (rentals: EnrichedRental[], branchLookup: Record<string, string>) => {
+  const grouped: Record<'new' | 'repeat', Record<string, { units: number; revenue: number }>> = { new: {}, repeat: {} };
+
+  rentals.forEach((r) => {
+    if (!r.renter?.id) return;
+    const isRepeatedRenter = rentals.some((rental) => rental.renter?.id === r.renter?.id && rental.status === 'completed' && rental.id !== r.id);
+    const renterType: 'new' | 'repeat' = isRepeatedRenter ? 'repeat' : 'new';
+    const branchName = branchLookup[r.item?.branch_id_fk ?? ''] ?? 'Unassigned';
+    const units = 1;
+    const revenue = Math.max(getRentalDayCount(r.rent_date_start, r.rent_date_end), 1) * (Number(r.rent_price ?? 0) || 0);
+
+    if (!grouped[renterType][branchName]) grouped[renterType][branchName] = { units: 0, revenue: 0 };
+    grouped[renterType][branchName].units += units;
+    grouped[renterType][branchName].revenue += revenue;
+  });
+
+  const toSummary = (map: Record<string, { units: number; revenue: number }>): RenterTypeAnalytics => {
+    const rows = Object.entries(map)
+      .map(([branch, data]) => ({ branch, units: data.units, revenue: data.revenue }))
+      .sort((a, b) => b.revenue - a.revenue);
+    return {
+      rows,
+      totalUnits: rows.reduce((sum, row) => sum + row.units, 0),
+      totalRevenue: rows.reduce((sum, row) => sum + row.revenue, 0),
+    };
+  };
+
+  const newRenter = toSummary(grouped.new);
+  const repeatRenter = toSummary(grouped.repeat);
+
+  return {
+    newRenter,
+    repeatRenter,
+    overallUnits: newRenter.totalUnits + repeatRenter.totalUnits,
+    overallRevenue: newRenter.totalRevenue + repeatRenter.totalRevenue,
+  };
+};
+
+const BranchAnalyticsTable: React.FC<{ title: string; analytics: RenterTypeAnalytics }> = ({ title, analytics }) => (
+  <Paper elevation={0} sx={{ borderRadius: '20px', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', p: 3, border: `1px solid ${BORDER}` }}>
+    <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '1rem', mb: 1.5 }}>{title}</Typography>
+    <TableContainer>
+      <Table size="small">
+        <TableHead>
+          <TableRow sx={{ backgroundColor: '#fafafa' }}>
+            <TableCell sx={{ fontWeight: 700 }}>Branch</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>Total Units Rented</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>Total Revenue</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {analytics.rows.map((row) => (
+            <TableRow key={`${title}-${row.branch}`}>
+              <TableCell>{row.branch}</TableCell>
+              <TableCell>{row.units}</TableCell>
+              <TableCell>₱{pesoFormatter.format(row.revenue)}</TableCell>
+            </TableRow>
+          ))}
+          <TableRow sx={{ backgroundColor: 'rgba(0,0,0,0.04)' }}>
+            <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>{analytics.totalUnits}</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>₱{pesoFormatter.format(analytics.totalRevenue)}</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </TableContainer>
+  </Paper>
+);
 const InfoBox: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <Box sx={{ p: 2, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
     <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase', mb: 0.5 }}>
@@ -277,7 +361,7 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
             <Select value={cameraId} onChange={(e: SelectChangeEvent) => setCameraId(e.target.value)} label="Select Camera">
               {cameraOptions.map((item) => (
                 <MenuItem key={item.id} value={item.id}>
-                  {item.device?.cam_name ?? '—'}
+                  {item.code_name ?? '—'}
                 </MenuItem>
               ))}
             </Select>
@@ -671,6 +755,25 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
           </Paper>
         ))}
       </Box>
+
+      <Paper elevation={0} sx={{ borderRadius: '20px', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', p: 3, border: `1px solid ${BORDER}` }}>
+        <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.95rem', mb: 1.5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Year To Date Analytics</Typography>
+        {(() => {
+          const yearStart = today.startOf('year');
+          const ytdRentals = rentals.filter((r) => {
+            const created = dayjs(r.created_at);
+            return created.isSameOrAfter(yearStart, 'day') && created.isSameOrBefore(today, 'day');
+          });
+          const ytdAnalytics = buildRenterAnalytics(ytdRentals, {});
+          return (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2 }}>
+              <Box><Typography sx={{ fontWeight: 700 }}>New Renters</Typography><Typography sx={{ color: MUTED }}>{ytdAnalytics.newRenter.totalUnits} Units | ₱{pesoFormatter.format(ytdAnalytics.newRenter.totalRevenue)}</Typography></Box>
+              <Box><Typography sx={{ fontWeight: 700 }}>Repeat Renters</Typography><Typography sx={{ color: MUTED }}>{ytdAnalytics.repeatRenter.totalUnits} Units | ₱{pesoFormatter.format(ytdAnalytics.repeatRenter.totalRevenue)}</Typography></Box>
+              <Box><Typography sx={{ fontWeight: 700 }}>Overall</Typography><Typography sx={{ color: MUTED }}>{ytdAnalytics.overallUnits} Units | ₱{pesoFormatter.format(ytdAnalytics.overallRevenue)}</Typography></Box>
+            </Box>
+          );
+        })()}
+      </Paper>
 
       {/* Upcoming dates */}
       <Box>
