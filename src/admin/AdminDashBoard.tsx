@@ -843,7 +843,7 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => 
   ];
 
   return (
-    <Paper elevation={0} sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', background: '#fff', border: `1px solid ${BORDER}`, p: 2 }}>
+    <Paper elevation={0} sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', background: '#fff', border: `1px solid ${BORDER}`, p: 2, textAlign: 'center' }}>
       <Typography sx={{ color: ESPRESSO, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '0.9rem', mb: 1.5, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
         Admin Rental Monitoring
       </Typography>
@@ -1696,11 +1696,6 @@ const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void
     icon={<InventoryIcon sx={{ fontSize: 16 }} />}
     iconPosition="start"
     label="Inventory"
-  />
-  <Tab
-    icon={<FilterListIcon sx={{ fontSize: 16 }} />}
-    iconPosition="start"
-    label="Monitoring"
   />
 </Tabs>
 
