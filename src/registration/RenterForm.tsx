@@ -6,6 +6,7 @@ import {
   ToggleButtonGroup, ToggleButton, type SelectChangeEvent,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+import { TimePicker } from '@mui/x-date-pickers/TimePicker';
 import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import CheckCircleIcon      from '@mui/icons-material/CheckCircle';
@@ -37,6 +38,8 @@ interface RentalForm {
   cam_name_id_fk:   string;
   rent_date_start:  Dayjs | null;
   rent_date_end:    Dayjs | null;
+  pickup_time:      Dayjs | null;
+  return_time:      Dayjs | null;
   loc_usage:        LocUsage | '';
   username:         string;
   discount_code:    string;
@@ -67,6 +70,7 @@ const STEPS = [
 
 const INIT_FORM: RentalForm = {
   cam_name_id_fk: '', rent_date_start: null, rent_date_end: null,
+  pickup_time: null, return_time: null,
   loc_usage: '', username: '', discount_code: '', refund_info: '',
   pickup_mode: 'hub', hub_pick_up_addr: '', delivery_addr: '',
   return_mode: 'hub', hub_return_addr: '', return_addr: '',
@@ -164,6 +168,24 @@ const StepPeriod: React.FC<{ form: RentalForm; setForm: React.Dispatch<React.Set
             minDate={form.rent_date_start ? form.rent_date_start.add(1, 'day') : dayjs().add(1, 'day')}
             disabled={!form.rent_date_start}
             slotProps={{ textField: { fullWidth: true, error: !!errors.rent_date_end, helperText: errors.rent_date_end } }} />
+        </Col>
+        <Col half>
+          <TimePicker
+            label="Pickup Time"
+            value={form.pickup_time}
+            onChange={(val) => setForm((f) => ({ ...f, pickup_time: val }))}
+            ampm
+            slotProps={{ textField: { fullWidth: true } }}
+          />
+        </Col>
+        <Col half>
+          <TimePicker
+            label="Return Time"
+            value={form.return_time}
+            onChange={(val) => setForm((f) => ({ ...f, return_time: val }))}
+            ampm
+            slotProps={{ textField: { fullWidth: true } }}
+          />
         </Col>
       </Row>
       {form.rent_date_start && form.rent_date_end && (
@@ -412,9 +434,21 @@ const RenterForm: React.FC = () => {
         .from('RB_ITEM')
         .select('*, device:RB_DEVICES(id, cam_name, device_img)')
         .order('created_at', { ascending: false }),
+      supabase.from('RB_DEVICES').select('id, cam_name, device_img'),
       supabase.from('RB_BRANCHES').select('*').order('location_name'),
-    ]).then(([itemsRes, branchesRes]) => {
-      if (itemsRes.data)    setItems(itemsRes.data as EnrichedItem[]);
+    ]).then(([itemsRes, devicesRes, branchesRes]) => {
+      if (itemsRes.data && devicesRes.data) {
+        const allowedDeviceIds = new Set(devicesRes.data.map((d) => d.id));
+        const uniqueByCamera = new Set<string>();
+        const filtered = (itemsRes.data as EnrichedItem[]).filter((item) => {
+          const deviceId = item.device_id_fk;
+          const camName = item.device?.cam_name?.trim().toLowerCase();
+          if (!deviceId || !allowedDeviceIds.has(deviceId) || !camName || uniqueByCamera.has(camName)) return false;
+          uniqueByCamera.add(camName);
+          return true;
+        });
+        setItems(filtered);
+      }
       if (branchesRes.data) setBranches(branchesRes.data as RbBranch[]);
     });
 
@@ -503,8 +537,10 @@ const RenterForm: React.FC = () => {
         discount_code:             form.discount_code  || null,
         username:                  form.username       || null,
         refund_info:               form.refund_info,   // always present now
-        rent_date_start:           form.rent_date_start?.toISOString(),
-        rent_date_end:             form.rent_date_end?.toISOString(),
+        rent_date_start:           form.rent_date_start?.format('YYYY-MM-DD'),
+        rent_date_end:             form.rent_date_end?.format('YYYY-MM-DD'),
+        pickup_time:               form.pickup_time?.format('hh:mm A') ?? null,
+        return_time:               form.return_time?.format('hh:mm A') ?? null,
         hub_pick_up_addr:          form.pickup_mode === 'hub'      ? form.hub_pick_up_addr : null,
         delivery_addr:             form.pickup_mode === 'delivery' ? form.delivery_addr    : null,
         hub_return_addr:           form.return_mode === 'hub'      ? form.hub_return_addr  : null,

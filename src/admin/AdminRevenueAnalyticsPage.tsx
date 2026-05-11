@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { Box, CircularProgress, IconButton, Paper, Typography } from '@mui/material';
+import { Box, CircularProgress, IconButton, Paper, Typography, Table, TableHead, TableBody, TableRow, TableCell, TableContainer } from '@mui/material';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import dayjs from 'dayjs';
 import { useNavigate, useSearchParams } from 'react-router-dom';
@@ -68,44 +68,28 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
   }, [fetchAnalyticsData]);
 
   const analytics = useMemo(() => {
-    const byCamera: Record<string, { camera: string; rentals: number; revenue: number }> = {};
-    const branchRentals: Record<string, number> = {};
+    const branchLookup = Object.fromEntries(branches.map((b) => [b.id, b.location_name]));
+    const grouped: Record<'new' | 'repeat', Record<string, { units: number; revenue: number }>> = { new: {}, repeat: {} };
 
     rentals.forEach((r) => {
-      const camKey = r.item?.device_id_fk ?? r.cam_name_id_fk;
-      const camName = r.item?.device?.cam_name ?? 'Unknown Camera';
-      const unitPrice = Number(r.rent_price ?? 0) || 0;
-      const rentalDays = Math.max(dayjs(r.rent_date_end).diff(dayjs(r.rent_date_start), 'day'), 0);
-      const revenue = unitPrice * rentalDays;
-
-      if (!byCamera[camKey]) {
-        byCamera[camKey] = { camera: camName, rentals: 0, revenue: 0 };
-      }
-
-      byCamera[camKey].rentals += 1;
-      byCamera[camKey].revenue += revenue;
-
-      const branchId = r.item?.branch_id_fk ?? 'unassigned';
-      branchRentals[branchId] = (branchRentals[branchId] ?? 0) + 1;
+      if (!r.renter_id_fk) return;
+      const isRepeatedRenter = rentals.some((rental) => rental.renter_id_fk === r.renter_id_fk && rental.status === 'completed' && rental.id !== r.id);
+      const type: 'new' | 'repeat' = isRepeatedRenter ? 'repeat' : 'new';
+      const branch = branchLookup[r.item?.branch_id_fk ?? ''] ?? 'Unassigned';
+      const revenue = Math.max(dayjs(r.rent_date_end).diff(dayjs(r.rent_date_start), 'day'), 1) * (Number(r.rent_price ?? 0) || 0);
+      if (!grouped[type][branch]) grouped[type][branch] = { units: 0, revenue: 0 };
+      grouped[type][branch].units += 1;
+      grouped[type][branch].revenue += revenue;
     });
 
-    const rows = Object.values(byCamera).sort((a, b) => b.revenue - a.revenue);
-    const topCamera = rows[0];
-
-    const topBranchEntry = Object.entries(branchRentals).sort((a, b) => b[1] - a[1])[0];
-    const topBranchName = topBranchEntry
-      ? (branches.find((b) => b.id === topBranchEntry[0])?.location_name ?? 'Unassigned')
-      : '—';
-
-    const totalRevenue = rows.reduce((sum, row) => sum + row.revenue, 0);
-
-    return {
-      rows,
-      topCamera,
-      topBranchName,
-      topBranchRentals: topBranchEntry?.[1] ?? 0,
-      totalRevenue,
+    const toRows = (map: Record<string, { units: number; revenue: number }>) => {
+      const rows = Object.entries(map).map(([branch, values]) => ({ branch, ...values }));
+      return { rows, totalUnits: rows.reduce((s, r) => s + r.units, 0), totalRevenue: rows.reduce((s, r) => s + r.revenue, 0) };
     };
+
+    const newRenter = toRows(grouped.new);
+    const repeatRenter = toRows(grouped.repeat);
+    return { newRenter, repeatRenter, overallUnits: newRenter.totalUnits + repeatRenter.totalUnits, overallRevenue: newRenter.totalRevenue + repeatRenter.totalRevenue };
   }, [branches, rentals]);
 
   if (loading) {
@@ -131,52 +115,24 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
           </Box>
         </Box>
 
-        <Paper elevation={0} sx={{ p: 2.5, borderRadius: 3, background: CARD_BG, border: `1px solid ${BORDER}` }}>
-          <Typography sx={{ color: AMBER, fontWeight: 700, fontSize: '0.78rem', textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-            Top camera rented
-          </Typography>
-          <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '1.35rem', mt: 0.5 }}>
-            {analytics.topCamera ? analytics.topCamera.camera : 'No rentals this month'}
-          </Typography>
-          <Typography sx={{ color: MUTED, fontSize: '0.82rem', mt: 0.5 }}>
-            {analytics.topCamera ? `${analytics.topCamera.rentals} rentals · ₱${analytics.topCamera.revenue.toLocaleString()}` : '—'}
-          </Typography>
-        </Paper>
-
-        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2 }}>
-          <Paper elevation={0} sx={{ p: 2, borderRadius: 3, border: `1px solid ${BORDER}` }}>
-            <Typography sx={{ color: MUTED, fontSize: '0.72rem' }}>Total Revenue</Typography>
-            <Typography sx={{ color: '#2E7D32', fontWeight: 700, fontSize: '1.15rem' }}>₱{analytics.totalRevenue.toLocaleString()}</Typography>
-          </Paper>
-          <Paper elevation={0} sx={{ p: 2, borderRadius: 3, border: `1px solid ${BORDER}` }}>
-            <Typography sx={{ color: MUTED, fontSize: '0.72rem' }}>Branch with Most Renters</Typography>
-            <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '1.05rem' }}>{analytics.topBranchName}</Typography>
-            <Typography sx={{ color: MUTED, fontSize: '0.76rem' }}>{analytics.topBranchRentals} rentals</Typography>
-          </Paper>
-          <Paper elevation={0} sx={{ p: 2, borderRadius: 3, border: `1px solid ${BORDER}` }}>
-            <Typography sx={{ color: MUTED, fontSize: '0.72rem' }}>Total Camera Rentals</Typography>
-            <Typography sx={{ color: AMBER, fontWeight: 700, fontSize: '1.15rem' }}>{rentals.length}</Typography>
+        <Box sx={{ display: 'grid', gap: 2 }}>
+          {(['New Renter', 'Repeat Renter'] as const).map((label) => {
+            const dataset = label === 'New Renter' ? analytics.newRenter : analytics.repeatRenter;
+            return (
+              <Paper key={label} elevation={0} sx={{ borderRadius: '20px', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', p: 3, border: `1px solid ${BORDER}` }}>
+                <Typography sx={{ fontWeight: 700, mb: 1.5 }}>{label}</Typography>
+                <TableContainer><Table size='small'><TableHead><TableRow sx={{ backgroundColor: '#fafafa' }}><TableCell sx={{ fontWeight: 700 }}>Branch</TableCell><TableCell sx={{ fontWeight: 700 }}>Total Units Rented</TableCell><TableCell sx={{ fontWeight: 700 }}>Total Revenue</TableCell></TableRow></TableHead><TableBody>
+                {dataset.rows.map((row) => <TableRow key={`${label}-${row.branch}`}><TableCell>{row.branch}</TableCell><TableCell>{row.units}</TableCell><TableCell>₱{row.revenue.toLocaleString()}</TableCell></TableRow>)}
+                <TableRow sx={{ backgroundColor: 'rgba(0,0,0,0.04)' }}><TableCell sx={{ fontWeight: 700 }}>Total</TableCell><TableCell sx={{ fontWeight: 700 }}>{dataset.totalUnits}</TableCell><TableCell sx={{ fontWeight: 700 }}>₱{dataset.totalRevenue.toLocaleString()}</TableCell></TableRow>
+                </TableBody></Table></TableContainer>
+              </Paper>
+            );
+          })}
+          <Paper elevation={0} sx={{ borderRadius: '20px', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', p: 3, border: `1px solid ${BORDER}` }}>
+            <Typography sx={{ fontWeight: 700 }}>Overall Total:</Typography>
+            <Typography sx={{ color: MUTED }}>{analytics.overallUnits} Units | ₱{analytics.overallRevenue.toLocaleString()} Revenue</Typography>
           </Paper>
         </Box>
-
-        <Paper elevation={0} sx={{ borderRadius: 3, border: `1px solid ${BORDER}`, overflow: 'hidden' }}>
-          <Box sx={{ display: 'grid', gridTemplateColumns: '1.2fr 90px 120px', px: 2, py: 1.2, background: 'rgba(201,151,58,0.05)' }}>
-            {['Camera', 'Rented', 'Revenue'].map((header) => (
-              <Typography key={header} sx={{ color: MUTED, fontSize: '0.7rem', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.08em' }}>{header}</Typography>
-            ))}
-          </Box>
-          {analytics.rows.length === 0 ? (
-            <Box sx={{ p: 3, textAlign: 'center' }}>
-              <Typography sx={{ color: MUTED }}>No rentals found for this month.</Typography>
-            </Box>
-          ) : analytics.rows.map((row, idx) => (
-            <Box key={`${row.camera}-${idx}`} sx={{ display: 'grid', gridTemplateColumns: '1.2fr 90px 120px', px: 2, py: 1.3, borderTop: `1px solid ${BORDER}` }}>
-              <Typography sx={{ color: ESPRESSO, fontWeight: 600, fontSize: '0.86rem' }}>{row.camera}</Typography>
-              <Typography sx={{ color: MUTED, fontSize: '0.84rem' }}>{row.rentals}</Typography>
-              <Typography sx={{ color: '#2E7D32', fontWeight: 700, fontSize: '0.84rem' }}>₱{row.revenue.toLocaleString()}</Typography>
-            </Box>
-          ))}
-        </Paper>
       </Box>
     </Box>
   );

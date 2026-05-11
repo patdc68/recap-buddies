@@ -122,6 +122,8 @@ export interface RbRentalForm {
   refund_info: string | null;
   rent_date_start: string;
   rent_date_end: string;
+  pickup_time: string | null;
+  return_time: string | null;
   actual_return_date: string | null;
   hub_pick_up_addr: string | null;   // FK → RB_BRANCHES.id
   delivery_addr: string | null;

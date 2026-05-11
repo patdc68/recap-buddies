@@ -4,7 +4,11 @@ import {
   Tabs, Tab, Divider, IconButton, Dialog, DialogTitle, DialogContent,
   DialogActions, Select, MenuItem, FormControl, InputLabel, FormHelperText,
   Switch, FormControlLabel, Tooltip, TextField, type SelectChangeEvent,
+  Table, TableHead, TableBody, TableRow, TableCell, TableContainer, TablePagination, Snackbar, Alert,
 } from '@mui/material';
+import { DataGrid, GridToolbar, type GridColDef } from '@mui/x-data-grid';
+import { LocalizationProvider, TimePicker } from '@mui/x-date-pickers';
+import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
   ResponsiveContainer, Cell,
@@ -45,6 +49,10 @@ import VerifiedUserIcon       from '@mui/icons-material/VerifiedUser';
 import OpenInNewIcon          from '@mui/icons-material/OpenInNew';
 import DeleteIcon             from '@mui/icons-material/Delete';
 import FilterListIcon         from '@mui/icons-material/FilterList';
+import CheckCircleIcon        from '@mui/icons-material/CheckCircle';
+import CancelIcon             from '@mui/icons-material/Cancel';
+import MonitorHeartIcon       from '@mui/icons-material/MonitorHeart';
+import SettingsSuggestIcon    from '@mui/icons-material/SettingsSuggest';
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
@@ -121,6 +129,90 @@ interface EnrichedRental extends RbRentalForm {
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
 
+
+
+interface BranchAnalyticsRow {
+  branch: string;
+  units: number;
+  revenue: number;
+}
+
+interface RenterTypeAnalytics {
+  rows: BranchAnalyticsRow[];
+  totalUnits: number;
+  totalRevenue: number;
+}
+
+const pesoFormatter = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 });
+
+const buildRenterAnalytics = (rentals: EnrichedRental[], branchLookup: Record<string, string>) => {
+  const grouped: Record<'new' | 'repeat', Record<string, { units: number; revenue: number }>> = { new: {}, repeat: {} };
+
+  rentals.forEach((r) => {
+    if (!r.renter?.id) return;
+    const isRepeatedRenter = rentals.some((rental) => rental.renter?.id === r.renter?.id && rental.status === 'completed' && rental.id !== r.id);
+    const renterType: 'new' | 'repeat' = isRepeatedRenter ? 'repeat' : 'new';
+    const branchName = branchLookup[r.item?.branch_id_fk ?? ''] ?? 'Unassigned';
+    const units = 1;
+    const revenue = Math.max(getRentalDayCount(r.rent_date_start, r.rent_date_end), 1) * (Number(r.rent_price ?? 0) || 0);
+
+    if (!grouped[renterType][branchName]) grouped[renterType][branchName] = { units: 0, revenue: 0 };
+    grouped[renterType][branchName].units += units;
+    grouped[renterType][branchName].revenue += revenue;
+  });
+
+  const toSummary = (map: Record<string, { units: number; revenue: number }>): RenterTypeAnalytics => {
+    const rows = Object.entries(map)
+      .map(([branch, data]) => ({ branch, units: data.units, revenue: data.revenue }))
+      .sort((a, b) => b.revenue - a.revenue);
+    return {
+      rows,
+      totalUnits: rows.reduce((sum, row) => sum + row.units, 0),
+      totalRevenue: rows.reduce((sum, row) => sum + row.revenue, 0),
+    };
+  };
+
+  const newRenter = toSummary(grouped.new);
+  const repeatRenter = toSummary(grouped.repeat);
+
+  return {
+    newRenter,
+    repeatRenter,
+    overallUnits: newRenter.totalUnits + repeatRenter.totalUnits,
+    overallRevenue: newRenter.totalRevenue + repeatRenter.totalRevenue,
+  };
+};
+
+const BranchAnalyticsTable: React.FC<{ title: string; analytics: RenterTypeAnalytics }> = ({ title, analytics }) => (
+  <Paper elevation={0} sx={{ borderRadius: '20px', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', p: 3, border: `1px solid ${BORDER}` }}>
+    <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '1rem', mb: 1.5 }}>{title}</Typography>
+    <TableContainer>
+      <Table size="small">
+        <TableHead>
+          <TableRow sx={{ backgroundColor: '#fafafa' }}>
+            <TableCell sx={{ fontWeight: 700 }}>Branch</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>Total Units Rented</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>Total Revenue</TableCell>
+          </TableRow>
+        </TableHead>
+        <TableBody>
+          {analytics.rows.map((row) => (
+            <TableRow key={`${title}-${row.branch}`}>
+              <TableCell>{row.branch}</TableCell>
+              <TableCell>{row.units}</TableCell>
+              <TableCell>₱{pesoFormatter.format(row.revenue)}</TableCell>
+            </TableRow>
+          ))}
+          <TableRow sx={{ backgroundColor: 'rgba(0,0,0,0.04)' }}>
+            <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>{analytics.totalUnits}</TableCell>
+            <TableCell sx={{ fontWeight: 700 }}>₱{pesoFormatter.format(analytics.totalRevenue)}</TableCell>
+          </TableRow>
+        </TableBody>
+      </Table>
+    </TableContainer>
+  </Paper>
+);
 const InfoBox: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <Box sx={{ p: 2, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
     <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase', mb: 0.5 }}>
@@ -153,6 +245,8 @@ interface RentalUpdatePayload {
   cam_name_id_fk: string;
   rent_date_start: string;
   rent_date_end: string;
+  pickup_time: string;
+  return_time: string;
 }
 
 const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, onClose, onSave }) => {
@@ -164,6 +258,8 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [cameraOptions, setCameraOptions] = useState<EnrichedItem[]>([]);
+  const [pickupTime, setPickupTime] = useState<Dayjs | null>(null);
+  const [returnTime, setReturnTime] = useState<Dayjs | null>(null);
   const [isRepeatRenter, setIsRepeatRenter] = useState(false);
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
@@ -178,6 +274,8 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
     setCameraId(rental.cam_name_id_fk ?? '');
     setStartDate(dayjs(rental.rent_date_start).format('YYYY-MM-DD'));
     setEndDate(dayjs(rental.rent_date_end).format('YYYY-MM-DD'));
+    setPickupTime(rental.pickup_time ? dayjs(`2000-01-01 ${rental.pickup_time}`) : null);
+    setReturnTime(rental.return_time ? dayjs(`2000-01-01 ${rental.return_time}`) : null);
   }, [rental]);
 
   useEffect(() => {
@@ -226,6 +324,8 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
       cam_name_id_fk: cameraId,
       rent_date_start: startDate,
       rent_date_end: endDate,
+      pickup_time: pickupTime?.format('hh:mm A') ?? '',
+      return_time: returnTime?.format('hh:mm A') ?? '',
     });
     setSaving(false);
     onClose();
@@ -261,7 +361,7 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
             <Select value={cameraId} onChange={(e: SelectChangeEvent) => setCameraId(e.target.value)} label="Select Camera">
               {cameraOptions.map((item) => (
                 <MenuItem key={item.id} value={item.id}>
-                  {item.device?.cam_name ?? '—'}
+                  {item.code_name ?? '—'}
                 </MenuItem>
               ))}
             </Select>
@@ -343,6 +443,20 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
         {isDateRangeInvalid && (
           <FormHelperText error>End date must be on or after start date.</FormHelperText>
         )}
+        <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
+          <Box sx={{ flex: '1 1 180px', p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.6 }}>Pickup Time</Typography>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <TimePicker value={pickupTime} onChange={setPickupTime} slotProps={{ textField: { size: 'small', fullWidth: true } }} />
+            </LocalizationProvider>
+          </Box>
+          <Box sx={{ flex: '1 1 180px', p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.6 }}>Return Time</Typography>
+            <LocalizationProvider dateAdapter={AdapterDayjs}>
+              <TimePicker value={returnTime} onChange={setReturnTime} slotProps={{ textField: { size: 'small', fullWidth: true } }} />
+            </LocalizationProvider>
+          </Box>
+        </Box>
 
         {/* Logistics */}
         <Box sx={{ display: 'flex', gap: 1.5 }}>
@@ -614,6 +728,7 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
     { label: 'Pending Review',   color: '#1565C0',   items: rentals.filter((r) => r.status === 'submitted' || r.status === 'in-review') },
   ];
 
+
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
 
@@ -640,6 +755,25 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
           </Paper>
         ))}
       </Box>
+
+      <Paper elevation={0} sx={{ borderRadius: '20px', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', p: 3, border: `1px solid ${BORDER}` }}>
+        <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.95rem', mb: 1.5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Year To Date Analytics</Typography>
+        {(() => {
+          const yearStart = today.startOf('year');
+          const ytdRentals = rentals.filter((r) => {
+            const created = dayjs(r.created_at);
+            return created.isSameOrAfter(yearStart, 'day') && created.isSameOrBefore(today, 'day');
+          });
+          const ytdAnalytics = buildRenterAnalytics(ytdRentals, {});
+          return (
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr 1fr' }, gap: 2 }}>
+              <Box><Typography sx={{ fontWeight: 700 }}>New Renters</Typography><Typography sx={{ color: MUTED }}>{ytdAnalytics.newRenter.totalUnits} Units | ₱{pesoFormatter.format(ytdAnalytics.newRenter.totalRevenue)}</Typography></Box>
+              <Box><Typography sx={{ fontWeight: 700 }}>Repeat Renters</Typography><Typography sx={{ color: MUTED }}>{ytdAnalytics.repeatRenter.totalUnits} Units | ₱{pesoFormatter.format(ytdAnalytics.repeatRenter.totalRevenue)}</Typography></Box>
+              <Box><Typography sx={{ fontWeight: 700 }}>Overall</Typography><Typography sx={{ color: MUTED }}>{ytdAnalytics.overallUnits} Units | ₱{pesoFormatter.format(ytdAnalytics.overallRevenue)}</Typography></Box>
+            </Box>
+          );
+        })()}
+      </Paper>
 
       {/* Upcoming dates */}
       <Box>
@@ -782,6 +916,98 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
   );
 };
 
+const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => {
+  const monitoringRows = rentals.map((r, index) => {
+    const totalDays = getRentalDayCount(r.rent_date_start, r.rent_date_end);
+    const rentPrice = Number(r.rent_price ?? 0);
+    const renterName = r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—';
+    const isRepeatedRenter = rentals.some(
+      (rental) => rental.renter?.id === r.renter?.id && rental.status === 'completed' && rental.id !== r.id,
+    );
+
+    return {
+      id: r.id,
+      no: index + 1,
+      pd: r.rent_date_start,
+      pt: r.pickup_time,
+      rt: r.return_time,
+      rd: r.rent_date_end,
+      name: renterName,
+      unit: r.item?.device?.cam_name ?? '—',
+      renter: r.renter?.id ? (isRepeatedRenter ? 'Repeated' : 'New') : '—',
+      type: r.delivery_addr == null ? 'Pick-up' : 'Deliver',
+      hub: r.pickupBranch?.location_name ?? r.delivery_addr ?? '—',
+      groupChat: Boolean(r.messenger_link),
+      rentalFee: Math.max(totalDays, 1) * rentPrice,
+      status: RENTAL_STATUS_META[r.status]?.label ?? r.status,
+      availableUnit: r.item?.code_name ?? '—',
+    };
+  });
+
+  const monitoringColumns: GridColDef[] = [
+    { field: 'no', headerName: 'No.', width: 80, type: 'number' },
+    { field: 'pd', headerName: 'PD', width: 150, type: 'date', valueGetter: (value: unknown) => value ? dayjs(value as string).toDate() : null, valueFormatter: (value: unknown) => value ? dayjs(value as Date).format('MMM D, YYYY') : '—' },
+    {
+  field: 'pt',
+  headerName: 'PT',
+  width: 120,
+  type: 'string',
+
+  valueFormatter: (value: unknown) => {
+    if (!value) return '—';
+
+    return dayjs(`2000-01-01 ${value}`).format('h:mm A');
+  },
+},
+    {
+      field: 'rt',
+      headerName: 'RT',
+      width: 120,
+      type: 'string',
+      valueFormatter: (value: unknown) => (value ? dayjs(`2000-01-01 ${value}`).format('h:mm A') : '—'),
+      sortComparator: (v1: string, v2: string) => {
+        const t1 = dayjs(`2000-01-01 ${v1}`);
+        const t2 = dayjs(`2000-01-01 ${v2}`);
+        return t1.valueOf() - t2.valueOf();
+      },
+    },
+    { field: 'rd', headerName: 'RD', width: 150, type: 'date', valueGetter: (value: unknown) => value ? dayjs(value as string).toDate() : null, valueFormatter: (value: unknown) => value ? dayjs(value as Date).format('MMM D, YYYY') : '—' },
+    { field: 'name', headerName: 'Name', minWidth: 180, flex: 1 },
+    { field: 'unit', headerName: 'Unit', minWidth: 120, flex: 1 },
+    { field: 'renter', headerName: 'Renter', minWidth: 180, flex: 1 },
+    { field: 'type', headerName: 'Type', minWidth: 120 },
+    { field: 'hub', headerName: 'Hub', minWidth: 160, flex: 1 },
+    { field: 'groupChat', headerName: 'Group Chat', type: 'boolean', minWidth: 130, renderCell: (params: { value?: boolean }) => params.value ? <CheckCircleIcon sx={{ color: '#2E7D32' }} /> : <CancelIcon sx={{ color: '#B71C1C' }} /> },
+    { field: 'rentalFee', headerName: 'Rental Fee', type: 'number', minWidth: 140, valueFormatter: (value: unknown) => `₱${Number(value ?? 0).toLocaleString()}` },
+    { field: 'status', headerName: 'Status', minWidth: 150 },
+    { field: 'availableUnit', headerName: 'Available Unit', minWidth: 150 },
+  ];
+
+  return (
+    <Paper elevation={0} sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', background: '#fff', border: `1px solid ${BORDER}`, p: 2, textAlign: 'center' }}>
+      <Typography sx={{ color: ESPRESSO, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '0.9rem', mb: 1.5, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+        Admin Rental Monitoring
+      </Typography>
+      <DataGrid
+        rows={monitoringRows}
+        columns={monitoringColumns}
+        disableRowSelectionOnClick
+        pagination
+        pageSizeOptions={[10, 25, 50]}
+        initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
+        slots={{ toolbar: GridToolbar }}
+        sx={{
+          border: 0,
+          '& .MuiDataGrid-columnHeaders': { backgroundColor: '#fafafa' },
+          '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700 },
+          '& .MuiDataGrid-row': { transition: 'background-color 0.2s ease' },
+          '& .MuiDataGrid-row:hover': { backgroundColor: '#f8f8f8' },
+        }}
+      />
+    </Paper>
+  );
+};
+
 // ═══════════════════════════════════════════════════════════════════════════════
 // TAB 1 — CALENDAR (Teams-style continuous span bars, first name label)
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -803,6 +1029,11 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
 
   const filtered = selectedCamera === 'all' ? rentals : rentals.filter((r) => r.cam_name_id_fk === selectedCamera);
+
+  const openRentalById = (rentalId: string) => {
+    const clickedRental = rentals.find((r) => r.id === rentalId);
+    if (clickedRental) setSelectedRental(clickedRental);
+  };
 
   return (
     <Box>
@@ -927,7 +1158,6 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                 return (
                   <Box
                     key={r.id}
-                    onClick={() => setSelectedRental(r)}
                     sx={{
                       position: 'absolute',
                       top: `${36 + slot * 19}px`,
@@ -937,12 +1167,12 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                       right: 0,
                       px: '2px',
                       height: 16,
-                      cursor: 'pointer', zIndex: 5,
-                      '&:hover': { filter: 'brightness(0.9)', zIndex: 10 },
-                      transition: 'filter 0.12s',
+                      zIndex: 5,
+                      pointerEvents: 'none',
                     }}
                   >
                     <Box
+                      onClick={() => openRentalById(r.id)}
                       sx={{
                         gridColumn: `${colStart + 1} / ${colEnd + 2}`,
                         background: meta.bg,
@@ -953,6 +1183,10 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                         px: 0.75,
                         overflow: 'hidden',
                         minWidth: 0,
+                        cursor: 'pointer',
+                        pointerEvents: 'auto',
+                        transition: 'filter 0.12s',
+                        '&:hover': { filter: 'brightness(0.9)' },
                       }}
                     >
                       {isStart && (
@@ -1033,7 +1267,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                 <Box
                   key={r.id}
                   onClick={() => {
-                    setSelectedRental(r);
+                    openRentalById(r.id);
                     setListDialog(null);
                   }}
                   sx={{ p: 1.4, borderRadius: 2, border: `1px solid ${BORDER}`, background: 'rgba(201,151,58,0.04)', cursor: 'pointer', '&:hover': { background: 'rgba(201,151,58,0.09)' } }}
@@ -1603,9 +1837,19 @@ const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void
     label="Calendar"
   />
   <Tab
+    icon={<MonitorHeartIcon sx={{ fontSize: 16 }} />}
+    iconPosition="start"
+    label="Monitoring"
+  />
+  <Tab
     icon={<InventoryIcon sx={{ fontSize: 16 }} />}
     iconPosition="start"
     label="Inventory"
+  />
+  <Tab
+    icon={<SettingsSuggestIcon sx={{ fontSize: 16 }} />}
+    iconPosition="start"
+    label="Others"
   />
 </Tabs>
 
@@ -1631,6 +1875,10 @@ const AdminDashboard: React.FC = () => {
   const [branches, setBranches] = useState<RbBranch[]>([]);
   const [loading, setLoading]   = useState(true);
   const [authUid, setAuthUid]   = useState('');
+  const [agreementMd, setAgreementMd] = useState('');
+  const [agreementLoading, setAgreementLoading] = useState(false);
+  const [agreementSaving, setAgreementSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' });
 
   const fetchAll = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -1689,6 +1937,20 @@ const AdminDashboard: React.FC = () => {
   }, [navigate]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+  const loadAgreement = useCallback(async () => {
+    setAgreementLoading(true);
+    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement.md');
+    if (error || !data) {
+      setSnackbar({ open: true, msg: `Failed to load agreement: ${error?.message ?? 'Unknown error'}`, severity: 'error' });
+      setAgreementLoading(false);
+      return;
+    }
+    setAgreementMd(await data.text());
+    setAgreementLoading(false);
+  }, []);
+  useEffect(() => {
+    if (tab === 4 && !agreementMd && !agreementLoading) void loadAgreement();
+  }, [tab, agreementMd, agreementLoading, loadAgreement]);
 
   const markOverdueRentalsForPenalty = useCallback(async () => {
     const today = dayjs().startOf('day');
@@ -1747,6 +2009,8 @@ const AdminDashboard: React.FC = () => {
       cam_name_id_fk: string;
       rent_date_start: string;
       rent_date_end: string;
+      pickup_time: string | null;
+      return_time: string | null;
     } = {
       status: updates.status,
       remarks: updates.remarks.trim() || null,
@@ -1755,6 +2019,8 @@ const AdminDashboard: React.FC = () => {
       cam_name_id_fk: updates.cam_name_id_fk,
       rent_date_start: updates.rent_date_start,
       rent_date_end: updates.rent_date_end,
+      pickup_time: updates.pickup_time || null,
+      return_time: updates.return_time || null,
     };
     if (updates.status === 'completed') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
     if (updates.status === 'for-penalty') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
@@ -1801,8 +2067,29 @@ const AdminDashboard: React.FC = () => {
       <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1400, mx: 'auto' }}>
         {tab === 0 && <OverviewTab  rentals={rentals} onSave={handleSaveStatus} />}
         {tab === 1 && <CalendarTab  rentals={rentals} items={items} onSave={handleSaveStatus} />}
-        {tab === 2 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
+        {tab === 2 && <MonitoringTab rentals={rentals} />}
+        {tab === 3 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
+        {tab === 4 && (
+          <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
+            <Typography sx={{ mb: 2, fontWeight: 700 }}>Terms & Conditions</Typography>
+            <TextField multiline minRows={14} fullWidth value={agreementMd} onChange={(e) => setAgreementMd(e.target.value)} placeholder="Write markdown content here..." />
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+              <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading}>Reload</Button>
+              <Button variant="contained" disabled={agreementSaving || !agreementMd.trim()} onClick={async () => {
+                setAgreementSaving(true);
+                const blob = new Blob([agreementMd], { type: 'text/markdown;charset=utf-8' });
+                const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
+                setAgreementSaving(false);
+                if (error) setSnackbar({ open: true, msg: `Save failed: ${error.message}`, severity: 'error' });
+                else setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
+              }}>Save Changes</Button>
+            </Box>
+          </Paper>
+        )}
       </Box>
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>{snackbar.msg}</Alert>
+      </Snackbar>
     </Box>
   );
 };
