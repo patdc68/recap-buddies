@@ -19,6 +19,8 @@ import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import isSameOrAfter  from 'dayjs/plugin/isSameOrAfter';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
+import { emailService } from '../services/emailService';
+import { EMAIL_STATUS_MAP } from '../constants/emailStatusMap';
 import type {
   RbUser, RbBranch, RbDevice, RbItem, RbRenter,
   RbRentalForm, ItemStatus, ItemCondition, RentalStatus,
@@ -1878,7 +1880,7 @@ const AdminDashboard: React.FC = () => {
   const [agreementMd, setAgreementMd] = useState('');
   const [agreementLoading, setAgreementLoading] = useState(false);
   const [agreementSaving, setAgreementSaving] = useState(false);
-  const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' });
+  const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
 
   const fetchAll = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -2025,7 +2027,11 @@ const AdminDashboard: React.FC = () => {
     if (updates.status === 'completed') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
     if (updates.status === 'for-penalty') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
 
-    await supabase.from('RB_RENTAL_FORM').update(payload).eq('id', id);
+    const { error: updateError } = await supabase.from('RB_RENTAL_FORM').update(payload).eq('id', id);
+    if (updateError) {
+      console.error('Failed to update rental status:', updateError);
+      throw updateError;
+    }
 
     const targetRental = rentals.find((r) => r.id === id);
     const itemStatus = RENTAL_TO_ITEM_STATUS[updates.status];
@@ -2040,6 +2046,31 @@ const AdminDashboard: React.FC = () => {
         .from('RB_ITEM')
         .update({ status: itemStatus })
         .eq('id', updates.cam_name_id_fk);
+    }
+
+    const emailType = EMAIL_STATUS_MAP[updates.status];
+    if (emailType && targetRental?.renter?.email) {
+      const emailPayload = {
+        to: targetRental.renter.email,
+        renterName: `${targetRental.renter.renter_fname} ${targetRental.renter.renter_lname}`.trim(),
+        rentalCode: targetRental.id,
+        startDate: updates.rent_date_start,
+        endDate: updates.rent_date_end,
+        remarks: updates.remarks,
+      };
+
+      try {
+        if (emailType === 'submitted') await emailService.sendSubmittedEmail(emailPayload);
+        if (emailType === 'in_review') await emailService.sendInReviewEmail(emailPayload);
+        if (emailType === 'declined') await emailService.sendDeclinedEmail(emailPayload);
+      } catch (emailError) {
+        console.error('Failed to send status email:', emailError);
+        setSnackbar({
+          open: true,
+          msg: 'Status updated, but sending email notification failed.',
+          severity: 'warning',
+        });
+      }
     }
 
     await fetchAll();
