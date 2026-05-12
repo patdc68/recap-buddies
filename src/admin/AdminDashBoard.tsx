@@ -19,6 +19,7 @@ import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import isSameOrAfter  from 'dayjs/plugin/isSameOrAfter';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
+import { sendDeclinedEmail, sendInReviewEmail, sendSubmittedEmail } from '../services/emailService';
 import type {
   RbUser, RbBranch, RbDevice, RbItem, RbRenter,
   RbRentalForm, ItemStatus, ItemCondition, RentalStatus,
@@ -1865,6 +1866,13 @@ const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void
   </Box>
 );
 
+
+const EMAIL_BY_STATUS: Partial<Record<string, (email: string, renterName?: string) => Promise<unknown>>> = {
+  submitted: sendSubmittedEmail,
+  'in-review': sendInReviewEmail,
+  declined: sendDeclinedEmail,
+};
+
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [tab, setTab]           = useState(0);
@@ -1994,7 +2002,6 @@ const AdminDashboard: React.FC = () => {
       void markOverdueRentalsForPenalty();
     }
   }, [loading, rentals, markOverdueRentalsForPenalty]);
-
   const handleSaveStatus = useCallback(async (
     id: string,
     updates: RentalUpdatePayload
@@ -2040,6 +2047,20 @@ const AdminDashboard: React.FC = () => {
         .from('RB_ITEM')
         .update({ status: itemStatus })
         .eq('id', updates.cam_name_id_fk);
+    }
+
+    const sendEmail = EMAIL_BY_STATUS[updates.status];
+    if (sendEmail && targetRental?.renter?.email) {
+      try {
+        await sendEmail(targetRental.renter.email, targetRental.renter.renter_fname ?? undefined);
+      } catch (emailError) {
+        console.error('Failed to send rental status email:', emailError);
+        setSnackbar({
+          open: true,
+          msg: 'Status updated, but notification email could not be sent.',
+          severity: 'error',
+        });
+      }
     }
 
     await fetchAll();
