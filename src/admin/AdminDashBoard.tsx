@@ -4,7 +4,7 @@ import {
   Tabs, Tab, Divider, IconButton, Dialog, DialogTitle, DialogContent,
   DialogActions, Select, MenuItem, FormControl, InputLabel, FormHelperText,
   Switch, FormControlLabel, Tooltip, TextField, type SelectChangeEvent,
-  Table, TableHead, TableBody, TableRow, TableCell, TableContainer, TablePagination, Snackbar, Alert,
+  Table, TableHead, TableBody, TableRow, TableCell, TableContainer, TablePagination, Snackbar, Alert, Badge, Menu, ListItemText,
 } from '@mui/material';
 import { DataGrid, GridToolbar, type GridColDef } from '@mui/x-data-grid';
 import { LocalizationProvider, TimePicker } from '@mui/x-date-pickers';
@@ -55,6 +55,7 @@ import CheckCircleIcon        from '@mui/icons-material/CheckCircle';
 import CancelIcon             from '@mui/icons-material/Cancel';
 import MonitorHeartIcon       from '@mui/icons-material/MonitorHeart';
 import SettingsSuggestIcon    from '@mui/icons-material/SettingsSuggest';
+import NotificationsIcon      from '@mui/icons-material/Notifications';
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
@@ -1629,12 +1630,6 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
           style={{ ...inputSx, resize: 'vertical' }}
         />
 
-        {/* Status — read-only display */}
-        <Box sx={{ p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.04)', border: `1px solid ${BORDER}`, display: 'flex', alignItems: 'center', gap: 1.5 }}>
-          <Typography sx={{ color: MUTED, fontSize: '0.75rem', fontFamily: '"Sora", sans-serif' }}>Status (auto-derived):</Typography>
-          <Chip label={item.status} size="small" sx={{ background: ITEM_STATUS_COLORS[item.status]?.bg, color: ITEM_STATUS_COLORS[item.status]?.color, border: `1px solid ${ITEM_STATUS_COLORS[item.status]?.border}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.68rem', height: 22 }} />
-        </Box>
-
         <FormControlLabel
           control={<Switch checked={gps} onChange={(e) => setGps(e.target.checked)} />}
           label={<Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}><GpsFixedIcon sx={{ fontSize: 16, color: AMBER }} /><Typography sx={{ color: INK, fontSize: '0.85rem' }}>GPS Installed</Typography></Box>}
@@ -1787,7 +1782,10 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
 // TOP BAR + ROOT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void; onLogout: () => void }> = ({ rbUser, tab, onTab, onLogout }) => (
+const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void; onLogout: () => void; rentals: EnrichedRental[] }> = ({ rbUser, tab, onTab, onLogout, rentals }) => {
+  const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null);
+  const submittedRentals = rentals.filter((r) => r.status === 'submitted');
+  return (
   <Box sx={{
     position: 'sticky', top: 0, zIndex: 100,
     background: 'rgba(255,251,244,0.96)', backdropFilter: 'blur(14px)',
@@ -1856,6 +1854,35 @@ const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void
 </Tabs>
 
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
+      <Tooltip title="Booking requests">
+        <IconButton onClick={(e) => setNotifAnchor(e.currentTarget)} size="small" sx={{ color: MUTED }}>
+          <Badge badgeContent={submittedRentals.length} color="error" max={99}>
+            <NotificationsIcon fontSize="small" />
+          </Badge>
+        </IconButton>
+      </Tooltip>
+      <Menu
+        anchorEl={notifAnchor}
+        open={Boolean(notifAnchor)}
+        onClose={() => setNotifAnchor(null)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        PaperProps={{ sx: { width: 360, maxWidth: '95vw', borderRadius: 2 } }}
+      >
+        {submittedRentals.length === 0 ? (
+          <MenuItem disabled>
+            <ListItemText primary="No new booking requests" />
+          </MenuItem>
+        ) : submittedRentals.map((r) => (
+          <MenuItem key={r.id} onClick={() => { onTab(2); setNotifAnchor(null); }} sx={{ whiteSpace: 'normal', alignItems: 'flex-start' }}>
+            <ListItemText
+              primary={`${r.renter?.renter_fname ?? 'Unknown'} ${r.renter?.renter_lname ?? ''}`.trim()}
+              secondary={`${r.item?.device?.cam_name ?? r.item?.code_name ?? 'Unknown unit'} • ${dayjs(r.rent_date_start).format('MMM D, YYYY')} - ${dayjs(r.rent_date_end).format('MMM D, YYYY')}\nSubmitted ${dayjs(r.created_at).format('MMM D, YYYY h:mm A')}`}
+              secondaryTypographyProps={{ sx: { whiteSpace: 'pre-line' } }}
+            />
+          </MenuItem>
+        ))}
+      </Menu>
       <Avatar sx={{ width: 32, height: 32, background: `linear-gradient(135deg, ${AMBER}, ${AMBER_LIGHT})`, fontSize: '0.85rem', fontWeight: 700, fontFamily: '"Sora", sans-serif', color: '#fff' }}>
         {rbUser.user_fname[0]?.toUpperCase()}
       </Avatar>
@@ -1865,7 +1892,7 @@ const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void
       </Tooltip>
     </Box>
   </Box>
-);
+)};
 
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
@@ -2094,7 +2121,7 @@ const AdminDashboard: React.FC = () => {
 
   return (
     <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
-      <TopBar rbUser={rbUser} tab={tab} onTab={setTab} onLogout={handleLogout} />
+      <TopBar rbUser={rbUser} tab={tab} onTab={setTab} onLogout={handleLogout} rentals={rentals} />
       <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1400, mx: 'auto' }}>
         {tab === 0 && <OverviewTab  rentals={rentals} onSave={handleSaveStatus} />}
         {tab === 1 && <CalendarTab  rentals={rentals} items={items} onSave={handleSaveStatus} />}
