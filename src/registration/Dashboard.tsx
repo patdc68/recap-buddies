@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, Typography, Paper, Chip, Button, CircularProgress,
-  Alert, Divider, Tabs, Tab, Avatar,
+  Alert, Divider, Tabs, Tab, Avatar, Dialog, DialogTitle, DialogContent, DialogActions, TextField, IconButton, InputAdornment, Snackbar, Grid,
 } from '@mui/material';
 import CameraAltIcon          from '@mui/icons-material/CameraAlt';
 import CalendarTodayIcon      from '@mui/icons-material/CalendarToday';
@@ -19,6 +19,7 @@ import BlockIcon              from '@mui/icons-material/Block';
 import GpsFixedIcon           from '@mui/icons-material/GpsFixed';
 import WarningAmberIcon       from '@mui/icons-material/WarningAmber';
 import LocalOfferIcon         from '@mui/icons-material/LocalOffer';
+import ContentCopyIcon        from '@mui/icons-material/ContentCopy';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
@@ -103,7 +104,8 @@ const isOngoing = (s: RentalStatus) =>
 
 const RentalCard: React.FC<{
   rental: EnrichedRental;
-}> = ({ rental }) => {
+  onClick: () => void;
+}> = ({ rental, onClick }) => {
 
   const status = STATUS_CONFIG[rental.status] ?? STATUS_CONFIG.submitted;
   const start  = dayjs(rental.rent_date_start).format('MMM D, YYYY');
@@ -120,13 +122,15 @@ const RentalCard: React.FC<{
   const hasGps     = rental.item?.gps_installed ?? false;
 
   return (
-    <Paper
+      <Paper
+        onClick={onClick}
         elevation={0}
         sx={{
           border: '1px solid rgba(201,151,58,0.15)', borderRadius: 3, overflow: 'hidden',
           transition: 'box-shadow 0.2s, transform 0.2s',
           '&:hover': { boxShadow: '0 6px 28px rgba(201,151,58,0.13)', transform: 'translateY(-2px)' },
           opacity: (rental.status === 'canceled' || rental.status === 'declined') ? 0.7 : 1,
+          cursor: 'pointer',
         }}
       >
         {/* Header */}
@@ -233,6 +237,17 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading]       = useState(true);
   const [tab, setTab]               = useState<'all' | 'ongoing' | 'completed'>('all');
   const [loggingOut, setLoggingOut] = useState(false);
+  const [pageTab, setPageTab]       = useState<'dashboard' | 'profile'>('dashboard');
+  const [selectedRental, setSelectedRental] = useState<EnrichedRental | null>(null);
+  const [copiedOpen, setCopiedOpen] = useState(false);
+  const [saveOpen, setSaveOpen] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' });
+  const [profileSaving, setProfileSaving] = useState(false);
+  const [profileUploading, setProfileUploading] = useState(false);
+  const [profile, setProfile] = useState({ fname: '', lname: '', contact: '', email: '' });
+  const [primaryIdFront, setPrimaryIdFront] = useState<File | null>(null);
+  const [primaryIdBack, setPrimaryIdBack] = useState<File | null>(null);
+  const [secondaryIdFront, setSecondaryIdFront] = useState<File | null>(null);
+  const [secondaryIdBack, setSecondaryIdBack] = useState<File | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -245,6 +260,12 @@ const Dashboard: React.FC = () => {
           .from('RB_RENTER').select('*').eq('auth_user_id', user.id).single();
         if (!renterData) { navigate('/login'); return; }
         setRenter(renterData as RbRenter);
+        setProfile({
+          fname: renterData.renter_fname ?? '',
+          lname: renterData.renter_lname ?? '',
+          contact: renterData.mobile_no ?? '',
+          email: renterData.email ?? '',
+        });
 
         const { data: rentalData } = await supabase
           .from('RB_RENTAL_FORM')
@@ -302,6 +323,57 @@ const Dashboard: React.FC = () => {
   });
   const ongoingCount   = rentals.filter((r) => isOngoing(r.status)).length;
   const completedCount = rentals.filter((r) => !isOngoing(r.status)).length;
+  const copyMessengerLink = async () => {
+    if (!selectedRental?.messenger_link) return;
+    await navigator.clipboard.writeText(selectedRental.messenger_link);
+    setCopiedOpen(true);
+  };
+
+  const uploadRenterFile = async (file: File, renterId: string, label: 'primary_front' | 'primary_back' | 'secondary_front' | 'secondary_back') => {
+    const ext = file.name.split('.').pop() ?? 'jpg';
+    const filePath = `renter/${renterId}/${label}_${Date.now()}.${ext}`;
+    const { error } = await supabase.storage.from('verification-images').upload(filePath, file, { upsert: true, contentType: file.type });
+    if (error) throw error;
+    const { data } = supabase.storage.from('verification-images').getPublicUrl(filePath);
+    return data.publicUrl;
+  };
+
+  const handleSaveProfile = async () => {
+    if (!renter) return;
+    setProfileSaving(true);
+    try {
+      let primaryFront = renter.primary_id_front;
+      let primaryBack = renter.primary_id_back;
+      let secondaryFront = renter.secondary_id_front;
+      let secondaryBack = renter.secondary_id_back;
+      if (primaryIdFront || primaryIdBack || secondaryIdFront || secondaryIdBack) setProfileUploading(true);
+      if (primaryIdFront) primaryFront = await uploadRenterFile(primaryIdFront, renter.id, 'primary_front');
+      if (primaryIdBack) primaryBack = await uploadRenterFile(primaryIdBack, renter.id, 'primary_back');
+      if (secondaryIdFront) secondaryFront = await uploadRenterFile(secondaryIdFront, renter.id, 'secondary_front');
+      if (secondaryIdBack) secondaryBack = await uploadRenterFile(secondaryIdBack, renter.id, 'secondary_back');
+
+      const { error } = await supabase.from('RB_RENTER').update({
+        renter_fname: profile.fname,
+        renter_lname: profile.lname,
+        mobile_no: profile.contact,
+        email: profile.email,
+        primary_id_front: primaryFront,
+        primary_id_back: primaryBack,
+        secondary_id_front: secondaryFront,
+        secondary_id_back: secondaryBack,
+      }).eq('id', renter.id);
+      if (error) throw error;
+      setRenter({ ...renter, renter_fname: profile.fname, renter_lname: profile.lname, mobile_no: profile.contact, email: profile.email, primary_id_front: primaryFront, primary_id_back: primaryBack, secondary_id_front: secondaryFront, secondary_id_back: secondaryBack });
+      setPrimaryIdFront(null); setPrimaryIdBack(null); setSecondaryIdFront(null); setSecondaryIdBack(null);
+      setSaveOpen({ open: true, msg: 'Profile updated successfully.', severity: 'success' });
+    } catch (e) {
+      console.error(e);
+      setSaveOpen({ open: true, msg: 'Failed to update profile.', severity: 'error' });
+    } finally {
+      setProfileSaving(false);
+      setProfileUploading(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -359,6 +431,16 @@ const Dashboard: React.FC = () => {
         ))}
       </Box>
 
+      {/* Page Tabs */}
+      <Box sx={{ mb: 3 }}>
+        <Tabs value={pageTab} onChange={(_, v) => setPageTab(v)} sx={{ borderBottom: '1px solid rgba(201,151,58,0.12)' }}>
+          <Tab value="dashboard" label="Rental Dashboard" sx={{ textTransform: 'none' }} />
+          <Tab value="profile" label="My Profile" sx={{ textTransform: 'none' }} />
+        </Tabs>
+      </Box>
+
+      {pageTab === 'dashboard' && (
+      <>
       {/* Tabs */}
       <Box sx={{ mb: 3 }}>
         <Tabs
@@ -383,10 +465,64 @@ const Dashboard: React.FC = () => {
       ) : (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           {filtered.map((rental) => (
-            <RentalCard key={rental.id} rental={rental} />
+            <RentalCard key={rental.id} rental={rental} onClick={() => setSelectedRental(rental)} />
           ))}
         </Box>
       )}
+      </>
+      )}
+      {pageTab === 'profile' && renter && (
+        <Paper elevation={0} sx={{ p: 3, borderRadius: 3, border: '1px solid rgba(201,151,58,0.15)' }}>
+          <Grid container spacing={2}>
+            <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth label="First name" value={profile.fname} onChange={(e) => setProfile((p) => ({ ...p, fname: e.target.value }))} /></Grid>
+            <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth label="Last name" value={profile.lname} onChange={(e) => setProfile((p) => ({ ...p, lname: e.target.value }))} /></Grid>
+            <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth label="Contact number" value={profile.contact} onChange={(e) => setProfile((p) => ({ ...p, contact: e.target.value }))} /></Grid>
+            <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth label="Email" value={profile.email} onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))} /></Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Typography sx={{ fontSize: '0.78rem', mb: 1 }}>Primary ID Front</Typography>
+              {(primaryIdFront || renter.primary_id_front) && <img src={primaryIdFront ? URL.createObjectURL(primaryIdFront) : (renter.primary_id_front ?? '')} alt="Primary ID Front" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />}
+              <Button component="label" variant="outlined" sx={{ mt: 1 }}>Upload / Replace<input hidden type="file" accept="image/*,.pdf" onChange={(e) => setPrimaryIdFront(e.target.files?.[0] ?? null)} /></Button>
+              <Typography sx={{ fontSize: '0.78rem', mt: 2, mb: 1 }}>Primary ID Back</Typography>
+              {(primaryIdBack || renter.primary_id_back) && <img src={primaryIdBack ? URL.createObjectURL(primaryIdBack) : (renter.primary_id_back ?? '')} alt="Primary ID Back" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />}
+              <Button component="label" variant="outlined" sx={{ mt: 1 }}>Upload / Replace<input hidden type="file" accept="image/*,.pdf" onChange={(e) => setPrimaryIdBack(e.target.files?.[0] ?? null)} /></Button>
+            </Grid>
+            <Grid size={{ xs: 12, md: 6 }}>
+              <Typography sx={{ fontSize: '0.78rem', mb: 1 }}>Secondary ID Front</Typography>
+              {(secondaryIdFront || renter.secondary_id_front) && <img src={secondaryIdFront ? URL.createObjectURL(secondaryIdFront) : (renter.secondary_id_front ?? '')} alt="Secondary ID Front" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />}
+              <Button component="label" variant="outlined" sx={{ mt: 1 }}>Upload / Replace<input hidden type="file" accept="image/*,.pdf" onChange={(e) => setSecondaryIdFront(e.target.files?.[0] ?? null)} /></Button>
+              <Typography sx={{ fontSize: '0.78rem', mt: 2, mb: 1 }}>Secondary ID Back</Typography>
+              {(secondaryIdBack || renter.secondary_id_back) && <img src={secondaryIdBack ? URL.createObjectURL(secondaryIdBack) : (renter.secondary_id_back ?? '')} alt="Secondary ID Back" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />}
+              <Button component="label" variant="outlined" sx={{ mt: 1 }}>Upload / Replace<input hidden type="file" accept="image/*,.pdf" onChange={(e) => setSecondaryIdBack(e.target.files?.[0] ?? null)} /></Button>
+            </Grid>
+          </Grid>
+          <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
+            <Button variant="contained" onClick={handleSaveProfile} disabled={profileSaving}>
+              {profileSaving ? `Saving${profileUploading ? ' + Uploading...' : '...'}` : 'Save Profile'}
+            </Button>
+          </Box>
+        </Paper>
+      )}
+
+      <Dialog open={!!selectedRental} onClose={() => setSelectedRental(null)} fullWidth maxWidth="sm">
+        <DialogTitle>Rental Details</DialogTitle>
+        {selectedRental && <DialogContent dividers>
+          <TextField margin="dense" fullWidth label="Camera name" value={selectedRental.item?.device?.cam_name ?? '—'} InputProps={{ readOnly: true }} />
+          <TextField margin="dense" fullWidth label="Camera codename" value={selectedRental.item?.code_name ?? '—'} InputProps={{ readOnly: true }} />
+          <TextField margin="dense" fullWidth label="Rental period" value={`${dayjs(selectedRental.rent_date_start).format('MMM D, YYYY')} - ${dayjs(selectedRental.rent_date_end).format('MMM D, YYYY')}`} InputProps={{ readOnly: true }} />
+          <TextField margin="dense" fullWidth label="Pickup date" value={dayjs(selectedRental.rent_date_start).format('MMM D, YYYY')} InputProps={{ readOnly: true }} />
+          <TextField margin="dense" fullWidth label="Pickup time" value={selectedRental.pickup_time ?? '—'} InputProps={{ readOnly: true }} />
+          <TextField margin="dense" fullWidth label="Return date" value={dayjs(selectedRental.rent_date_end).format('MMM D, YYYY')} InputProps={{ readOnly: true }} />
+          <TextField margin="dense" fullWidth label="Return time" value={selectedRental.return_time ?? '—'} InputProps={{ readOnly: true }} />
+          <TextField margin="dense" fullWidth label="Pickup branch" value={selectedRental.pickupBranch?.location_name ?? selectedRental.delivery_addr ?? '—'} InputProps={{ readOnly: true }} />
+          <TextField margin="dense" fullWidth label="Return branch" value={selectedRental.returnBranch?.location_name ?? selectedRental.return_addr ?? '—'} InputProps={{ readOnly: true }} />
+          <TextField margin="dense" fullWidth label="Usage" value={selectedRental.loc_usage ?? '—'} InputProps={{ readOnly: true }} />
+          <TextField margin="dense" fullWidth label="Status" value={STATUS_CONFIG[selectedRental.status]?.label ?? selectedRental.status} InputProps={{ readOnly: true }} />
+          <TextField margin="dense" fullWidth label="Messenger link" value={selectedRental.messenger_link || 'Not yet available'} InputProps={{ readOnly: true, endAdornment: <InputAdornment position="end"><IconButton disabled={!selectedRental.messenger_link} onClick={copyMessengerLink}><ContentCopyIcon fontSize="small" /></IconButton></InputAdornment> }} />
+        </DialogContent>}
+        <DialogActions><Button onClick={() => setSelectedRental(null)}>Close</Button></DialogActions>
+      </Dialog>
+      <Snackbar open={copiedOpen} autoHideDuration={2500} onClose={() => setCopiedOpen(false)} message="Messenger link copied." />
+      <Snackbar open={saveOpen.open} autoHideDuration={3500} onClose={() => setSaveOpen((s) => ({ ...s, open: false }))} message={saveOpen.msg} />
 
       <Box sx={{ height: 40 }} />
     </PageLayout>
