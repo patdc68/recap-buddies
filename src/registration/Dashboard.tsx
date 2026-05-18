@@ -244,8 +244,10 @@ const Dashboard: React.FC = () => {
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileUploading, setProfileUploading] = useState(false);
   const [profile, setProfile] = useState({ fname: '', lname: '', contact: '', email: '' });
-  const [primaryId, setPrimaryId] = useState<File | null>(null);
-  const [secondaryId, setSecondaryId] = useState<File | null>(null);
+  const [primaryIdFront, setPrimaryIdFront] = useState<File | null>(null);
+  const [primaryIdBack, setPrimaryIdBack] = useState<File | null>(null);
+  const [secondaryIdFront, setSecondaryIdFront] = useState<File | null>(null);
+  const [secondaryIdBack, setSecondaryIdBack] = useState<File | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -327,7 +329,7 @@ const Dashboard: React.FC = () => {
     setCopiedOpen(true);
   };
 
-  const uploadRenterFile = async (file: File, renterId: string, label: 'primary' | 'secondary') => {
+  const uploadRenterFile = async (file: File, renterId: string, label: 'primary_front' | 'primary_back' | 'secondary_front' | 'secondary_back') => {
     const ext = file.name.split('.').pop() ?? 'jpg';
     const filePath = `renter/${renterId}/${label}_${Date.now()}.${ext}`;
     const { error } = await supabase.storage.from('verification-images').upload(filePath, file, { upsert: true, contentType: file.type });
@@ -341,10 +343,14 @@ const Dashboard: React.FC = () => {
     setProfileSaving(true);
     try {
       let primaryFront = renter.primary_id_front;
+      let primaryBack = renter.primary_id_back;
       let secondaryFront = renter.secondary_id_front;
-      if (primaryId || secondaryId) setProfileUploading(true);
-      if (primaryId) primaryFront = await uploadRenterFile(primaryId, renter.id, 'primary');
-      if (secondaryId) secondaryFront = await uploadRenterFile(secondaryId, renter.id, 'secondary');
+      let secondaryBack = renter.secondary_id_back;
+      if (primaryIdFront || primaryIdBack || secondaryIdFront || secondaryIdBack) setProfileUploading(true);
+      if (primaryIdFront) primaryFront = await uploadRenterFile(primaryIdFront, renter.id, 'primary_front');
+      if (primaryIdBack) primaryBack = await uploadRenterFile(primaryIdBack, renter.id, 'primary_back');
+      if (secondaryIdFront) secondaryFront = await uploadRenterFile(secondaryIdFront, renter.id, 'secondary_front');
+      if (secondaryIdBack) secondaryBack = await uploadRenterFile(secondaryIdBack, renter.id, 'secondary_back');
 
       const { error } = await supabase.from('RB_RENTER').update({
         renter_fname: profile.fname,
@@ -352,11 +358,13 @@ const Dashboard: React.FC = () => {
         mobile_no: profile.contact,
         email: profile.email,
         primary_id_front: primaryFront,
+        primary_id_back: primaryBack,
         secondary_id_front: secondaryFront,
+        secondary_id_back: secondaryBack,
       }).eq('id', renter.id);
       if (error) throw error;
-      setRenter({ ...renter, renter_fname: profile.fname, renter_lname: profile.lname, mobile_no: profile.contact, email: profile.email, primary_id_front: primaryFront, secondary_id_front: secondaryFront });
-      setPrimaryId(null); setSecondaryId(null);
+      setRenter({ ...renter, renter_fname: profile.fname, renter_lname: profile.lname, mobile_no: profile.contact, email: profile.email, primary_id_front: primaryFront, primary_id_back: primaryBack, secondary_id_front: secondaryFront, secondary_id_back: secondaryBack });
+      setPrimaryIdFront(null); setPrimaryIdBack(null); setSecondaryIdFront(null); setSecondaryIdBack(null);
       setSaveOpen({ open: true, msg: 'Profile updated successfully.', severity: 'success' });
     } catch (e) {
       console.error(e);
@@ -471,14 +479,20 @@ const Dashboard: React.FC = () => {
             <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth label="Contact number" value={profile.contact} onChange={(e) => setProfile((p) => ({ ...p, contact: e.target.value }))} /></Grid>
             <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth label="Email" value={profile.email} onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))} /></Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <Typography sx={{ fontSize: '0.78rem', mb: 1 }}>Primary ID</Typography>
-              {(primaryId || renter.primary_id_front) && <img src={primaryId ? URL.createObjectURL(primaryId) : (renter.primary_id_front ?? '')} alt="Primary ID" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />}
-              <Button component="label" variant="outlined" sx={{ mt: 1 }}>Upload / Replace<input hidden type="file" accept="image/*,.pdf" onChange={(e) => setPrimaryId(e.target.files?.[0] ?? null)} /></Button>
+              <Typography sx={{ fontSize: '0.78rem', mb: 1 }}>Primary ID Front</Typography>
+              {(primaryIdFront || renter.primary_id_front) && <img src={primaryIdFront ? URL.createObjectURL(primaryIdFront) : (renter.primary_id_front ?? '')} alt="Primary ID Front" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />}
+              <Button component="label" variant="outlined" sx={{ mt: 1 }}>Upload / Replace<input hidden type="file" accept="image/*,.pdf" onChange={(e) => setPrimaryIdFront(e.target.files?.[0] ?? null)} /></Button>
+              <Typography sx={{ fontSize: '0.78rem', mt: 2, mb: 1 }}>Primary ID Back</Typography>
+              {(primaryIdBack || renter.primary_id_back) && <img src={primaryIdBack ? URL.createObjectURL(primaryIdBack) : (renter.primary_id_back ?? '')} alt="Primary ID Back" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />}
+              <Button component="label" variant="outlined" sx={{ mt: 1 }}>Upload / Replace<input hidden type="file" accept="image/*,.pdf" onChange={(e) => setPrimaryIdBack(e.target.files?.[0] ?? null)} /></Button>
             </Grid>
             <Grid size={{ xs: 12, md: 6 }}>
-              <Typography sx={{ fontSize: '0.78rem', mb: 1 }}>Secondary ID</Typography>
-              {(secondaryId || renter.secondary_id_front) && <img src={secondaryId ? URL.createObjectURL(secondaryId) : (renter.secondary_id_front ?? '')} alt="Secondary ID" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />}
-              <Button component="label" variant="outlined" sx={{ mt: 1 }}>Upload / Replace<input hidden type="file" accept="image/*,.pdf" onChange={(e) => setSecondaryId(e.target.files?.[0] ?? null)} /></Button>
+              <Typography sx={{ fontSize: '0.78rem', mb: 1 }}>Secondary ID Front</Typography>
+              {(secondaryIdFront || renter.secondary_id_front) && <img src={secondaryIdFront ? URL.createObjectURL(secondaryIdFront) : (renter.secondary_id_front ?? '')} alt="Secondary ID Front" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />}
+              <Button component="label" variant="outlined" sx={{ mt: 1 }}>Upload / Replace<input hidden type="file" accept="image/*,.pdf" onChange={(e) => setSecondaryIdFront(e.target.files?.[0] ?? null)} /></Button>
+              <Typography sx={{ fontSize: '0.78rem', mt: 2, mb: 1 }}>Secondary ID Back</Typography>
+              {(secondaryIdBack || renter.secondary_id_back) && <img src={secondaryIdBack ? URL.createObjectURL(secondaryIdBack) : (renter.secondary_id_back ?? '')} alt="Secondary ID Back" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />}
+              <Button component="label" variant="outlined" sx={{ mt: 1 }}>Upload / Replace<input hidden type="file" accept="image/*,.pdf" onChange={(e) => setSecondaryIdBack(e.target.files?.[0] ?? null)} /></Button>
             </Grid>
           </Grid>
           <Box sx={{ mt: 2, display: 'flex', justifyContent: 'flex-end' }}>
