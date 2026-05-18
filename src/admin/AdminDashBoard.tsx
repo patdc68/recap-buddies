@@ -1783,6 +1783,7 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void; onLogout: () => void; rentals: EnrichedRental[] }> = ({ rbUser, tab, onTab, onLogout, rentals }) => {
+  const navigate = useNavigate();
   const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null);
   const submittedRentals = rentals.filter((r) => r.status === 'submitted');
   return (
@@ -1873,14 +1874,29 @@ const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void
           <MenuItem disabled>
             <ListItemText primary="No new booking requests" />
           </MenuItem>
-        ) : submittedRentals.map((r) => (
-          <MenuItem key={r.id} onClick={() => { onTab(2); setNotifAnchor(null); }} sx={{ whiteSpace: 'normal', alignItems: 'flex-start' }}>
-            <ListItemText
-              primary={`${r.renter?.renter_fname ?? 'Unknown'} ${r.renter?.renter_lname ?? ''}`.trim()}
-              secondary={`${r.item?.device?.cam_name ?? r.item?.code_name ?? 'Unknown unit'} • ${dayjs(r.rent_date_start).format('MMM D, YYYY')} - ${dayjs(r.rent_date_end).format('MMM D, YYYY')}\nSubmitted ${dayjs(r.created_at).format('MMM D, YYYY h:mm A')}`}
-              secondaryTypographyProps={{ sx: { whiteSpace: 'pre-line' } }}
-            />
-          </MenuItem>
+        ) : submittedRentals.map((r, index) => (
+          <React.Fragment key={r.id}>
+            <MenuItem
+              onClick={() => {
+                setNotifAnchor(null);
+                navigate(`/admin/verify/${r.id}`);
+              }}
+              sx={{
+                whiteSpace: 'normal',
+                alignItems: 'flex-start',
+                py: 1.25,
+                transition: 'background-color 0.2s ease',
+                '&:hover': { backgroundColor: 'rgba(201,151,58,0.08)' },
+              }}
+            >
+              <ListItemText
+                primary={`${r.renter?.renter_fname ?? 'Unknown'} ${r.renter?.renter_lname ?? ''}`.trim()}
+                secondary={`${r.item?.device?.cam_name ?? r.item?.code_name ?? 'Unknown unit'} • ${dayjs(r.rent_date_start).format('MMM D, YYYY')} - ${dayjs(r.rent_date_end).format('MMM D, YYYY')}\nSubmitted ${dayjs(r.created_at).format('MMM D, YYYY h:mm A')}`}
+                secondaryTypographyProps={{ sx: { whiteSpace: 'pre-line' } }}
+              />
+            </MenuItem>
+            {index < submittedRentals.length - 1 && <Divider sx={{ my: 0.25 }} />}
+          </React.Fragment>
         ))}
       </Menu>
       <Avatar sx={{ width: 32, height: 32, background: `linear-gradient(135deg, ${AMBER}, ${AMBER_LIGHT})`, fontSize: '0.85rem', fontWeight: 700, fontFamily: '"Sora", sans-serif', color: '#fff' }}>
