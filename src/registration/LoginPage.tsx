@@ -1,4 +1,4 @@
-import React, { useState, type ChangeEvent } from 'react';
+import React, { useEffect, useState, type ChangeEvent } from 'react';
 import {
   Box,
   Typography,
@@ -32,7 +32,34 @@ const LoginPage: React.FC = () => {
   const [form, setForm]       = useState<LoginForm>({ email: '', password: '' });
   const [errors, setErrors]   = useState<LoginErrors>({});
   const [loading, setLoading] = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
   const [authError, setAuthError] = useState('');
+
+  useEffect(() => {
+    const redirectIfAuthenticated = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+
+      if (!session?.user) {
+        setCheckingSession(false);
+        return;
+      }
+
+      const { data: rbUser } = await supabase
+        .from('RB_USER')
+        .select('role')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
+
+      if (rbUser?.role === 'admin' || rbUser?.role === 'staff') {
+        navigate('/admin/dashboard', { replace: true });
+        return;
+      }
+
+      navigate('/dashboard', { replace: true });
+    };
+
+    void redirectIfAuthenticated();
+  }, [navigate]);
 
   const onText =
     (field: keyof LoginForm) =>
@@ -74,7 +101,7 @@ const LoginPage: React.FC = () => {
       return;
     }
 
-    navigate('/dashboard');
+    navigate('/dashboard', { replace: true });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -83,6 +110,11 @@ const LoginPage: React.FC = () => {
 
   return (
     <PageLayout>
+      {checkingSession ? (
+        <Box sx={{ minHeight: '60vh', display: 'grid', placeItems: 'center' }}>
+          <CircularProgress />
+        </Box>
+      ) : (
       <Box
         sx={{
           minHeight: '80vh',
@@ -215,6 +247,7 @@ const LoginPage: React.FC = () => {
           By signing in, you agree to our rental terms and conditions.
         </Typography>
       </Box>
+      )}
     </PageLayout>
   );
 };

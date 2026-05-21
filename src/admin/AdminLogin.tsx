@@ -1,4 +1,4 @@
-import React, { useState, type ChangeEvent } from 'react';
+import React, { useEffect, useState, type ChangeEvent } from 'react';
 import {
   Box, Typography, TextField, Button, Alert, CircularProgress,
   Paper, Chip,
@@ -16,6 +16,32 @@ const AdminLogin: React.FC = () => {
   const [password, setPassword] = useState('');
   const [error, setError]       = useState('');
   const [loading, setLoading]   = useState(false);
+  const [checkingSession, setCheckingSession] = useState(true);
+
+  useEffect(() => {
+    const redirectIfAuthenticated = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.user) {
+        setCheckingSession(false);
+        return;
+      }
+
+      const { data: rbUser } = await supabase
+        .from('RB_USER')
+        .select('role')
+        .eq('auth_user_id', session.user.id)
+        .maybeSingle();
+
+      if (rbUser?.role === 'admin' || rbUser?.role === 'staff') {
+        navigate('/admin/dashboard', { replace: true });
+        return;
+      }
+
+      navigate('/dashboard', { replace: true });
+    };
+
+    void redirectIfAuthenticated();
+  }, [navigate]);
 
   const handleLogin = async () => {
     if (!email || !password) { setError('Email and password are required.'); return; }
@@ -36,11 +62,16 @@ const AdminLogin: React.FC = () => {
       return;
     }
 
-    navigate('/admin/dashboard');
+    navigate('/admin/dashboard', { replace: true });
   };
 
   return (
     <PageLayout>
+      {checkingSession ? (
+        <Box sx={{ minHeight: '60vh', display: 'grid', placeItems: 'center' }}>
+          <CircularProgress />
+        </Box>
+      ) : (
       <Box sx={{ maxWidth: 420, mx: 'auto', py: 8 }}>
         <Box sx={{ textAlign: 'center', mb: 4 }}>
           <Box sx={{
@@ -95,6 +126,7 @@ const AdminLogin: React.FC = () => {
           </Button>
         </Box>
       </Box>
+      )}
     </PageLayout>
   );
 };
