@@ -1638,7 +1638,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
       <DialogActions sx={{ px: 3, pb: 3 }}>
         <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
         <Button onClick={handleSave} variant="contained" size="small" disabled={saving}
-          startIcon={saving ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <SaveIcon />}>Save Changes</Button>
+          startIcon={saving ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <SaveIcon />}>Save Terms & Conditions</Button>
       </DialogActions>
     </Dialog>
   );
@@ -1920,7 +1920,7 @@ const AdminDashboard: React.FC = () => {
   const [branches, setBranches] = useState<RbBranch[]>([]);
   const [loading, setLoading]   = useState(true);
   const [authUid, setAuthUid]   = useState('');
-  const [agreementMd, setAgreementMd] = useState('');
+  const [agreementHtml, setAgreementHtml] = useState('');
   const [agreementLoading, setAgreementLoading] = useState(false);
   const [agreementSaving, setAgreementSaving] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
@@ -1984,18 +1984,20 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => { fetchAll(); }, [fetchAll]);
   const loadAgreement = useCallback(async () => {
     setAgreementLoading(true);
-    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement.md');
+    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement');
     if (error || !data) {
       setSnackbar({ open: true, msg: `Failed to load agreement: ${error?.message ?? 'Unknown error'}`, severity: 'error' });
       setAgreementLoading(false);
       return;
     }
-    setAgreementMd(await data.text());
+    setAgreementHtml(await data.text());
     setAgreementLoading(false);
   }, []);
   useEffect(() => {
-    if (tab === 4 && !agreementMd && !agreementLoading) void loadAgreement();
-  }, [tab, agreementMd, agreementLoading, loadAgreement]);
+    if (tab === 4 && !agreementHtml && !agreementLoading) void loadAgreement();
+  }, [tab, agreementHtml, agreementLoading, loadAgreement]);
+
+  const agreementEditorRef = useRef<HTMLDivElement | null>(null);
 
   const markOverdueRentalsForPenalty = useCallback(async () => {
     const today = dayjs().startOf('day');
@@ -2135,6 +2137,11 @@ const AdminDashboard: React.FC = () => {
 
   if (!rbUser) return null;
 
+  const execEditorCommand = (command: string, value?: string) => {
+    document.execCommand(command, false, value);
+    if (agreementEditorRef.current) setAgreementHtml(agreementEditorRef.current.innerHTML);
+  };
+
   return (
     <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
       <TopBar rbUser={rbUser} tab={tab} onTab={setTab} onLogout={handleLogout} rentals={rentals} />
@@ -2146,17 +2153,60 @@ const AdminDashboard: React.FC = () => {
         {tab === 4 && (
           <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
             <Typography sx={{ mb: 2, fontWeight: 700 }}>Terms & Conditions</Typography>
-            <TextField multiline minRows={14} fullWidth value={agreementMd} onChange={(e) => setAgreementMd(e.target.value)} placeholder="Write markdown content here..." />
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+            
+            <Box sx={{ border: '1px solid rgba(17,17,17,0.12)', borderRadius: 3, overflow: 'hidden', backgroundColor: '#FFFFFF' }}>
+              <Box sx={{ p: 1.5, borderBottom: '1px solid rgba(17,17,17,0.12)', display: 'flex', flexWrap: 'wrap', gap: 1 }}>
+                <Button size="small" onClick={() => execEditorCommand('bold')}>Bold</Button>
+                <Button size="small" onClick={() => execEditorCommand('italic')}>Italic</Button>
+                <Button size="small" onClick={() => execEditorCommand('underline')}>Underline</Button>
+                <Button size="small" onClick={() => {
+                  const link = window.prompt('Enter link URL');
+                  if (link) execEditorCommand('createLink', link);
+                }}>Link</Button>
+                <Select size="small" defaultValue="3" onChange={(e) => execEditorCommand('formatBlock', `<h${e.target.value}>`)}>
+                  <MenuItem value="1">H1</MenuItem><MenuItem value="2">H2</MenuItem><MenuItem value="3">H3</MenuItem><MenuItem value="4">H4</MenuItem><MenuItem value="5">H5</MenuItem><MenuItem value="6">H6</MenuItem>
+                </Select>
+                <Select size="small" defaultValue="3" onChange={(e) => execEditorCommand('fontSize', e.target.value)}>
+                  <MenuItem value="1">10px</MenuItem><MenuItem value="2">13px</MenuItem><MenuItem value="3">16px</MenuItem><MenuItem value="4">18px</MenuItem><MenuItem value="5">24px</MenuItem>
+                </Select>
+                <Select size="small" defaultValue="Arial" onChange={(e) => execEditorCommand('fontName', e.target.value)}>
+                  <MenuItem value="Arial">Arial</MenuItem><MenuItem value="Times New Roman">Times</MenuItem><MenuItem value="Georgia">Georgia</MenuItem><MenuItem value="Verdana">Verdana</MenuItem>
+                </Select>
+                <Button size="small" component="label">Text Color<input hidden type="color" onChange={(e) => execEditorCommand('foreColor', e.target.value)} /></Button>
+                <Button size="small" component="label">Highlight<input hidden type="color" onChange={(e) => execEditorCommand('hiliteColor', e.target.value)} /></Button>
+                <Button size="small" onClick={() => execEditorCommand('insertUnorderedList')}>• List</Button>
+                <Button size="small" onClick={() => execEditorCommand('insertOrderedList')}>1. List</Button>
+                <Button size="small" onClick={() => execEditorCommand('justifyLeft')}>Left</Button>
+                <Button size="small" onClick={() => execEditorCommand('justifyCenter')}>Center</Button>
+                <Button size="small" onClick={() => execEditorCommand('justifyRight')}>Right</Button>
+                <Button size="small" onClick={() => execEditorCommand('undo')}>Undo</Button>
+                <Button size="small" onClick={() => execEditorCommand('redo')}>Redo</Button>
+              </Box>
+              <Box
+                ref={agreementEditorRef}
+                contentEditable
+                suppressContentEditableWarning
+                onInput={(e) => setAgreementHtml((e.target as HTMLDivElement).innerHTML)}
+                dangerouslySetInnerHTML={{ __html: agreementHtml }}
+                sx={{
+                  minHeight: 500,
+                  p: 2,
+                  outline: 'none',
+                  overflowY: 'auto',
+                  '&:focus': { boxShadow: 'inset 0 0 0 2px rgba(17,17,17,0.08)' },
+                }}
+              />
+            </Box>
+            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
               <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading}>Reload</Button>
-              <Button variant="contained" disabled={agreementSaving || !agreementMd.trim()} onClick={async () => {
+              <Button variant="contained" disabled={agreementSaving || !agreementHtml.trim()} onClick={async () => {
                 setAgreementSaving(true);
-                const blob = new Blob([agreementMd], { type: 'text/markdown;charset=utf-8' });
-                const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
+                const blob = new Blob([agreementHtml], { type: 'text/html;charset=utf-8' });
+                const { error } = await supabase.storage.from('terms_and_condition').upload('agreement', blob, { upsert: true, contentType: 'text/html' });
                 setAgreementSaving(false);
                 if (error) setSnackbar({ open: true, msg: `Save failed: ${error.message}`, severity: 'error' });
                 else setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
-              }}>Save Changes</Button>
+              }}>Save Terms & Conditions</Button>
             </Box>
           </Paper>
         )}
