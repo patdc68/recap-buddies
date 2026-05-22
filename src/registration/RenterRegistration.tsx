@@ -42,7 +42,6 @@ import type { RbSelfieVerificationInst } from '../service/supabaseClient';
 import PageLayout from '../components/PageLayout';
 import CameraCapture from '../components/CameraCapture';
 import FileUpload, { type FileUploadResult } from '../components/FileUpload';
-import rentalContractAgreement from '../../official rental contract agreement.md?raw';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -445,6 +444,8 @@ const RenterRegistration: React.FC = () => {
   const [countdown, setCountdown]                   = useState(3);
   const [termsOpen, setTermsOpen]                   = useState(false);
   const [acceptedTerms, setAcceptedTerms]           = useState(false);
+  const [termsHtml, setTermsHtml]                     = useState('');
+  const [termsLoading, setTermsLoading]               = useState(false);
   const [primaryGuideOpen, setPrimaryGuideOpen]     = useState(false);
   const [secondaryGuideOpen, setSecondaryGuideOpen] = useState(false);
 
@@ -618,6 +619,23 @@ const RenterRegistration: React.FC = () => {
     }
   };
 
+
+  const loadTermsAgreement = useCallback(async () => {
+    setTermsLoading(true);
+    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement');
+    if (error || !data) {
+      setSubmitError(`Failed to load Terms & Conditions: ${error?.message ?? 'Unknown error'}`);
+      setTermsLoading(false);
+      return;
+    }
+    setTermsHtml(await data.text());
+    setTermsLoading(false);
+  }, []);
+
+  useEffect(() => {
+    if (termsOpen && !termsHtml && !termsLoading) void loadTermsAgreement();
+  }, [termsOpen, termsHtml, termsLoading, loadTermsAgreement]);
+
   const handleReviewAndSubmit = () => {
     if (!validate()) return;
     setTermsOpen(true);
@@ -788,12 +806,14 @@ const RenterRegistration: React.FC = () => {
       >
         <DialogTitle>Official Rental Contract Agreement</DialogTitle>
         <DialogContent dividers>
-          <Typography
-            variant="body2"
-            sx={{ whiteSpace: 'pre-wrap', color: '#3A2A12', lineHeight: 1.7, mb: 2 }}
-          >
-            {rentalContractAgreement}
-          </Typography>
+          {termsLoading ? (
+            <Box sx={{ display: 'flex', justifyContent: 'center', py: 4 }}><CircularProgress size={24} /></Box>
+          ) : (
+            <Box
+              sx={{ color: '#3A2A12', lineHeight: 1.7, mb: 2, '& p': { mb: 1.25 } }}
+              dangerouslySetInnerHTML={{ __html: termsHtml }}
+            />
+          )}
           <FormControlLabel
             control={(
               <Checkbox

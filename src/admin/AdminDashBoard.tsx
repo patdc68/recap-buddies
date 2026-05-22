@@ -57,6 +57,33 @@ import MonitorHeartIcon       from '@mui/icons-material/MonitorHeart';
 import SettingsSuggestIcon    from '@mui/icons-material/SettingsSuggest';
 import NotificationsIcon      from '@mui/icons-material/Notifications';
 
+import {
+  RichTextEditor,
+  MenuControlsContainer,
+  MenuButtonBold,
+  MenuButtonItalic,
+  MenuButtonUnderline,
+  MenuButtonStrikethrough,
+  MenuButtonBulletList,
+  MenuButtonOrderedList,
+  MenuButtonH1,
+  MenuButtonH2,
+  MenuButtonH3,
+  MenuButtonLink,
+  MenuSelectTextAlign,
+  MenuButtonTextColor,
+  MenuButtonHighlightColor,
+  MenuButtonUndo,
+  MenuButtonRedo,
+} from 'mui-tiptap';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
+import TextAlign from '@tiptap/extension-text-align';
+import Color from '@tiptap/extension-color';
+import TextStyle from '@tiptap/extension-text-style';
+import Highlight from '@tiptap/extension-highlight';
+
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
 dayjs.extend(isSameOrAfter);
@@ -1920,7 +1947,7 @@ const AdminDashboard: React.FC = () => {
   const [branches, setBranches] = useState<RbBranch[]>([]);
   const [loading, setLoading]   = useState(true);
   const [authUid, setAuthUid]   = useState('');
-  const [agreementMd, setAgreementMd] = useState('');
+  const [agreementHtml, setAgreementHtml] = useState('');
   const [agreementLoading, setAgreementLoading] = useState(false);
   const [agreementSaving, setAgreementSaving] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
@@ -1984,18 +2011,18 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => { fetchAll(); }, [fetchAll]);
   const loadAgreement = useCallback(async () => {
     setAgreementLoading(true);
-    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement.md');
+    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement');
     if (error || !data) {
       setSnackbar({ open: true, msg: `Failed to load agreement: ${error?.message ?? 'Unknown error'}`, severity: 'error' });
       setAgreementLoading(false);
       return;
     }
-    setAgreementMd(await data.text());
+    setAgreementHtml(await data.text());
     setAgreementLoading(false);
   }, []);
   useEffect(() => {
-    if (tab === 4 && !agreementMd && !agreementLoading) void loadAgreement();
-  }, [tab, agreementMd, agreementLoading, loadAgreement]);
+    if (tab === 4 && !agreementHtml && !agreementLoading) void loadAgreement();
+  }, [tab, agreementHtml, agreementLoading, loadAgreement]);
 
   const markOverdueRentalsForPenalty = useCallback(async () => {
     const today = dayjs().startOf('day');
@@ -2146,17 +2173,51 @@ const AdminDashboard: React.FC = () => {
         {tab === 4 && (
           <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
             <Typography sx={{ mb: 2, fontWeight: 700 }}>Terms & Conditions</Typography>
-            <TextField multiline minRows={14} fullWidth value={agreementMd} onChange={(e) => setAgreementMd(e.target.value)} placeholder="Write markdown content here..." />
+            <Paper sx={{ borderRadius: 3, border: '1px solid rgba(17,17,17,0.12)', p: 2, backgroundColor: '#fff' }}>
+              <RichTextEditor
+                content={agreementHtml}
+                onUpdate={({ editor }: { editor: any }) => setAgreementHtml(editor.getHTML())}
+                extensions={[
+                  StarterKit,
+                  Underline,
+                  Link.configure({ openOnClick: false, autolink: true }),
+                  TextAlign.configure({ types: ['heading', 'paragraph'] }),
+                  TextStyle,
+                  Color,
+                  Highlight.configure({ multicolor: true }),
+                ]}
+                editable={!agreementLoading && !agreementSaving}
+                renderControls={() => (
+                  <MenuControlsContainer>
+                    <MenuButtonBold /><MenuButtonItalic /><MenuButtonUnderline /><MenuButtonStrikethrough />
+                    <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+                    <MenuButtonBulletList /><MenuButtonOrderedList />
+                    <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+                    <MenuButtonH1 /><MenuButtonH2 /><MenuButtonH3 />
+                    <MenuButtonLink />
+                    <MenuSelectTextAlign />
+                    <MenuButtonTextColor />
+                    <MenuButtonHighlightColor />
+                    <Divider orientation="vertical" flexItem sx={{ mx: 0.5 }} />
+                    <MenuButtonUndo /><MenuButtonRedo />
+                  </MenuControlsContainer>
+                )}
+                RichTextFieldProps={{
+                  variant: 'outlined',
+                  sx: { '& .ProseMirror': { minHeight: 500, p: 2 } },
+                }}
+              />
+            </Paper>
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-              <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading}>Reload</Button>
-              <Button variant="contained" disabled={agreementSaving || !agreementMd.trim()} onClick={async () => {
+              <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading || agreementSaving}>{agreementLoading ? 'Loading…' : 'Reload'}</Button>
+              <Button variant="contained" disabled={agreementSaving || agreementLoading || !agreementHtml.trim()} onClick={async () => {
                 setAgreementSaving(true);
-                const blob = new Blob([agreementMd], { type: 'text/markdown;charset=utf-8' });
-                const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
+                const blob = new Blob([agreementHtml], { type: 'text/html;charset=utf-8' });
+                const { error } = await supabase.storage.from('terms_and_condition').upload('agreement', blob, { upsert: true, contentType: 'text/html' });
                 setAgreementSaving(false);
                 if (error) setSnackbar({ open: true, msg: `Save failed: ${error.message}`, severity: 'error' });
                 else setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
-              }}>Save Changes</Button>
+              }}>{agreementSaving ? 'Saving…' : 'Save Changes'}</Button>
             </Box>
           </Paper>
         )}
