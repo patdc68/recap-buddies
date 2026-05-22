@@ -2191,40 +2191,44 @@ const AdminDashboard: React.FC = () => {
                 onUpdate={({ editor }: { editor: any }) => setAgreementHtml(editor.getHTML())}
                 editable={!agreementLoading && !agreementSaving}
               >
-                <RichTextField
-                  controls={(
-                    <MenuControlsContainer>
-                      <MenuButtonBold />
-                      <MenuButtonItalic />
-                      <MenuButtonUnderline />
-                      <MenuButtonStrikethrough />
+                {() => (
+                  <>
+                    <RichTextField
+                      controls={(
+                        <MenuControlsContainer>
+                          <MenuButtonBold />
+                          <MenuButtonItalic />
+                          <MenuButtonUnderline />
+                          <MenuButtonStrikethrough />
 
-                      <MenuDivider />
+                          <MenuDivider />
 
-                      <MenuButtonBulletedList />
-                      <MenuButtonOrderedList />
+                          <MenuButtonBulletedList />
+                          <MenuButtonOrderedList />
 
-                      <MenuDivider />
+                          <MenuDivider />
 
-                      <MenuSelectHeading />
-                      <MenuSelectTextAlign />
+                          <MenuSelectHeading />
+                          <MenuSelectTextAlign />
 
-                      <MenuDivider />
+                          <MenuDivider />
 
-                      <MenuButtonEditLink />
-                      <MenuButtonTextColor />
-                      <MenuButtonHighlightColor />
+                          <MenuButtonEditLink />
+                          <MenuButtonTextColor />
+                          <MenuButtonHighlightColor />
 
-                      <MenuDivider />
+                          <MenuDivider />
 
-                      <MenuButtonUndo />
-                      <MenuButtonRedo />
-                    </MenuControlsContainer>
-                  )}
-                  variant="outlined"
-                  sx={{ '& .ProseMirror': { minHeight: 500, p: 2 } }}
-                />
-                <LinkBubbleMenu />
+                          <MenuButtonUndo />
+                          <MenuButtonRedo />
+                        </MenuControlsContainer>
+                      )}
+                      variant="outlined"
+                      sx={{ '& .ProseMirror': { minHeight: 500, p: 2 } }}
+                    />
+                    <LinkBubbleMenu />
+                  </>
+                )}
               </RichTextEditor>
             </Paper>
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
