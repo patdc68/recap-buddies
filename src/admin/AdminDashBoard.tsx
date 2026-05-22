@@ -59,6 +59,7 @@ import NotificationsIcon      from '@mui/icons-material/Notifications';
 
 import {
   LinkBubbleMenu,
+  LinkBubbleMenuHandler,
   MenuButtonBold,
   MenuButtonItalic,
   MenuButtonUnderline,
@@ -2186,6 +2187,7 @@ const AdminDashboard: React.FC = () => {
                   TextStyle,
                   Color,
                   Highlight.configure({ multicolor: true }),
+                  LinkBubbleMenuHandler,
                 ]}
                 content={agreementHtml}
                 onUpdate={({ editor }: { editor: any }) => setAgreementHtml(editor.getHTML())}
