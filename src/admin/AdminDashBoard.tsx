@@ -2026,6 +2026,11 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => {
     if (tab === 4 && !agreementHtml && !agreementLoading) void loadAgreement();
   }, [tab, agreementHtml, agreementLoading, loadAgreement]);
+  useEffect(() => {
+    if (rteRef.current?.editor && agreementHtml) {
+      rteRef.current.editor.commands.setContent(agreementHtml);
+    }
+  }, [agreementHtml]);
 
   const markOverdueRentalsForPenalty = useCallback(async () => {
     const today = dayjs().startOf('day');
@@ -2189,7 +2194,7 @@ const AdminDashboard: React.FC = () => {
                   Highlight.configure({ multicolor: true }),
                   LinkBubbleMenuHandler,
                 ]}
-                content={agreementHtml}
+                content={agreementHtml || ''}
                 onUpdate={({ editor }: { editor: any }) => setAgreementHtml(editor.getHTML())}
                 editable={!agreementLoading && !agreementSaving}
               >
@@ -2226,7 +2231,14 @@ const AdminDashboard: React.FC = () => {
                         </MenuControlsContainer>
                       )}
                       variant="outlined"
-                      sx={{ '& .ProseMirror': { minHeight: 500, p: 2 } }}
+                      sx={{
+                        borderRadius: 2,
+                        backgroundColor: '#fff',
+                        '& .ProseMirror': {
+                          minHeight: 500,
+                          p: 3,
+                        },
+                      }}
                     />
                     <LinkBubbleMenu />
                   </>
