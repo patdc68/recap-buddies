@@ -1964,7 +1964,7 @@ const AdminDashboard: React.FC = () => {
       Highlight.configure({ multicolor: true }),
       LinkBubbleMenuHandler,
     ],
-    content: agreementHtml || '',
+    content: '',
     onUpdate: ({ editor: currentEditor }: { editor: any }) => {
       setAgreementHtml(currentEditor.getHTML());
     },
@@ -2036,17 +2036,22 @@ const AdminDashboard: React.FC = () => {
       setAgreementLoading(false);
       return;
     }
-    setAgreementHtml(await data.text());
+    const text = await data.text();
+    const normalizedContent = text.trim().startsWith('<')
+      ? text
+      : text.replace(/\n/g, '<br />');
+
+    setAgreementHtml(normalizedContent);
+
+    if (editor) {
+      editor.commands.setContent(normalizedContent);
+    }
+
     setAgreementLoading(false);
-  }, []);
+  }, [editor]);
   useEffect(() => {
     if (tab === 4 && !agreementHtml && !agreementLoading) void loadAgreement();
   }, [tab, agreementHtml, agreementLoading, loadAgreement]);
-  useEffect(() => {
-    if (editor && agreementHtml) {
-      editor.commands.setContent(agreementHtml);
-    }
-  }, [editor, agreementHtml]);
   useEffect(() => {
     if (editor) {
       editor.setEditable(!agreementLoading && !agreementSaving);
