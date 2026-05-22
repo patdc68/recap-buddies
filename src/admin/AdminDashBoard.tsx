@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Chip, Button, CircularProgress, Avatar,
   Tabs, Tab, Divider, IconButton, Dialog, DialogTitle, DialogContent,
@@ -75,9 +75,9 @@ import {
   MenuDivider,
   MenuSelectHeading,
   MenuSelectTextAlign,
-  RichTextEditor,
-  RichTextField,
+  RichTextEditorProvider,
 } from 'mui-tiptap';
+import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import Underline from '@tiptap/extension-underline';
 import Link from '@tiptap/extension-link';
@@ -1950,10 +1950,26 @@ const AdminDashboard: React.FC = () => {
   const [loading, setLoading]   = useState(true);
   const [authUid, setAuthUid]   = useState('');
   const [agreementHtml, setAgreementHtml] = useState('');
-  const rteRef = useRef<any>(null);
   const [agreementLoading, setAgreementLoading] = useState(false);
   const [agreementSaving, setAgreementSaving] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Link.configure({ openOnClick: false, autolink: true }),
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      TextStyle,
+      Color,
+      Highlight.configure({ multicolor: true }),
+      LinkBubbleMenuHandler,
+    ],
+    content: agreementHtml || '',
+    onUpdate: ({ editor: currentEditor }: { editor: any }) => {
+      setAgreementHtml(currentEditor.getHTML());
+    },
+    editable: !agreementLoading && !agreementSaving,
+  });
 
   const fetchAll = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -2027,10 +2043,15 @@ const AdminDashboard: React.FC = () => {
     if (tab === 4 && !agreementHtml && !agreementLoading) void loadAgreement();
   }, [tab, agreementHtml, agreementLoading, loadAgreement]);
   useEffect(() => {
-    if (rteRef.current?.editor && agreementHtml) {
-      rteRef.current.editor.commands.setContent(agreementHtml);
+    if (editor && agreementHtml) {
+      editor.commands.setContent(agreementHtml);
     }
-  }, [agreementHtml]);
+  }, [editor, agreementHtml]);
+  useEffect(() => {
+    if (editor) {
+      editor.setEditable(!agreementLoading && !agreementSaving);
+    }
+  }, [editor, agreementLoading, agreementSaving]);
 
   const markOverdueRentalsForPenalty = useCallback(async () => {
     const today = dayjs().startOf('day');
@@ -2182,74 +2203,61 @@ const AdminDashboard: React.FC = () => {
           <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
             <Typography sx={{ mb: 2, fontWeight: 700 }}>Terms & Conditions</Typography>
             <Paper sx={{ borderRadius: 3, border: '1px solid rgba(17,17,17,0.12)', p: 2, backgroundColor: '#fff' }}>
-              <RichTextEditor
-                ref={rteRef}
-                extensions={[
-                  StarterKit,
-                  Underline,
-                  Link.configure({ openOnClick: false, autolink: true }),
-                  TextAlign.configure({ types: ['heading', 'paragraph'] }),
-                  TextStyle,
-                  Color,
-                  Highlight.configure({ multicolor: true }),
-                  LinkBubbleMenuHandler,
-                ]}
-                content={agreementHtml || ''}
-                onUpdate={({ editor }: { editor: any }) => setAgreementHtml(editor.getHTML())}
-                editable={!agreementLoading && !agreementSaving}
-              >
-                {() => (
-                  <>
-                    <RichTextField
-                      controls={(
-                        <MenuControlsContainer>
-                          <MenuButtonBold />
-                          <MenuButtonItalic />
-                          <MenuButtonUnderline />
-                          <MenuButtonStrikethrough />
-
-                          <MenuDivider />
-
-                          <MenuButtonBulletedList />
-                          <MenuButtonOrderedList />
-
-                          <MenuDivider />
-
-                          <MenuSelectHeading />
-                          <MenuSelectTextAlign />
-
-                          <MenuDivider />
-
-                          <MenuButtonEditLink />
-                          <MenuButtonTextColor />
-                          <MenuButtonHighlightColor />
-
-                          <MenuDivider />
-
-                          <MenuButtonUndo />
-                          <MenuButtonRedo />
-                        </MenuControlsContainer>
-                      )}
-                      variant="outlined"
-                      sx={{
-                        borderRadius: 2,
-                        backgroundColor: '#fff',
-                        '& .ProseMirror': {
-                          minHeight: 500,
-                          p: 3,
-                        },
-                      }}
-                    />
-                    <LinkBubbleMenu />
-                  </>
-                )}
-              </RichTextEditor>
+              <RichTextEditorProvider editor={editor}>
+                <Box
+                  className="terms-toolbar"
+                  sx={{
+                    border: '1px solid #ddd',
+                    borderBottom: 'none',
+                    borderRadius: '16px 16px 0 0',
+                    p: 1.5,
+                    background: '#fff',
+                  }}
+                >
+                  <MenuControlsContainer>
+                    <MenuButtonBold />
+                    <MenuButtonItalic />
+                    <MenuButtonUnderline />
+                    <MenuButtonStrikethrough />
+                    <MenuDivider />
+                    <MenuButtonBulletedList />
+                    <MenuButtonOrderedList />
+                    <MenuDivider />
+                    <MenuSelectHeading />
+                    <MenuSelectTextAlign />
+                    <MenuDivider />
+                    <MenuButtonEditLink />
+                    <MenuButtonTextColor />
+                    <MenuButtonHighlightColor />
+                    <MenuDivider />
+                    <MenuButtonUndo />
+                    <MenuButtonRedo />
+                  </MenuControlsContainer>
+                </Box>
+                <Box
+                  className="terms-editor-content"
+                  sx={{
+                    border: '1px solid #ddd',
+                    borderRadius: '0 0 16px 16px',
+                    minHeight: 500,
+                    p: 3,
+                    background: '#fff',
+                    '& .ProseMirror': {
+                      minHeight: 500,
+                      outline: 'none',
+                    },
+                  }}
+                >
+                  <EditorContent editor={editor} />
+                </Box>
+                <LinkBubbleMenu />
+              </RichTextEditorProvider>
             </Paper>
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
               <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading || agreementSaving}>{agreementLoading ? 'Loading…' : 'Reload'}</Button>
               <Button variant="contained" disabled={agreementSaving || agreementLoading || !agreementHtml.trim()} onClick={async () => {
                 setAgreementSaving(true);
-                const html = rteRef.current?.editor?.getHTML() ?? agreementHtml;
+                const html = editor?.getHTML() ?? '';
                 const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
                 const { error } = await supabase.storage.from('terms_and_condition').upload('agreement', blob, { upsert: true, contentType: 'text/html' });
                 setAgreementSaving(false);
