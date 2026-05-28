@@ -430,19 +430,20 @@ const RepeatSelfieVerification: React.FC<RepeatSelfieVerificationProps> = ({
     elevation={0}
     sx={{
       p: { xs: 2, sm: 2.5 },
-      background: 'linear-gradient(135deg, rgba(17,17,17,0.98), rgba(17,17,17,0.90))',
-      border: '1px solid rgba(201,151,58,0.35)',
-      borderRadius: 3,
-      color: '#FFFFFF',
+      background: '#ffffff',
+      border: '1px solid #f1e5d0',
+      borderRadius: '24px',
+      boxShadow: '0 8px 24px rgba(0,0,0,0.04)',
+      color: '#111111',
     }}
   >
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
-      <Box sx={{ width: 42, height: 42, borderRadius: '12px', background: 'rgba(201,151,58,0.16)', border: '1px solid rgba(201,151,58,0.45)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <Box sx={{ width: 42, height: 42, borderRadius: '14px', background: '#fff7e8', border: '1px solid #f1e5d0', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)' }}>
         <VerifiedUserIcon sx={{ color: '#C9973A' }} />
       </Box>
       <Box>
-        <Typography variant="h6" sx={{ color: '#FFFFFF', lineHeight: 1.1 }}>Repeat Renter Live Verification</Typography>
-        <Typography variant="body2" sx={{ color: 'rgba(255,255,255,0.72)' }}>
+        <Typography variant="h6" sx={{ color: '#111111', lineHeight: 1.1, fontWeight: 800 }}>Repeat Renter Live Verification</Typography>
+        <Typography variant="body2" sx={{ color: '#6b7280' }}>
           For your account security, capture a new live selfie before submitting this rental.
         </Typography>
       </Box>
@@ -451,26 +452,26 @@ const RepeatSelfieVerification: React.FC<RepeatSelfieVerificationProps> = ({
     {loading ? (
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, py: 2 }}>
         <CircularProgress size={18} sx={{ color: '#C9973A' }} />
-        <Typography sx={{ color: 'rgba(255,255,255,0.78)', fontSize: '0.9rem' }}>Loading verification instructions…</Typography>
+        <Typography sx={{ color: '#374151', fontSize: '0.9rem' }}>Loading verification instructions…</Typography>
       </Box>
     ) : instructions.length > 0 ? (
-      <Paper elevation={0} sx={{ p: 2, mb: 2, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.10)', borderRadius: 2 }}>
-        <Typography variant="caption" sx={{ color: '#C9973A', letterSpacing: '0.1em', fontWeight: 700 }}>
+      <Paper elevation={0} sx={{ p: 2, mb: 2, background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '18px' }}>
+        <Typography variant="caption" sx={{ color: '#9b6f1f', letterSpacing: '0.1em', fontWeight: 800 }}>
           FOLLOW THESE INSTRUCTIONS BEFORE CAPTURE
         </Typography>
         <List dense sx={{ mt: 1, p: 0 }}>
           {instructions.map((inst, index) => (
             <ListItem key={inst.id} disableGutters sx={{ alignItems: 'flex-start', py: 0.75 }}>
               <ListItemIcon sx={{ minWidth: 34, mt: 0.25 }}>
-                <Box sx={{ width: 24, height: 24, borderRadius: '50%', background: '#C9973A', color: '#111111', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 800 }}>
+                <Box sx={{ width: 24, height: 24, borderRadius: '50%', background: '#fff7e8', border: '1px solid #f1e5d0', color: '#9b6f1f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 800 }}>
                   {index + 1}
                 </Box>
               </ListItemIcon>
               <ListItemText
                 primary={inst.instruction_name}
                 secondary={inst.instruction_desc}
-                primaryTypographyProps={{ sx: { color: '#FFFFFF', fontWeight: 700, fontSize: '0.9rem' } }}
-                secondaryTypographyProps={{ sx: { color: 'rgba(255,255,255,0.70)', fontSize: '0.82rem', lineHeight: 1.5 } }}
+                primaryTypographyProps={{ sx: { color: '#111111', fontWeight: 700, fontSize: '0.9rem' } }}
+                secondaryTypographyProps={{ sx: { color: '#374151', fontSize: '0.82rem', lineHeight: 1.5 } }}
               />
             </ListItem>
           ))}
@@ -484,8 +485,9 @@ const RepeatSelfieVerification: React.FC<RepeatSelfieVerificationProps> = ({
       onCapture={onSelfieCapture}
       capturedUrl={selfiePreview}
       hint="Use the device camera only. Gallery uploads and manual file selection are not accepted for repeat-renter verification."
+      variant="lightVerification"
     />
-    {error && <Alert severity="error" sx={{ mt: 1.5 }}>{error}</Alert>}
+    {error && <Alert severity="error" sx={{ mt: 1.5, borderRadius: '14px' }}>{error}</Alert>}
   </Paper>
 );
 
