@@ -19,7 +19,23 @@ interface CameraCaptureProps {
   capturedUrl: string | null;
   hint?: string;
   facingMode?: 'user' | 'environment';
+  variant?: 'default' | 'lightVerification';
 }
+
+const primaryButtonSx = {
+  backgroundColor: '#111111',
+  color: '#FFFFFF',
+  borderRadius: '12px',
+  fontWeight: 700,
+  textTransform: 'none',
+  boxShadow: '0 8px 18px rgba(17,17,17,0.14)',
+  transition: 'all 0.2s ease',
+  '&:hover': {
+    backgroundColor: '#2A2A2A',
+    boxShadow: '0 10px 22px rgba(17,17,17,0.18)',
+    transform: 'translateY(-1px)',
+  },
+} as const;
 
 const CameraCapture: React.FC<CameraCaptureProps> = ({
   label,
@@ -27,7 +43,9 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
   capturedUrl,
   hint,
   facingMode: defaultFacing = 'environment',
+  variant = 'default',
 }) => {
+  const isLightVerification = variant === 'lightVerification';
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
@@ -102,19 +120,22 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
     startCamera();
   };
 
-  const borderColor = capturedUrl ? '#69DB7C' : 'rgba(201, 151, 58, 0.3)';
+  const borderColor = isLightVerification
+    ? capturedUrl ? '#86C98B' : '#d6c3a3'
+    : capturedUrl ? '#69DB7C' : 'rgba(201, 151, 58, 0.3)';
 
   return (
     <Box
       sx={{
         border: `1.5px dashed ${borderColor}`,
-        borderRadius: 3,
+        borderRadius: isLightVerification ? '20px' : 3,
         p: 2,
-        background: 'rgba(201,151,58,0.04)',
-        transition: 'border-color 0.3s',
+        background: isLightVerification ? '#f9fafb' : 'rgba(201,151,58,0.04)',
+        transition: 'border-color 0.3s, box-shadow 0.2s ease',
+        boxShadow: isLightVerification ? 'inset 0 1px 0 rgba(255,255,255,0.8)' : 'none',
       }}
     >
-      <Typography variant="caption" sx={{ color: '#666666', mb: 1, display: 'block' }}>
+      <Typography variant="caption" sx={{ color: isLightVerification ? '#374151' : '#666666', mb: 1, display: 'block', fontWeight: isLightVerification ? 700 : 400 }}>
         {label}
       </Typography>
 
@@ -125,9 +146,10 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
             mb: 1.5,
             py: 0.5,
             fontSize: '0.8rem',
-            background: 'rgba(107,142,107,0.08)',
-            color: '#4A6A4A',
-            border: '1px solid rgba(107,142,107,0.25)',
+            background: isLightVerification ? '#f8fafc' : 'rgba(107,142,107,0.08)',
+            color: isLightVerification ? '#374151' : '#4A6A4A',
+            border: isLightVerification ? '1px solid #e5e7eb' : '1px solid rgba(107,142,107,0.25)',
+            borderRadius: isLightVerification ? '14px' : undefined,
           }}
         >
           {hint}
@@ -135,14 +157,14 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
       )}
 
       {error && (
-        <Alert severity="error" sx={{ mb: 1.5 }}>
+        <Alert severity="error" sx={{ mb: 1.5, borderRadius: isLightVerification ? '14px' : undefined }}>
           {error}
         </Alert>
       )}
 
       {/* Captured preview */}
       {capturedUrl && !active && (
-        <Box sx={{ position: 'relative', borderRadius: 2, overflow: 'hidden', mb: 1.5 }}>
+        <Box sx={{ position: 'relative', borderRadius: isLightVerification ? '16px' : 2, overflow: 'hidden', mb: 1.5, border: isLightVerification ? '1px solid #e5e7eb' : 'none', background: '#ffffff' }}>
           <img
             src={capturedUrl}
             alt="captured"
@@ -151,7 +173,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
               maxHeight: 220,
               objectFit: 'cover',
               display: 'block',
-              borderRadius: 8,
+              borderRadius: isLightVerification ? 16 : 8,
             }}
           />
           <Box
@@ -172,7 +194,7 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
       {/* Live viewfinder */}
       {active && (
         <Box
-          sx={{ position: 'relative', borderRadius: 2, overflow: 'hidden', mb: 1.5, background: '#000' }}
+          sx={{ position: 'relative', borderRadius: isLightVerification ? '16px' : 2, overflow: 'hidden', mb: 1.5, background: isLightVerification ? '#f3f4f6' : '#000', border: isLightVerification ? '1px solid #e5e7eb' : 'none' }}
         >
           <video
             ref={videoRef}
@@ -193,9 +215,10 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
                 position: 'absolute',
                 top: 8,
                 right: 8,
-                background: 'rgba(0,0,0,0.5)',
-                color: '#fff',
-                '&:hover': { background: 'rgba(0,0,0,0.7)' },
+                background: isLightVerification ? 'rgba(255,255,255,0.92)' : 'rgba(0,0,0,0.5)',
+                color: isLightVerification ? '#111111' : '#fff',
+                border: isLightVerification ? '1px solid rgba(17,17,17,0.08)' : 'none',
+                '&:hover': { background: isLightVerification ? '#ffffff' : 'rgba(0,0,0,0.7)' },
               }}
               size="small"
             >
@@ -210,13 +233,13 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
       <Box sx={{ display: 'flex', gap: 1 }}>
         {!active && !capturedUrl && (
           <Button
-            variant="outlined"
-            startIcon={loading ? <CircularProgress size={16} /> : <CameraAltIcon />}
+            variant={isLightVerification ? 'contained' : 'outlined'}
+            startIcon={loading ? <CircularProgress size={16} sx={{ color: isLightVerification ? '#FFFFFF' : undefined }} /> : <CameraAltIcon />}
             onClick={startCamera}
             disabled={loading}
             size="small"
             fullWidth
-            sx={{ borderColor: 'rgba(201,151,58,0.5)', color: '#111111' }}
+            sx={isLightVerification ? primaryButtonSx : { borderColor: 'rgba(201,151,58,0.5)', color: '#111111' }}
           >
             {loading ? 'Starting Camera…' : 'Open Camera'}
           </Button>
@@ -228,17 +251,18 @@ const CameraCapture: React.FC<CameraCaptureProps> = ({
             onClick={capture}
             size="small"
             fullWidth
+            sx={isLightVerification ? primaryButtonSx : undefined}
           >
             Capture Photo
           </Button>
         )}
         {capturedUrl && !active && (
           <Button
-            variant="outlined"
+            variant={isLightVerification ? 'contained' : 'outlined'}
             startIcon={<ReplayIcon />}
             onClick={retake}
             size="small"
-            sx={{ borderColor: 'rgba(201,151,58,0.35)', color: '#666666' }}
+            sx={isLightVerification ? primaryButtonSx : { borderColor: 'rgba(201,151,58,0.35)', color: '#666666' }}
           >
             Retake
           </Button>

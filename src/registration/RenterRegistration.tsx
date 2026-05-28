@@ -452,6 +452,7 @@ const RenterRegistration: React.FC = () => {
     supabase
       .from('RB_SELFIE_VERIFICATION_INST')
       .select('*')
+      .order('created_at', { ascending: true })
       .then(({ data }) => {
         if (data) setSelfieInstructions(data as RbSelfieVerificationInst[]);
       });
