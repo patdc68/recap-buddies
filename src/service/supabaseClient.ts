@@ -92,6 +92,8 @@ export interface RbSelfieVerificationInst {
   id: string;
   instruction_name: string;
   instruction_desc: string;
+  is_active?: boolean;
+  display_order?: number | null;
 }
 
 // ─── Rental Form ──────────────────────────────────────────────────────────────
