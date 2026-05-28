@@ -476,11 +476,7 @@ const RepeatSelfieVerification: React.FC<RepeatSelfieVerificationProps> = ({
           ))}
         </List>
       </Paper>
-    ) : (
-      <Alert severity="error" sx={{ mb: 2 }}>
-        No active selfie verification instructions are configured. Please contact support before submitting.
-      </Alert>
-    )}
+    ) : null}
 
     <CameraCapture
       label="Live Selfie Capture"
@@ -561,14 +557,15 @@ const RenterForm: React.FC = () => {
       setRepeatCheckLoading(true);
       setRepeatVerificationError('');
       try {
-        const { count, error: countError } = await supabase
+        const { data: completedRentals, error: completedRentalsError } = await supabase
           .from('RB_RENTAL_FORM')
-          .select('id', { count: 'exact', head: true })
+          .select('id')
           .eq('renter_id_fk', renter.id)
-          .eq('status', 'completed');
-        if (countError) throw countError;
+          .eq('status', 'completed')
+          .limit(1);
+        if (completedRentalsError) throw completedRentalsError;
 
-        const repeat = (count ?? 0) > 0;
+        const repeat = (completedRentals?.length ?? 0) > 0;
         if (cancelled) return;
         setIsRepeatRenter(repeat);
 
@@ -585,8 +582,7 @@ const RenterForm: React.FC = () => {
         const { data, error: instructionError } = await supabase
           .from('RB_SELFIE_VERIFICATION_INST')
           .select('*')
-          .eq('is_active', true)
-          .order('display_order', { ascending: true });
+          .order('created_at', { ascending: true });
         if (instructionError) throw instructionError;
         if (!cancelled) setSelfieInstructions((data ?? []) as RbSelfieVerificationInst[]);
       } catch (err) {
@@ -663,7 +659,6 @@ const RenterForm: React.FC = () => {
     }
     if (activeStep === 4 && isRepeatRenter) {
       if (repeatVerificationError) e.selfie_verification_img = repeatVerificationError;
-      else if (selfieInstructions.length === 0) e.selfie_verification_img = 'Active selfie verification instructions are required before submitting.';
       else if (!selfieBlob) e.selfie_verification_img = 'Live selfie capture is required for repeat renters.';
     }
     setErrors(e);

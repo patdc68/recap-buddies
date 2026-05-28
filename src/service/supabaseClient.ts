@@ -92,7 +92,7 @@ export interface RbSelfieVerificationInst {
   id: string;
   instruction_name: string;
   instruction_desc: string;
-  is_active?: boolean;
+  created_at: string;
   display_order?: number | null;
 }
 
