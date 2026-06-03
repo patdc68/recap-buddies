@@ -4,7 +4,7 @@ import {
   Tabs, Tab, Divider, IconButton, Dialog, DialogTitle, DialogContent,
   DialogActions, Select, MenuItem, FormControl, InputLabel, FormHelperText,
   Switch, FormControlLabel, Tooltip, TextField, type SelectChangeEvent,
-  Table, TableHead, TableBody, TableRow, TableCell, TableContainer, TablePagination, Snackbar, Alert, Badge, Menu, ListItemText,
+  Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Snackbar, Alert, Badge, Menu, ListItemText,
 } from '@mui/material';
 import { DataGrid, GridToolbar, type GridColDef } from '@mui/x-data-grid';
 import { LocalizationProvider, TimePicker } from '@mui/x-date-pickers';
@@ -50,7 +50,6 @@ import PhoneIcon              from '@mui/icons-material/Phone';
 import VerifiedUserIcon       from '@mui/icons-material/VerifiedUser';
 import OpenInNewIcon          from '@mui/icons-material/OpenInNew';
 import DeleteIcon             from '@mui/icons-material/Delete';
-import FilterListIcon         from '@mui/icons-material/FilterList';
 import CheckCircleIcon        from '@mui/icons-material/CheckCircle';
 import CancelIcon             from '@mui/icons-material/Cancel';
 import MonitorHeartIcon       from '@mui/icons-material/MonitorHeart';
@@ -74,21 +73,6 @@ const MUTED       = '#666666';
 const BORDER      = 'rgba(17,17,17,0.12)';
 
 // ─── Status tables ────────────────────────────────────────────────────────────
-
-const ITEM_STATUSES: ItemStatus[] = [
-  'Available', 'In Review', 'For Delivery', 'Renting', 'Delivered', 'For Return', 'For Refund', 'For Penalty',
-];
-
-const ITEM_STATUS_COLORS: Record<ItemStatus, { bg: string; color: string; border: string }> = {
-  'Available':    { bg: 'rgba(105,219,124,0.12)', color: '#2E7D32', border: 'rgba(105,219,124,0.35)' },
-  'In Review':    { bg: 'rgba(255,212,59,0.10)',  color: '#B8860B', border: 'rgba(255,212,59,0.30)'  },
-  'For Delivery': { bg: 'rgba(100,149,237,0.12)', color: '#1565C0', border: 'rgba(100,149,237,0.35)' },
-  'Renting':      { bg: 'rgba(201,151,58,0.12)',  color: '#7A4F00', border: 'rgba(201,151,58,0.40)'  },
-  'Delivered':    { bg: 'rgba(100,149,237,0.08)', color: '#1A237E', border: 'rgba(100,149,237,0.25)' },
-  'For Return':   { bg: 'rgba(255,165,0,0.12)',   color: '#E65100', border: 'rgba(255,165,0,0.35)'   },
-  'For Refund':   { bg: 'rgba(156,39,176,0.10)',  color: '#6A1B9A', border: 'rgba(156,39,176,0.30)'  },
-  'For Penalty':  { bg: 'rgba(211,47,47,0.10)',   color: '#B71C1C', border: 'rgba(211,47,47,0.30)'   },
-};
 
 const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
   submitted:   { label: 'Submitted',  color: '#B8860B', bg: 'rgba(255,212,59,0.10)',  border: 'rgba(255,212,59,0.30)'  },
@@ -1650,8 +1634,6 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
   const [addItemOpen, setAddItemOpen]     = useState(false);
   const [editItem, setEditItem]           = useState<EnrichedItem | null>(null);
   const [viewImg, setViewImg]             = useState<string | null>(null);
-  const [filterStatus, setFilterStatus]   = useState<ItemStatus | 'all'>('all');
-  const [filterSearch, setFilterSearch]   = useState('');
 
   const handleDelete = async (item: EnrichedItem) => {
     if (!window.confirm(`Delete unit "${item.code_name}"? This cannot be undone.`)) return;
@@ -1659,21 +1641,137 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
     onRefresh();
   };
 
-  const displayed = items.filter((it) => {
-    const matchStatus = filterStatus === 'all' || it.status === filterStatus;
-    const q = filterSearch.toLowerCase();
-    const matchSearch = !q || it.code_name.toLowerCase().includes(q) || it.serial_no.toLowerCase().includes(q) || (it.device?.cam_name ?? '').toLowerCase().includes(q);
-    return matchStatus && matchSearch;
-  });
+  type InventoryRow = {
+    id: string;
+    imageUrl: string | null;
+    cameraCode: string;
+    cameraName: string;
+    codeName: string;
+    serialNo: string;
+    condition: ItemCondition;
+    gps: boolean;
+    item: EnrichedItem;
+  };
 
-  const COLS = '90px 1fr 120px 150px 110px 56px 52px 48px';
-  const HEADERS = ['Image', 'Camera · Code', 'Serial No.', 'Condition', 'GPS', '', '', ''];
+  const inventoryRows: InventoryRow[] = items.map((item) => ({
+    id: item.id,
+    imageUrl: item.device?.device_img ?? null,
+    cameraCode: `${item.device?.cam_name ?? '—'} ${item.code_name}`,
+    cameraName: item.device?.cam_name ?? '—',
+    codeName: item.code_name,
+    serialNo: item.serial_no,
+    condition: item.current_condition,
+    gps: item.gps_installed,
+    item,
+  }));
+
+  const inventoryColumns: GridColDef<InventoryRow>[] = [
+    {
+      field: 'imageUrl',
+      headerName: 'Image',
+      width: 110,
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => (
+        <Box sx={{ height: '100%', display: 'flex', alignItems: 'center' }}>
+          <Box
+            sx={{ position: 'relative', width: 60, cursor: params.row.imageUrl ? 'pointer' : 'default' }}
+            onClick={() => params.row.imageUrl && setViewImg(params.row.imageUrl)}
+          >
+            {params.row.imageUrl
+              ? <>
+                  <img src={params.row.imageUrl} alt="" style={{ width: 60, height: 44, objectFit: 'cover', borderRadius: 7, border: `1px solid ${BORDER}`, display: 'block' }} />
+                  <Box sx={{ position: 'absolute', inset: 0, borderRadius: 7, opacity: 0, background: 'rgba(0,0,0,0)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', '&:hover': { background: 'rgba(0,0,0,0.28)', opacity: 1 } }}>
+                    <ZoomInIcon sx={{ color: '#fff', fontSize: 20 }} />
+                  </Box>
+                </>
+              : <Box sx={{ width: 60, height: 44, borderRadius: 1.5, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 22, color: AMBER }} /></Box>}
+          </Box>
+        </Box>
+      ),
+    },
+    {
+      field: 'cameraCode',
+      headerName: 'Camera - Code',
+      minWidth: 220,
+      flex: 1,
+      renderCell: (params) => (
+        <Box sx={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', height: '100%' }}>
+          <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.85rem', lineHeight: 1.3 }}>{params.row.cameraName}</Typography>
+          <Typography sx={{ color: AMBER, fontSize: '0.72rem', fontFamily: '"Sora", sans-serif', lineHeight: 1.3 }}>{params.row.codeName}</Typography>
+        </Box>
+      ),
+    },
+    {
+      field: 'serialNo',
+      headerName: 'Serial No.',
+      minWidth: 150,
+      flex: 0.7,
+      renderCell: (params) => <Typography sx={{ color: MUTED, fontSize: '0.78rem', fontFamily: 'monospace' }}>{params.value}</Typography>,
+    },
+    {
+      field: 'condition',
+      headerName: 'Condition',
+      minWidth: 150,
+      renderCell: (params) => (
+        <Chip
+          label={params.row.condition}
+          size="small"
+          sx={{
+            background: params.row.condition === 'working' ? 'rgba(105,219,124,0.1)' : 'rgba(211,47,47,0.1)',
+            color: params.row.condition === 'working' ? '#2E7D32' : '#B71C1C',
+            border: `1px solid ${params.row.condition === 'working' ? 'rgba(105,219,124,0.3)' : 'rgba(211,47,47,0.3)'}`,
+            fontFamily: '"Sora", sans-serif',
+            fontWeight: 600,
+            fontSize: '0.68rem',
+            height: 22,
+            textTransform: 'capitalize',
+            width: 'fit-content',
+          }}
+        />
+      ),
+    },
+    {
+      field: 'gps',
+      headerName: 'GPS',
+      type: 'boolean',
+      minWidth: 110,
+      renderCell: (params) => (
+        <Box sx={{ width: '100%', display: 'flex', justifyContent: 'center' }}>
+          {params.row.gps ? <GpsFixedIcon sx={{ fontSize: 16, color: '#2E7D32' }} /> : <Typography sx={{ color: MUTED, fontSize: '0.75rem' }}>—</Typography>}
+        </Box>
+      ),
+    },
+    {
+      field: 'actions',
+      headerName: 'Actions',
+      minWidth: 120,
+      align: 'center',
+      headerAlign: 'center',
+      sortable: false,
+      filterable: false,
+      renderCell: (params) => (
+        <Box sx={{ display: 'flex', justifyContent: 'center', gap: 0.5, width: '100%' }}>
+          <Tooltip title="Edit unit">
+            <IconButton size="small" onClick={() => setEditItem(params.row.item)} sx={{ color: MUTED, '&:hover': { color: AMBER } }}>
+              <EditIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+          <Tooltip title="Delete unit">
+            <IconButton size="small" onClick={() => handleDelete(params.row.item)} sx={{ color: MUTED, '&:hover': { color: '#B71C1C' } }}>
+              <DeleteIcon fontSize="small" />
+            </IconButton>
+          </Tooltip>
+        </Box>
+      ),
+    },
+  ];
 
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 2 }}>
         <Typography sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', fontWeight: 700, fontSize: '1.15rem' }}>
-          Camera Inventory <span style={{ color: MUTED, fontFamily: '"Sora", sans-serif', fontWeight: 400, fontSize: '0.8rem' }}>({displayed.length}/{items.length} units)</span>
+          Camera Inventory <span style={{ color: MUTED, fontFamily: '"Sora", sans-serif', fontWeight: 400, fontSize: '0.8rem' }}>({items.length} units)</span>
         </Typography>
         <Box sx={{ display: 'flex', gap: 1.5 }}>
           {isAdmin && <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={() => setAddDeviceOpen(true)}>Add Camera Type</Button>}
@@ -1682,91 +1780,51 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
         </Box>
       </Box>
 
-      {/* Filters row */}
-      <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: '1 1 220px' }}>
-          <FilterListIcon sx={{ color: MUTED, fontSize: 18 }} />
-          <input
-            placeholder="Search camera, code, serial…"
-            value={filterSearch}
-            onChange={(e) => setFilterSearch(e.target.value)}
-            style={{ flex: 1, padding: '7px 12px', borderRadius: 8, border: `1px solid ${BORDER}`, fontFamily: '"DM Sans", sans-serif', fontSize: '0.85rem', color: ESPRESSO, background: CARD_BG, outline: 'none' }}
-          />
-        </Box>
-        {/* <FormControl size="small" sx={{ minWidth: 160 }}>
-          <InputLabel sx={{ color: MUTED }}>Filter by status</InputLabel>
-          <Select value={filterStatus} onChange={(e: SelectChangeEvent) => setFilterStatus(e.target.value as ItemStatus | 'all')} label="Filter by status">
-            <MenuItem value="all">All statuses</MenuItem>
-            {ITEM_STATUSES.map((s) => <MenuItem key={s} value={s}>{s}</MenuItem>)}
-          </Select>
-        </FormControl> */}
-      </Box>
-
-      <Paper elevation={0} sx={{ border: `1px solid ${BORDER}`, borderRadius: 3, overflow: 'hidden' }}>
-        <Box sx={{ overflowX: 'auto', WebkitOverflowScrolling: 'touch' }}>
-          {/* Header */}
-          <Box sx={{ display: 'grid', gridTemplateColumns: COLS, minWidth: 900, gap: 1, px: 2.5, py: 1.5, background: 'rgba(201,151,58,0.05)', borderBottom: `1px solid ${BORDER}` }}>
-            {HEADERS.map((h, i) => (
-              <Typography key={i} sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase', fontWeight: 700 }}>{h}</Typography>
-            ))}
-          </Box>
-
-          {/* Rows */}
-          {displayed.length === 0
-            ? <Box sx={{ minWidth: 900, textAlign: 'center', py: 6 }}><Typography sx={{ color: MUTED, fontFamily: '"Sora", sans-serif', fontSize: '0.85rem' }}>No items match the current filters.</Typography></Box>
-            : displayed.map((item, idx) => {
-                const sc = ITEM_STATUS_COLORS[item.status] ?? ITEM_STATUS_COLORS['Available'];
-                return (
-                  <Box key={item.id} sx={{ display: 'grid', gridTemplateColumns: COLS, minWidth: 900, gap: 1, px: 2.5, py: 1.75, alignItems: 'center', borderBottom: idx < displayed.length - 1 ? `1px solid ${BORDER}` : 'none', background: idx % 2 === 0 ? CARD_BG : 'rgba(201,151,58,0.015)', '&:hover': { background: 'rgba(201,151,58,0.06)' }, transition: 'background 0.15s' }}>
-                  {/* Image */}
-                  <Box sx={{ position: 'relative', width: 60, cursor: item.device?.device_img ? 'pointer' : 'default' }} onClick={() => item.device?.device_img && setViewImg(item.device.device_img)}>
-                    {item.device?.device_img
-                      ? <>
-                          <img src={item.device.device_img} alt="" style={{ width: 60, height: 44, objectFit: 'cover', borderRadius: 7, border: `1px solid ${BORDER}`, display: 'block' }} />
-                          <Box sx={{ position: 'absolute', inset: 0, borderRadius: 7, opacity: 0, background: 'rgba(0,0,0,0)', display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'all 0.15s', '&:hover': { background: 'rgba(0,0,0,0.28)', opacity: 1 } }}>
-                            <ZoomInIcon sx={{ color: '#fff', fontSize: 20 }} />
-                          </Box>
-                        </>
-                      : <Box sx={{ width: 60, height: 44, borderRadius: 1.5, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 22, color: AMBER }} /></Box>}
-                  </Box>
-
-                  {/* Name + code */}
-                  <Box>
-                    <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.85rem' }}>{item.device?.cam_name ?? '—'}</Typography>
-                    <Typography sx={{ color: AMBER, fontSize: '0.72rem', fontFamily: '"Sora", sans-serif' }}>{item.code_name}</Typography>
-                  </Box>
-
-                  <Typography sx={{ color: MUTED, fontSize: '0.78rem', fontFamily: 'monospace' }}>{item.serial_no}</Typography>
-                  {/* Status — read-only chip */}
-                  {/* <Chip label={item.status} size="small" sx={{ background: sc.bg, color: sc.color, border: `1px solid ${sc.border}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.68rem', height: 22, width: 'fit-content' }} /> */}
-
-                  <Chip label={item.current_condition} size="small" sx={{ background: item.current_condition === 'working' ? 'rgba(105,219,124,0.1)' : 'rgba(211,47,47,0.1)', color: item.current_condition === 'working' ? '#2E7D32' : '#B71C1C', border: `1px solid ${item.current_condition === 'working' ? 'rgba(105,219,124,0.3)' : 'rgba(211,47,47,0.3)'}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.68rem', height: 22, textTransform: 'capitalize', width: 'fit-content' }} />
-
-                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                    {item.gps_installed ? <GpsFixedIcon sx={{ fontSize: 16, color: '#2E7D32' }} /> : <Typography sx={{ color: MUTED, fontSize: '0.75rem' }}>—</Typography>}
-                  </Box>
-
-                  {/* Edit */}
-                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                    <Tooltip title="Edit unit">
-                      <IconButton size="small" onClick={() => setEditItem(item)} sx={{ color: MUTED, '&:hover': { color: AMBER } }}>
-                        <EditIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-
-                  {/* Delete */}
-                  <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-                    <Tooltip title="Delete unit">
-                      <IconButton size="small" onClick={() => handleDelete(item)} sx={{ color: MUTED, '&:hover': { color: '#B71C1C' } }}>
-                        <DeleteIcon fontSize="small" />
-                      </IconButton>
-                    </Tooltip>
-                  </Box>
-                  </Box>
-                );
-              })}
-        </Box>
+      <Paper
+        elevation={0}
+        sx={{
+          borderRadius: 3,
+          border: '1px solid #eee',
+          overflow: 'hidden',
+          backgroundColor: '#fff',
+          boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+        }}
+      >
+        <DataGrid
+          rows={inventoryRows}
+          columns={inventoryColumns}
+          disableRowSelectionOnClick
+          pagination
+          pageSizeOptions={[10, 25, 50, 100]}
+          initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
+          slots={{ toolbar: GridToolbar }}
+          slotProps={{ toolbar: { showQuickFilter: true } }}
+          sx={{
+            border: 0,
+            minHeight: 520,
+            '& .MuiDataGrid-columnHeaders': {
+              minHeight: 56,
+              backgroundColor: '#fafafa',
+              borderTopLeftRadius: 12,
+              borderTopRightRadius: 12,
+            },
+            '& .MuiDataGrid-columnHeaderTitle': {
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              letterSpacing: '0.04em',
+            },
+            '& .MuiDataGrid-columnHeader[data-field="imageUrl"]': {
+              pl: 2,
+            },
+            '& .MuiDataGrid-cell[data-field="imageUrl"]': {
+              pl: 2,
+            },
+            '& .MuiDataGrid-row': { transition: 'background-color 0.2s ease' },
+            '& .MuiDataGrid-row:hover': { backgroundColor: '#f8f8f8' },
+            '& .MuiDataGrid-cell': { py: 1, fontFamily: '"DM Sans", sans-serif' },
+            '& .MuiDataGrid-toolbarContainer': { p: 1.5, gap: 1 },
+          }}
+        />
       </Paper>
 
       <AddDeviceDialog open={addDeviceOpen} onClose={() => setAddDeviceOpen(false)} onSaved={onRefresh} />
