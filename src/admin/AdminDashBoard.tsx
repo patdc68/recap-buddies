@@ -1783,7 +1783,7 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
       <Paper
         elevation={0}
         sx={{
-          borderRadius: 4,
+          borderRadius: 3,
           border: '1px solid #eee',
           overflow: 'hidden',
           backgroundColor: '#fff',
@@ -1802,8 +1802,23 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
           sx={{
             border: 0,
             minHeight: 520,
-            '& .MuiDataGrid-columnHeaders': { backgroundColor: '#fafafa' },
-            '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700 },
+            '& .MuiDataGrid-columnHeaders': {
+              minHeight: 56,
+              backgroundColor: '#fafafa',
+              borderTopLeftRadius: 12,
+              borderTopRightRadius: 12,
+            },
+            '& .MuiDataGrid-columnHeaderTitle': {
+              fontWeight: 700,
+              fontSize: '0.8rem',
+              letterSpacing: '0.04em',
+            },
+            '& .MuiDataGrid-columnHeader[data-field="imageUrl"]': {
+              pl: 2,
+            },
+            '& .MuiDataGrid-cell[data-field="imageUrl"]': {
+              pl: 2,
+            },
             '& .MuiDataGrid-row': { transition: 'background-color 0.2s ease' },
             '& .MuiDataGrid-row:hover': { backgroundColor: '#f8f8f8' },
             '& .MuiDataGrid-cell': { py: 1, fontFamily: '"DM Sans", sans-serif' },
