@@ -254,11 +254,6 @@ const InfoBox: React.FC<{ label: string; children: React.ReactNode }> = ({ label
   </Box>
 );
 
-const getRentalDayCount = (startDate: string, endDate: string) => {
-  const start = dayjs(startDate).startOf('day');
-  const end = dayjs(endDate).startOf('day');
-  return Math.max(end.diff(start, 'day'), 1);
-};
 
 const getSelfieInstructionTitle = (inst?: RbSelfieVerificationInst | null) =>
   inst?.instruction_name ?? null;
@@ -528,15 +523,10 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
               InputLabelProps={{ shrink: true }}
             />
           </Box>
-          {[
-            { label: 'Actual Returned', val: rental.actual_return_date ? dayjs(rental.actual_return_date).format('MMM D, YYYY') : 'Not returned yet' },
-            { label: 'Duration',   val: `${getRentalDayCount(startDate || rental.rent_date_start, endDate || rental.rent_date_end)} days` },
-          ].map((d) => (
-            <Box key={d.label} sx={{ flex: 1, p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
-              <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.25 }}>{d.label}</Typography>
-              <Typography sx={{ color: ESPRESSO, fontSize: '0.85rem', fontWeight: 600 }}>{d.val}</Typography>
-            </Box>
-          ))}
+          <Box sx={{ flex: 1, p: 1.5, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.25 }}>Actual Returned</Typography>
+            <Typography sx={{ color: ESPRESSO, fontSize: '0.85rem', fontWeight: 600 }}>{rental.actual_return_date ? dayjs(rental.actual_return_date).format('MMM D, YYYY') : 'Not returned yet'}</Typography>
+          </Box>
         </Box>
         {isDateRangeInvalid && (
           <FormHelperText error>End date must be on or after start date.</FormHelperText>
@@ -1013,34 +1003,62 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
                   </Box>
                 </Box>
 
-                {group.map((r) => {
-                  const meta = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META.submitted;
-                  return (
-                    <Box key={r.id} sx={{ px: 3, py: 1.8, borderBottom: `1px solid rgba(201,151,58,0.06)`, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 2, '&:last-child': { borderBottom: 'none' }, '&:hover': { background: 'rgba(201,151,58,0.04)' }, transition: 'background 0.15s' }}>
-                      {r.item?.device?.device_img
-                        ? <img src={r.item.device.device_img} alt="" style={{ width: 40, height: 30, objectFit: 'cover', borderRadius: 5, border: `1px solid ${BORDER}`, flexShrink: 0 }} />
-                        : <Box sx={{ width: 40, height: 30, borderRadius: 1, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><CameraAltIcon sx={{ fontSize: 16, color: AMBER }} /></Box>}
-                      <Box sx={{ minWidth: 150 }}>
-                        <Typography sx={{ color: ESPRESSO, fontWeight: 600, fontSize: '0.85rem' }}>{r.item?.device?.cam_name ?? '—'}</Typography>
-                        <Typography sx={{ color: AMBER, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif' }}>{r.item?.code_name ?? '—'}</Typography>
+                <Box sx={{ overflowX: { xs: 'visible', md: 'auto' } }}>
+                  {group.map((r) => {
+                    const meta = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META.submitted;
+                    const isHubPickup = Boolean(r.hub_pick_up_addr);
+                    const typeLabel = isHubPickup ? 'Hub' : 'Delivery';
+                    const pickupLocation = r.pickupBranch?.location_name ?? r.delivery_addr ?? '—';
+
+                    return (
+                      <Box
+                        key={r.id}
+                        sx={{
+                          px: 3,
+                          py: 1.8,
+                          minWidth: { xs: 'auto', md: 900 },
+                          borderBottom: `1px solid rgba(201,151,58,0.06)`,
+                          display: 'grid',
+                          gridTemplateColumns: {
+                            xs: '56px minmax(0, 1fr)',
+                            md: '64px minmax(220px, 1.6fr) minmax(180px, 1fr) minmax(150px, 0.8fr) minmax(120px, 0.7fr) 120px',
+                          },
+                          alignItems: 'center',
+                          gap: { xs: 1.5, md: 2 },
+                          '&:last-child': { borderBottom: 'none' },
+                          '&:hover': { background: 'rgba(201,151,58,0.04)' },
+                          transition: 'background 0.15s',
+                        }}
+                      >
+                        {r.item?.device?.device_img
+                          ? <img src={r.item.device.device_img} alt="" style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 8, border: `1px solid ${BORDER}` }} />
+                          : <Box sx={{ width: 56, height: 42, borderRadius: 2, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 18, color: AMBER }} /></Box>}
+                        <Box sx={{ minWidth: 0 }}>
+                          <Typography sx={{ color: ESPRESSO, fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.item?.device?.cam_name ?? '—'}</Typography>
+                          <Typography sx={{ color: AMBER, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.item?.code_name ?? '—'}</Typography>
+                        </Box>
+                        <Box sx={{ minWidth: 0, gridColumn: { xs: '2', md: 'auto' } }}>
+                          <Typography sx={{ color: INK, fontSize: '0.82rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—'}</Typography>
+                          <Typography sx={{ color: MUTED, fontSize: '0.7rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.renter?.mobile_no ?? ''}</Typography>
+                        </Box>
+                        <Box sx={{ minWidth: 0, gridColumn: { xs: '2', md: 'auto' } }}>
+                          <Typography sx={{ color: MUTED, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Returns</Typography>
+                          <Typography sx={{ color: INK, fontSize: '0.8rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{dayjs(r.rent_date_end).format('MMM D, YYYY')}</Typography>
+                        </Box>
+                        <Box sx={{ minWidth: 0, gridColumn: { xs: '2', md: 'auto' }, display: 'flex', alignItems: 'center', gap: 0.6 }}>
+                          {isHubPickup ? <StorefrontIcon sx={{ fontSize: 13, color: MUTED, flexShrink: 0 }} /> : <LocalShippingIcon sx={{ fontSize: 13, color: MUTED, flexShrink: 0 }} />}
+                          <Box sx={{ minWidth: 0 }}>
+                            <Typography sx={{ color: MUTED, fontSize: '0.72rem', fontWeight: 700 }}>{typeLabel}</Typography>
+                            <Typography sx={{ color: MUTED, fontSize: '0.68rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pickupLocation}</Typography>
+                          </Box>
+                        </Box>
+                        <Box sx={{ gridColumn: { xs: '2', md: 'auto' }, justifySelf: { xs: 'start', md: 'end' } }}>
+                          <Chip label={meta.label} size="small" sx={{ background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.68rem', height: 22 }} />
+                        </Box>
                       </Box>
-                      <Box sx={{ minWidth: 140 }}>
-                        <Typography sx={{ color: INK, fontSize: '0.82rem', fontWeight: 500 }}>{r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—'}</Typography>
-                        <Typography sx={{ color: MUTED, fontSize: '0.7rem' }}>{r.renter?.mobile_no ?? ''}</Typography>
-                      </Box>
-                      <Box>
-                        <Typography sx={{ color: MUTED, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.06em' }}>Returns</Typography>
-                        <Typography sx={{ color: INK, fontSize: '0.8rem', fontWeight: 500 }}>{dayjs(r.rent_date_end).format('MMM D, YYYY')}</Typography>
-                      </Box>
-                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                        {r.hub_pick_up_addr
-                          ? <><StorefrontIcon sx={{ fontSize: 13, color: MUTED }} /><Typography sx={{ color: MUTED, fontSize: '0.72rem' }}>Hub</Typography></>
-                          : <><LocalShippingIcon sx={{ fontSize: 13, color: MUTED }} /><Typography sx={{ color: MUTED, fontSize: '0.72rem' }}>Delivery</Typography></>}
-                      </Box>
-                      <Chip label={meta.label} size="small" sx={{ ml: 'auto', background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.68rem', height: 22 }} />
-                    </Box>
-                  );
-                })}
+                    );
+                  })}
+                </Box>
               </Paper>
             ))}
           </Box>

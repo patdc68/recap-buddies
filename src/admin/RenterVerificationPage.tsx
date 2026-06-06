@@ -245,7 +245,6 @@ const RenterVerificationPage: React.FC = () => {
   const selfieInstructionTitle = getSelfieInstructionTitle(selfieInst);
   const selfieInstructionDescription = getSelfieInstructionDescription(selfieInst);
   const statusMeta = RENTAL_STATUS_META[status] ?? RENTAL_STATUS_META.submitted;
-  const days = dayjs(rental.rent_date_end).diff(dayjs(rental.rent_date_start), 'day');
 
   return (
     <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
@@ -356,7 +355,6 @@ const RenterVerificationPage: React.FC = () => {
 
             <InfoRow label="Start Date"     value={dayjs(rental.rent_date_start).format('MMMM D, YYYY')} />
             <InfoRow label="End Date"       value={dayjs(rental.rent_date_end).format('MMMM D, YYYY')} />
-            <InfoRow label="Duration"       value={`${days} day${days !== 1 ? 's' : ''}`} />
             <InfoRow label="Pickup Time"    value={formatTime(rental.pickup_time)} />
             <InfoRow label="Return Time"    value={formatTime(rental.return_time)} />
             <InfoRow label="Location Type"  value={rental.loc_usage ? rental.loc_usage.charAt(0).toUpperCase() + rental.loc_usage.slice(1) : null} />
