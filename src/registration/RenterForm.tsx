@@ -3,7 +3,7 @@ import {
   Box, Typography, TextField, Button, Alert, CircularProgress,
   Select, MenuItem, FormControl, InputLabel, Paper, Divider, Chip,
   LinearProgress, FormHelperText, Stepper, Step, StepLabel,
-  ToggleButtonGroup, ToggleButton, type SelectChangeEvent,
+  ToggleButtonGroup, ToggleButton, Snackbar, type SelectChangeEvent,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
@@ -27,6 +27,7 @@ import AccountBalanceIcon   from '@mui/icons-material/AccountBalance';
 import dayjs, { Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
+import { sendRentalStatusEmail } from '../services/emailService';
 import type { RbItem, RbDevice, RbBranch, RbRenter, RbSelfieVerificationInst, LocUsage } from '../service/supabaseClient';
 import PageLayout from '../components/PageLayout';
 import FileUpload, { type FileUploadResult } from '../components/FileUpload';
@@ -520,6 +521,7 @@ const RenterForm: React.FC = () => {
   const [submitError, setSubmitError] = useState('');
   const [done, setDone]               = useState(false);
   const [countdown, setCountdown]     = useState(5);
+  const [snackbar, setSnackbar]       = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
 
   useEffect(() => {
     Promise.all([
@@ -741,7 +743,7 @@ const RenterForm: React.FC = () => {
 
       setSubmitError('Saving rental form…');
       const selectedItem = items.find((i) => i.id === form.cam_name_id_fk);
-      const { error } = await supabase.from('RB_RENTAL_FORM').insert({
+      const rentalPayload = {
         cam_name_id_fk:            form.cam_name_id_fk,
         renter_id_fk:              renter?.id ?? null,
         branch_id_fk:              selectedItem?.branch_id_fk ?? null,
@@ -759,8 +761,21 @@ const RenterForm: React.FC = () => {
         hub_return_addr:           form.return_mode === 'hub'      ? form.hub_return_addr  : null,
         return_addr:               form.return_mode === 'delivery' ? form.return_addr      : null,
         status: 'submitted',
-      });
+      };
+
+      const { data: createdRental, error } = await supabase
+        .from('RB_RENTAL_FORM')
+        .insert(rentalPayload)
+        .select()
+        .single();
       if (error) throw new Error(`DB insert failed (${error.code}): ${error.message}${error.details ? ` | ${error.details}` : ''}${error.hint ? ` | Hint: ${error.hint}` : ''}`);
+
+      try {
+        await sendRentalStatusEmail({ status: 'submitted', rental: createdRental, renter });
+      } catch (emailError) {
+        console.error('Failed to send booking submitted email:', emailError);
+        setSnackbar({ open: true, msg: 'Booking submitted, but confirmation email could not be sent.', severity: 'warning' });
+      }
 
       setSubmitError('');
       setDone(true);
@@ -797,6 +812,9 @@ const RenterForm: React.FC = () => {
             <Typography sx={{ color: '#666666', fontSize: '0.8rem', fontFamily: '"Sora", sans-serif' }}>Redirecting to dashboard in {countdown}s…</Typography>
           </Box>
         </Box>
+        <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar((current) => ({ ...current, open: false }))} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+          <Alert severity={snackbar.severity} onClose={() => setSnackbar((current) => ({ ...current, open: false }))}>{snackbar.msg}</Alert>
+        </Snackbar>
       </PageLayout>
     );
   }
@@ -886,6 +904,10 @@ const RenterForm: React.FC = () => {
           <Box key={i} sx={{ width: i === activeStep ? 20 : 8, height: 8, borderRadius: 4, background: i < activeStep ? '#69DB7C' : i === activeStep ? '#111111' : 'rgba(201,151,58,0.15)', transition: 'all 0.3s ease' }} />
         ))}
       </Box>
+
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar((current) => ({ ...current, open: false }))} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((current) => ({ ...current, open: false }))}>{snackbar.msg}</Alert>
+      </Snackbar>
     </PageLayout>
   );
 };
