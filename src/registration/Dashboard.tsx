@@ -243,7 +243,7 @@ const Dashboard: React.FC = () => {
   const [saveOpen, setSaveOpen] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' });
   const [profileSaving, setProfileSaving] = useState(false);
   const [profileUploading, setProfileUploading] = useState(false);
-  const [profile, setProfile] = useState({ fname: '', lname: '', contact: '', email: '' });
+  const [profile, setProfile] = useState({ fname: '', lname: '', contact: '', email: '', emergencyContactPerson: '', emergencyContactRelationship: '' });
   const [primaryIdFront, setPrimaryIdFront] = useState<File | null>(null);
   const [primaryIdBack, setPrimaryIdBack] = useState<File | null>(null);
   const [secondaryIdFront, setSecondaryIdFront] = useState<File | null>(null);
@@ -265,6 +265,8 @@ const Dashboard: React.FC = () => {
           lname: renterData.renter_lname ?? '',
           contact: renterData.mobile_no ?? '',
           email: renterData.email ?? '',
+          emergencyContactPerson: renterData.emergency_contact_person ?? '',
+          emergencyContactRelationship: renterData.emergency_contact_relationship ?? '',
         });
 
         const { data: rentalData } = await supabase
@@ -357,13 +359,15 @@ const Dashboard: React.FC = () => {
         renter_lname: profile.lname,
         mobile_no: profile.contact,
         email: profile.email,
+        emergency_contact_person: profile.emergencyContactPerson,
+        emergency_contact_relationship: profile.emergencyContactRelationship,
         primary_id_front: primaryFront,
         primary_id_back: primaryBack,
         secondary_id_front: secondaryFront,
         secondary_id_back: secondaryBack,
       }).eq('id', renter.id);
       if (error) throw error;
-      setRenter({ ...renter, renter_fname: profile.fname, renter_lname: profile.lname, mobile_no: profile.contact, email: profile.email, primary_id_front: primaryFront, primary_id_back: primaryBack, secondary_id_front: secondaryFront, secondary_id_back: secondaryBack });
+      setRenter({ ...renter, renter_fname: profile.fname, renter_lname: profile.lname, mobile_no: profile.contact, email: profile.email, emergency_contact_person: profile.emergencyContactPerson, emergency_contact_relationship: profile.emergencyContactRelationship, primary_id_front: primaryFront, primary_id_back: primaryBack, secondary_id_front: secondaryFront, secondary_id_back: secondaryBack });
       setPrimaryIdFront(null); setPrimaryIdBack(null); setSecondaryIdFront(null); setSecondaryIdBack(null);
       setSaveOpen({ open: true, msg: 'Profile updated successfully.', severity: 'success' });
     } catch (e) {
@@ -478,6 +482,8 @@ const Dashboard: React.FC = () => {
             <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth label="Last name" value={profile.lname} onChange={(e) => setProfile((p) => ({ ...p, lname: e.target.value }))} /></Grid>
             <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth label="Contact number" value={profile.contact} onChange={(e) => setProfile((p) => ({ ...p, contact: e.target.value }))} /></Grid>
             <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth label="Email" value={profile.email} onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))} /></Grid>
+            <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth label="Emergency Contact Person" value={profile.emergencyContactPerson} onChange={(e) => setProfile((p) => ({ ...p, emergencyContactPerson: e.target.value }))} /></Grid>
+            <Grid size={{ xs: 12, md: 6 }}><TextField fullWidth label="Emergency Contact Relationship" value={profile.emergencyContactRelationship} onChange={(e) => setProfile((p) => ({ ...p, emergencyContactRelationship: e.target.value }))} /></Grid>
             <Grid size={{ xs: 12, md: 6 }}>
               <Typography sx={{ fontSize: '0.78rem', mb: 1 }}>Primary ID Front</Typography>
               {(primaryIdFront || renter.primary_id_front) && <img src={primaryIdFront ? URL.createObjectURL(primaryIdFront) : (renter.primary_id_front ?? '')} alt="Primary ID Front" style={{ width: '100%', maxHeight: 180, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(0,0,0,0.1)' }} />}
