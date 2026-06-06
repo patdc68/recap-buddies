@@ -15,7 +15,6 @@ import SaveIcon from '@mui/icons-material/Save';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '../components/PageLayout';
 import { supabase } from '../service/supabaseClient';
-import type { Session } from '@supabase/supabase-js';
 
 interface ResetPasswordForm {
   newPassword: string;
@@ -37,14 +36,25 @@ const ResetPasswordPage: React.FC = () => {
   const [sessionReady, setSessionReady] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successOpen, setSuccessOpen] = useState(false);
-  const [recoverySession, setRecoverySession] = useState<Session | null>(null);
-
 
   useEffect(() => {
     let isActive = true;
 
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isActive) return;
+
+      if (event === 'PASSWORD_RECOVERY' && session) {
+        setSessionReady(true);
+        setErrorMessage('');
+        setCheckingSession(false);
+      }
+    });
+
     const initializeRecoverySession = async () => {
       setCheckingSession(true);
+      setSessionReady(false);
       setErrorMessage('');
 
       try {
@@ -52,20 +62,10 @@ const ResetPasswordPage: React.FC = () => {
         const code = params.get('code');
 
         if (code) {
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
 
           if (error) {
             console.error('Failed to exchange recovery code:', error);
-            if (isActive) {
-              setSessionReady(false);
-              setErrorMessage(INVALID_LINK_MESSAGE);
-            }
-            return;
-          }
-
-          if (isActive) {
-            setRecoverySession(data.session ?? null);
-            setSessionReady(!!data.session);
           }
         }
 
@@ -74,24 +74,14 @@ const ResetPasswordPage: React.FC = () => {
         const refreshToken = hashParams.get('refresh_token');
         const resetType = hashParams.get('type');
 
-        if (accessToken && refreshToken && resetType === 'recovery') {
-          const { data, error } = await supabase.auth.setSession({
+        if (accessToken && refreshToken && (!resetType || resetType === 'recovery')) {
+          const { error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
 
           if (error) {
             console.error('Failed to initialize recovery session from URL tokens:', error);
-            if (isActive) {
-              setSessionReady(false);
-              setErrorMessage(INVALID_LINK_MESSAGE);
-            }
-            return;
-          }
-
-          if (isActive) {
-            setRecoverySession(data.session ?? null);
-            setSessionReady(!!data.session);
           }
         }
 
@@ -99,11 +89,19 @@ const ResetPasswordPage: React.FC = () => {
 
         if (!isActive) return;
 
-        setRecoverySession(data.session ?? null);
-        setSessionReady(!!data.session);
-
-        if (!data.session) {
+        if (data.session) {
+          setSessionReady(true);
+          setErrorMessage('');
+        } else {
+          setSessionReady(false);
           setErrorMessage(MISSING_SESSION_MESSAGE);
+        }
+      } catch (error) {
+        console.error('Failed to initialize password reset session:', error);
+
+        if (isActive) {
+          setSessionReady(false);
+          setErrorMessage(INVALID_LINK_MESSAGE);
         }
       } finally {
         if (isActive) setCheckingSession(false);
@@ -111,16 +109,6 @@ const ResetPasswordPage: React.FC = () => {
     };
 
     void initializeRecoverySession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'PASSWORD_RECOVERY' && session) {
-        setRecoverySession(session);
-        setErrorMessage('');
-        setSessionReady(true);
-      }
-    });
 
     return () => {
       isActive = false;
@@ -152,7 +140,7 @@ const ResetPasswordPage: React.FC = () => {
     (e: ChangeEvent<HTMLInputElement>) => {
       setForm((current) => ({ ...current, [field]: e.target.value }));
       setErrors((current) => ({ ...current, [field]: undefined }));
-      if (recoverySession) setErrorMessage('');
+      if (sessionReady) setErrorMessage('');
     };
 
   const handleSubmit = async () => {
@@ -165,13 +153,10 @@ const ResetPasswordPage: React.FC = () => {
       const { data } = await supabase.auth.getSession();
 
       if (!data.session) {
-        setRecoverySession(null);
         setSessionReady(false);
         setErrorMessage(MISSING_SESSION_MESSAGE);
         return;
       }
-
-      setRecoverySession(data.session);
 
       const { error } = await supabase.auth.updateUser({
         password: form.newPassword,
@@ -246,7 +231,7 @@ const ResetPasswordPage: React.FC = () => {
           {checkingSession ? (
             <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, py: 4 }}>
               <CircularProgress size={22} />
-              <Typography sx={{ color: '#666666' }}>Checking password reset session…</Typography>
+              <Typography sx={{ color: '#666666' }}>Verifying password reset link...</Typography>
             </Box>
           ) : !sessionReady ? (
             <Alert
