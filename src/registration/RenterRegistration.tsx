@@ -42,7 +42,6 @@ import type { RbSelfieVerificationInst } from '../service/supabaseClient';
 import PageLayout from '../components/PageLayout';
 import CameraCapture from '../components/CameraCapture';
 import FileUpload, { type FileUploadResult } from '../components/FileUpload';
-import rentalContractAgreement from '../../official rental contract agreement.md?raw';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -444,7 +443,18 @@ const RenterRegistration: React.FC = () => {
   const [done, setDone]                             = useState(false);
   const [countdown, setCountdown]                   = useState(3);
   const [termsOpen, setTermsOpen]                   = useState(false);
+  const [termsHtml, setTermsHtml]                   = useState('');
   const [acceptedTerms, setAcceptedTerms]           = useState(false);
+
+  useEffect(() => {
+    const loadTerms = async () => {
+      const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement');
+      if (error || !data) return;
+      setTermsHtml(await data.text());
+    };
+
+    void loadTerms();
+  }, []);
   const [primaryGuideOpen, setPrimaryGuideOpen]     = useState(false);
   const [secondaryGuideOpen, setSecondaryGuideOpen] = useState(false);
 
@@ -789,12 +799,10 @@ const RenterRegistration: React.FC = () => {
       >
         <DialogTitle>Official Rental Contract Agreement</DialogTitle>
         <DialogContent dividers>
-          <Typography
-            variant="body2"
-            sx={{ whiteSpace: 'pre-wrap', color: '#3A2A12', lineHeight: 1.7, mb: 2 }}
-          >
-            {rentalContractAgreement}
-          </Typography>
+          <Box
+            sx={{ color: '#3A2A12', lineHeight: 1.7, mb: 2, '& p': { m: 0, mb: 1.5 }, '& ul, & ol': { pl: 2.5 } }}
+            dangerouslySetInnerHTML={{ __html: termsHtml || '<p>No terms available right now.</p>' }}
+          />
           <FormControlLabel
             control={(
               <Checkbox
