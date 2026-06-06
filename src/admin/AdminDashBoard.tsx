@@ -23,7 +23,7 @@ import { emailService } from '../services/emailService';
 import { EMAIL_STATUS_MAP } from '../constants/emailStatusMap';
 import type {
   RbUser, RbBranch, RbDevice, RbItem, RbRenter,
-  RbRentalForm, ItemStatus, ItemCondition, RentalStatus,
+  RbRentalForm, RbSelfieVerificationInst, ItemStatus, ItemCondition, RentalStatus,
 } from '../service/supabaseClient';
 
 import DashboardIcon          from '@mui/icons-material/Dashboard';
@@ -108,10 +108,11 @@ const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 interface EnrichedItem extends RbItem { device?: RbDevice; }
 
 interface EnrichedRental extends RbRentalForm {
-  item?:         EnrichedItem;
-  renter?:       RbRenter;
-  pickupBranch?: RbBranch;
-  returnBranch?: RbBranch;
+  item?:              EnrichedItem;
+  renter?:            RbRenter;
+  pickupBranch?:      RbBranch;
+  returnBranch?:      RbBranch;
+  selfieInstruction?: RbSelfieVerificationInst | null;
 }
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
@@ -215,6 +216,12 @@ const getRentalDayCount = (startDate: string, endDate: string) => {
   return Math.max(end.diff(start, 'day'), 1);
 };
 
+const getSelfieInstructionTitle = (inst?: RbSelfieVerificationInst | null) =>
+  inst?.title || inst?.name || inst?.instruction_title || inst?.instruction_name || null;
+
+const getSelfieInstructionDescription = (inst?: RbSelfieVerificationInst | null) =>
+  inst?.instruction || inst?.description || inst?.instruction_description || inst?.instruction_desc || null;
+
 // ─── Rental Detail Dialog ─────────────────────────────────────────────────────
 
 interface RentalDetailDialogProps {
@@ -294,6 +301,8 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
   }, [open, rental?.id, rental?.renter_id_fk]);
   if (!rental) return null;
   const selectedCamera = cameraOptions.find((it) => it.id === cameraId) ?? rental.item;
+  const selfieInstructionTitle = getSelfieInstructionTitle(rental.selfieInstruction);
+  const selfieInstructionDescription = getSelfieInstructionDescription(rental.selfieInstruction);
 
   const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META.submitted;
 
@@ -389,6 +398,16 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
               }}
             />
           </Box>
+        </InfoBox>
+
+        {/* Selfie Verification Instruction */}
+        <InfoBox label="Selfie Verification Instruction">
+          <Typography sx={{ color: selfieInstructionTitle ? ESPRESSO : MUTED, fontWeight: 700, fontSize: '0.9rem', mb: 0.5, fontStyle: selfieInstructionTitle ? 'normal' : 'italic' }}>
+            {selfieInstructionTitle ?? 'Not provided'}
+          </Typography>
+          <Typography sx={{ color: selfieInstructionDescription ? MUTED : MUTED, fontSize: '0.82rem', lineHeight: 1.6, whiteSpace: 'pre-wrap', fontStyle: selfieInstructionDescription ? 'normal' : 'italic' }}>
+            {selfieInstructionDescription ?? 'Not provided'}
+          </Typography>
         </InfoBox>
 
         {/* Dates */}
@@ -2235,13 +2254,29 @@ const AdminDashboard: React.FC = () => {
       (rentersRaw      ?? []).forEach((r: RbRenter)      => { rMap[r.id]  = r; });
       (rentBranchesRaw ?? []).forEach((b: RbBranch)      => { bMap[b.id]  = b; });
 
-      setRentals(rf.map((r) => ({
-        ...r,
-        item:         r.cam_name_id_fk  ? iMap[r.cam_name_id_fk]   : undefined,
-        renter:       r.renter_id_fk    ? rMap[r.renter_id_fk]     : undefined,
-        pickupBranch: r.hub_pick_up_addr ? bMap[r.hub_pick_up_addr] : undefined,
-        returnBranch: r.hub_return_addr  ? bMap[r.hub_return_addr]  : undefined,
-      })));
+      const selfieInstructionIds = [
+        ...new Set((rentersRaw ?? [])
+          .map((r: RbRenter) => r.selfie_verification_id)
+          .filter(Boolean)),
+      ] as string[];
+      const { data: selfieInstructionsRaw } = selfieInstructionIds.length
+        ? await supabase.from('RB_SELFIE_VERIFICATION_INST').select('*').in('id', selfieInstructionIds)
+        : { data: [] };
+      const selfieInstructionMap = new Map<string, RbSelfieVerificationInst>(
+        ((selfieInstructionsRaw ?? []) as RbSelfieVerificationInst[]).map((instruction) => [instruction.id, instruction])
+      );
+
+      setRentals(rf.map((r) => {
+        const renter = r.renter_id_fk ? rMap[r.renter_id_fk] : undefined;
+        return {
+          ...r,
+          item:              r.cam_name_id_fk  ? iMap[r.cam_name_id_fk]   : undefined,
+          renter,
+          pickupBranch:      r.hub_pick_up_addr ? bMap[r.hub_pick_up_addr] : undefined,
+          returnBranch:      r.hub_return_addr  ? bMap[r.hub_return_addr]  : undefined,
+          selfieInstruction: renter?.selfie_verification_id ? selfieInstructionMap.get(renter.selfie_verification_id) ?? null : null,
+        };
+      }));
     } else {
       setRentals([]);
     }

@@ -63,10 +63,10 @@ const formatTime = (value?: string | null) => {
 };
 
 const getSelfieInstructionTitle = (inst: RbSelfieVerificationInst | null) =>
-  inst?.instruction_title || inst?.instruction_name || null;
+  inst?.title || inst?.name || inst?.instruction_title || inst?.instruction_name || null;
 
 const getSelfieInstructionDescription = (inst: RbSelfieVerificationInst | null) =>
-  inst?.instruction_description || inst?.instruction_desc || null;
+  inst?.instruction || inst?.description || inst?.instruction_description || inst?.instruction_desc || null;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -153,15 +153,15 @@ const RenterVerificationPage: React.FC = () => {
         (branches ?? []).forEach((b: RbBranch) => { branchMap[b.id] = b; });
       }
 
-      // 5. Selfie instruction (supports both rental-level and renter-level selections)
+      // 5. Selfie instruction: rental form → renter → selfie verification instruction
       let selfieInst: RbSelfieVerificationInst | null = null;
-      const selfieInstructionId =
-        rental.selfie_verification_inst_id ??
-        rental.selfie_verification_id ??
-        renter.selfie_verification_inst_id ??
-        renter.selfie_verification_id;
+      const selfieInstructionId = renter.selfie_verification_id;
       if (selfieInstructionId) {
-        const { data: si } = await supabase.from('RB_SELFIE_VERIFICATION_INST').select('*').eq('id', selfieInstructionId).maybeSingle();
+        const { data: si } = await supabase
+          .from('RB_SELFIE_VERIFICATION_INST')
+          .select('*')
+          .eq('id', selfieInstructionId)
+          .maybeSingle();
         if (si) selfieInst = si as RbSelfieVerificationInst;
       }
 

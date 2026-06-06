@@ -93,10 +93,14 @@ export interface RbRenter {
 
 export interface RbSelfieVerificationInst {
   id: string;
-  instruction_name: string;
+  instruction_name?: string | null;
   instruction_title?: string | null;
-  instruction_desc: string;
+  title?: string | null;
+  name?: string | null;
+  instruction_desc?: string | null;
   instruction_description?: string | null;
+  instruction?: string | null;
+  description?: string | null;
   created_at: string;
   display_order?: number | null;
 }
