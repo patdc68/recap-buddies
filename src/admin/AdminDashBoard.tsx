@@ -763,39 +763,65 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
             <IconButton onClick={onClose} size="small" sx={{ color: MUTED }}><CloseIcon fontSize="small" /></IconButton>
           </Box>
         </DialogTitle>
-        <DialogContent sx={{ p: { xs: 1.5, sm: 2.5 }, pt: '0 !important' }}>
+        <DialogContent sx={{ p: { xs: 1.5, sm: 2.5 }, pt: '0 !important', overflowX: 'visible' }}>
           {rentals.length === 0 ? (
             <Box sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: `1px solid ${BORDER}`, background: '#fff' }}>
               <Typography sx={{ color: MUTED, fontFamily: '"Sora", sans-serif', fontSize: '0.85rem' }}>No rentals in this category.</Typography>
             </Box>
           ) : (
-            <Box sx={{
-              borderRadius: 3,
-              border: '1px solid #eee',
-              overflow: 'hidden',
-              backgroundColor: '#fff',
-              width: '100%',
-              '& .MuiDataGrid-root': { border: 'none' },
-              '& .MuiDataGrid-columnHeaders': { background: '#fafafa', borderBottom: `1px solid ${BORDER}` },
-              '& .MuiDataGrid-columnHeaderTitle': { fontFamily: '"Sora", sans-serif', fontSize: '0.68rem', fontWeight: 800, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em' },
-              '& .MuiDataGrid-cell': { borderColor: 'rgba(17,17,17,0.08)', alignItems: 'center' },
-              '& .MuiDataGrid-row': { cursor: 'pointer' },
-              '& .MuiDataGrid-row:hover': { backgroundColor: 'rgba(201,151,58,0.05)' },
-            }}>
-              <DataGrid
-                rows={rentals}
-                columns={columns}
-                getRowId={(row) => row.id}
-                rowHeight={68}
-                columnHeaderHeight={46}
-                hideFooter={rentals.length <= 10}
-                initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
-                pageSizeOptions={[10, 25, 50]}
-                disableRowSelectionOnClick
-                onRowClick={(params) => handleRowClick(params.row as EnrichedRental)}
-                sx={{ minWidth: { xs: 780, md: 'auto' } }}
-              />
-            </Box>
+            <>
+              <Typography
+                sx={{
+                  display: { xs: 'block', sm: 'none' },
+                  color: MUTED,
+                  fontFamily: '"Sora", sans-serif',
+                  fontSize: '0.7rem',
+                  fontWeight: 600,
+                  mb: 1,
+                }}
+              >
+                Swipe left/right to view all columns
+              </Typography>
+              <Box
+                sx={{
+                  width: '100%',
+                  overflowX: 'auto',
+                  overflowY: 'hidden',
+                  WebkitOverflowScrolling: 'touch',
+                  pb: 0.5,
+                }}
+              >
+                <Box sx={{ minWidth: 900 }}>
+                  <Box sx={{
+                    borderRadius: 3,
+                    border: '1px solid #eee',
+                    overflow: 'hidden',
+                    backgroundColor: '#fff',
+                    width: '100%',
+                    '& .MuiDataGrid-root': { border: 'none' },
+                    '& .MuiDataGrid-columnHeaders': { background: '#fafafa', borderBottom: `1px solid ${BORDER}` },
+                    '& .MuiDataGrid-columnHeaderTitle': { fontFamily: '"Sora", sans-serif', fontSize: '0.68rem', fontWeight: 800, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em' },
+                    '& .MuiDataGrid-cell': { borderColor: 'rgba(17,17,17,0.08)', alignItems: 'center' },
+                    '& .MuiDataGrid-row': { cursor: 'pointer' },
+                    '& .MuiDataGrid-row:hover': { backgroundColor: 'rgba(201,151,58,0.05)' },
+                  }}>
+                    <DataGrid
+                      rows={rentals}
+                      columns={columns}
+                      getRowId={(row) => row.id}
+                      rowHeight={68}
+                      columnHeaderHeight={46}
+                      hideFooter={rentals.length <= 10}
+                      initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
+                      pageSizeOptions={[10, 25, 50]}
+                      disableRowSelectionOnClick
+                      onRowClick={(params) => handleRowClick(params.row as EnrichedRental)}
+                      sx={{ minWidth: 900 }}
+                    />
+                  </Box>
+                </Box>
+              </Box>
+            </>
           )}
         </DialogContent>
       </Dialog>
