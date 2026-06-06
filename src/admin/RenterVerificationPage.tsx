@@ -418,7 +418,7 @@ const RenterVerificationPage: React.FC = () => {
             {selfieInst && (
               <Box sx={{ flex: '1 1 220px', p: 2, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
                 <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.1em', mb: 0.5, fontWeight: 700 }}>
-                  Verification Instruction
+                  Selected Selfie Instruction
                 </Typography>
                 <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.9rem', mb: 0.5 }}>{selfieInst.instruction_name}</Typography>
                 <Typography sx={{ color: MUTED, fontSize: '0.82rem', lineHeight: 1.6 }}>{selfieInst.instruction_desc}</Typography>

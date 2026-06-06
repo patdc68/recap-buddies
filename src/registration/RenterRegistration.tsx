@@ -42,7 +42,6 @@ import type { RbSelfieVerificationInst } from '../service/supabaseClient';
 import PageLayout from '../components/PageLayout';
 import CameraCapture from '../components/CameraCapture';
 import FileUpload, { type FileUploadResult } from '../components/FileUpload';
-import rentalContractAgreement from '../../official rental contract agreement.md?raw';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -461,6 +460,9 @@ const RenterRegistration: React.FC = () => {
   const [countdown, setCountdown]                   = useState(3);
   const [termsOpen, setTermsOpen]                   = useState(false);
   const [acceptedTerms, setAcceptedTerms]           = useState(false);
+  const [termsContent, setTermsContent]             = useState('');
+  const [termsLoading, setTermsLoading]             = useState(false);
+  const [termsError, setTermsError]                 = useState('');
   const [primaryGuideOpen, setPrimaryGuideOpen]     = useState(false);
   const [secondaryGuideOpen, setSecondaryGuideOpen] = useState(false);
 
@@ -473,6 +475,28 @@ const RenterRegistration: React.FC = () => {
         if (data) setSelfieInstructions(data as RbSelfieVerificationInst[]);
       });
   }, []);
+
+
+  const loadTermsContent = useCallback(async () => {
+    setTermsLoading(true);
+    setTermsError('');
+    try {
+      const { data, error } = await supabase.storage
+        .from('terms_and_condition')
+        .download('agreement.md');
+      if (error) throw error;
+      setTermsContent(await data.text());
+    } catch (err) {
+      setTermsError(err instanceof Error ? err.message : 'Failed to load terms and conditions.');
+      setTermsContent('');
+    } finally {
+      setTermsLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (termsOpen && !termsContent && !termsLoading) void loadTermsContent();
+  }, [termsOpen, termsContent, termsLoading, loadTermsContent]);
 
   // Countdown redirect — declared before any conditional return
   useEffect(() => {
@@ -641,8 +665,11 @@ const RenterRegistration: React.FC = () => {
 
   const handleReviewAndSubmit = () => {
     if (!validate()) return;
+    setAcceptedTerms(false);
     setTermsOpen(true);
   };
+
+  const termsContainsHtml = /<([a-z][\w:-]*)(?:\s[^>]*)?>[\s\S]*?<\/\1>|<(br|hr|img|input|meta|link)(?:\s[^>]*)?\/?>/i.test(termsContent);
 
   const handleConfirmSubmit = async () => {
     if (!acceptedTerms) return;
@@ -809,12 +836,26 @@ const RenterRegistration: React.FC = () => {
       >
         <DialogTitle>Official Rental Contract Agreement</DialogTitle>
         <DialogContent dividers>
-          <Typography
-            variant="body2"
-            sx={{ whiteSpace: 'pre-wrap', color: '#3A2A12', lineHeight: 1.7, mb: 2 }}
-          >
-            {rentalContractAgreement}
-          </Typography>
+          {termsLoading ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, py: 3 }}>
+              <CircularProgress size={18} />
+              <Typography variant="body2">Loading terms and conditions…</Typography>
+            </Box>
+          ) : termsError ? (
+            <Alert severity="error" sx={{ mb: 2 }}>{termsError}</Alert>
+          ) : termsContainsHtml ? (
+            <Box
+              sx={{ color: '#3A2A12', lineHeight: 1.7, mb: 2, '& p': { mt: 0, mb: 1.5 } }}
+              dangerouslySetInnerHTML={{ __html: termsContent }}
+            />
+          ) : (
+            <Typography
+              variant="body2"
+              sx={{ whiteSpace: 'pre-wrap', color: '#3A2A12', lineHeight: 1.7, mb: 2 }}
+            >
+              {termsContent}
+            </Typography>
+          )}
           <FormControlLabel
             control={(
               <Checkbox
@@ -832,7 +873,7 @@ const RenterRegistration: React.FC = () => {
           <Button
             variant="contained"
             onClick={handleConfirmSubmit}
-            disabled={!acceptedTerms || submitting}
+            disabled={!acceptedTerms || submitting || termsLoading || !!termsError}
           >
             Agree & Submit
           </Button>

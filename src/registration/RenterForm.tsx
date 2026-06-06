@@ -4,7 +4,6 @@ import {
   Select, MenuItem, FormControl, InputLabel, Paper, Divider, Chip,
   LinearProgress, FormHelperText, Stepper, Step, StepLabel,
   ToggleButtonGroup, ToggleButton, type SelectChangeEvent,
-  List, ListItem, ListItemIcon, ListItemText,
 } from '@mui/material';
 import { DatePicker } from '@mui/x-date-pickers/DatePicker';
 import { TimePicker } from '@mui/x-date-pickers/TimePicker';
@@ -57,7 +56,7 @@ interface RentalForm {
 
 interface EnrichedItem extends RbItem { device?: RbDevice; }
 
-type RentalFormErrors = Partial<Record<keyof RentalForm | 'proof_of_purpose' | 'selfie_verification_img', string>>;
+type RentalFormErrors = Partial<Record<keyof RentalForm | 'proof_of_purpose' | 'selfie_verification_img' | 'selfie_verification_id', string>>;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -417,79 +416,86 @@ const StepReview: React.FC<StepReviewProps> = ({ form, items, branches, purposeP
 
 interface RepeatSelfieVerificationProps {
   instructions: RbSelfieVerificationInst[];
+  selectedInstructionId: string;
+  onInstructionSelect: (e: SelectChangeEvent) => void;
   selfiePreview: string | null;
   onSelfieCapture: (blob: Blob | null) => void;
+  instructionError?: string;
   error?: string;
   loading: boolean;
 }
 
 const RepeatSelfieVerification: React.FC<RepeatSelfieVerificationProps> = ({
-  instructions, selfiePreview, onSelfieCapture, error, loading,
-}) => (
-  <Paper
-    elevation={0}
-    sx={{
-      p: { xs: 2, sm: 2.5 },
-      background: '#ffffff',
-      border: '1px solid #f1e5d0',
-      borderRadius: '24px',
-      boxShadow: '0 8px 24px rgba(0,0,0,0.04)',
-      color: '#111111',
-    }}
-  >
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
-      <Box sx={{ width: 42, height: 42, borderRadius: '14px', background: '#fff7e8', border: '1px solid #f1e5d0', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)' }}>
-        <VerifiedUserIcon sx={{ color: '#C9973A' }} />
-      </Box>
-      <Box>
-        <Typography variant="h6" sx={{ color: '#111111', lineHeight: 1.1, fontWeight: 800 }}>Repeat Renter Live Verification</Typography>
-        <Typography variant="body2" sx={{ color: '#6b7280' }}>
-          For your account security, capture a new live selfie before submitting this rental.
-        </Typography>
-      </Box>
-    </Box>
+  instructions, selectedInstructionId, onInstructionSelect, selfiePreview, onSelfieCapture, instructionError, error, loading,
+}) => {
+  const selectedInstruction = instructions.find((inst) => inst.id === selectedInstructionId);
 
-    {loading ? (
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, py: 2 }}>
-        <CircularProgress size={18} sx={{ color: '#C9973A' }} />
-        <Typography sx={{ color: '#374151', fontSize: '0.9rem' }}>Loading verification instructions…</Typography>
+  return (
+    <Paper
+      elevation={0}
+      sx={{
+        p: { xs: 2, sm: 2.5 },
+        background: '#ffffff',
+        border: '1px solid #f1e5d0',
+        borderRadius: '24px',
+        boxShadow: '0 8px 24px rgba(0,0,0,0.04)',
+        color: '#111111',
+      }}
+    >
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
+        <Box sx={{ width: 42, height: 42, borderRadius: '14px', background: '#fff7e8', border: '1px solid #f1e5d0', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.8)' }}>
+          <VerifiedUserIcon sx={{ color: '#C9973A' }} />
+        </Box>
+        <Box>
+          <Typography variant="h6" sx={{ color: '#111111', lineHeight: 1.1, fontWeight: 800 }}>Repeat Renter Live Verification</Typography>
+          <Typography variant="body2" sx={{ color: '#6b7280' }}>
+            Select one live-selfie instruction and capture a new selfie before submitting this rental.
+          </Typography>
+        </Box>
       </Box>
-    ) : instructions.length > 0 ? (
-      <Paper elevation={0} sx={{ p: 2, mb: 2, background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '18px' }}>
-        <Typography variant="caption" sx={{ color: '#9b6f1f', letterSpacing: '0.1em', fontWeight: 800 }}>
-          FOLLOW THESE INSTRUCTIONS BEFORE CAPTURE
-        </Typography>
-        <List dense sx={{ mt: 1, p: 0 }}>
-          {instructions.map((inst, index) => (
-            <ListItem key={inst.id} disableGutters sx={{ alignItems: 'flex-start', py: 0.75 }}>
-              <ListItemIcon sx={{ minWidth: 34, mt: 0.25 }}>
-                <Box sx={{ width: 24, height: 24, borderRadius: '50%', background: '#fff7e8', border: '1px solid #f1e5d0', color: '#9b6f1f', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.75rem', fontWeight: 800 }}>
-                  {index + 1}
-                </Box>
-              </ListItemIcon>
-              <ListItemText
-                primary={inst.instruction_name}
-                secondary={inst.instruction_desc}
-                primaryTypographyProps={{ sx: { color: '#111111', fontWeight: 700, fontSize: '0.9rem' } }}
-                secondaryTypographyProps={{ sx: { color: '#374151', fontSize: '0.82rem', lineHeight: 1.5 } }}
-              />
-            </ListItem>
-          ))}
-        </List>
-      </Paper>
-    ) : null}
 
-    <CameraCapture
-      label="Live Selfie Capture"
-      facingMode="user"
-      onCapture={onSelfieCapture}
-      capturedUrl={selfiePreview}
-      hint="Use the device camera only. Gallery uploads and manual file selection are not accepted for repeat-renter verification."
-      variant="lightVerification"
-    />
-    {error && <Alert severity="error" sx={{ mt: 1.5, borderRadius: '14px' }}>{error}</Alert>}
-  </Paper>
-);
+      {loading ? (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, py: 2 }}>
+          <CircularProgress size={18} sx={{ color: '#C9973A' }} />
+          <Typography sx={{ color: '#374151', fontSize: '0.9rem' }}>Loading verification instructions…</Typography>
+        </Box>
+      ) : instructions.length > 0 ? (
+        <Paper elevation={0} sx={{ p: 2, mb: 2, background: '#f8fafc', border: '1px solid #e5e7eb', borderRadius: '18px' }}>
+          <FormControl fullWidth size="small" error={!!instructionError}>
+            <InputLabel>Select Selfie Instruction</InputLabel>
+            <Select value={selectedInstructionId} onChange={onInstructionSelect} label="Select Selfie Instruction">
+              {instructions.map((inst) => (
+                <MenuItem key={inst.id} value={inst.id}>
+                  <Box>
+                    <Typography sx={{ color: '#111111', fontWeight: 700, fontSize: '0.9rem' }}>{inst.instruction_name}</Typography>
+                    <Typography sx={{ color: '#374151', fontSize: '0.78rem', whiteSpace: 'normal' }}>{inst.instruction_desc}</Typography>
+                  </Box>
+                </MenuItem>
+              ))}
+            </Select>
+            {instructionError && <FormHelperText>{instructionError}</FormHelperText>}
+          </FormControl>
+          {selectedInstruction && (
+            <Alert severity="warning" sx={{ mt: 1.5, borderRadius: '14px' }}>
+              <Typography sx={{ fontWeight: 800, fontSize: '0.86rem' }}>{selectedInstruction.instruction_name}</Typography>
+              <Typography sx={{ fontSize: '0.82rem' }}>{selectedInstruction.instruction_desc}</Typography>
+            </Alert>
+          )}
+        </Paper>
+      ) : null}
+
+      <CameraCapture
+        label="Live Selfie Capture"
+        facingMode="user"
+        onCapture={onSelfieCapture}
+        capturedUrl={selfiePreview}
+        hint="Use the device camera only. Gallery uploads and manual file selection are not accepted for repeat-renter verification."
+        variant="lightVerification"
+      />
+      {error && <Alert severity="error" sx={{ mt: 1.5, borderRadius: '14px' }}>{error}</Alert>}
+    </Paper>
+  );
+};
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -507,6 +513,7 @@ const RenterForm: React.FC = () => {
   const [repeatCheckLoading, setRepeatCheckLoading] = useState(false);
   const [repeatVerificationError, setRepeatVerificationError] = useState('');
   const [selfieInstructions, setSelfieInstructions] = useState<RbSelfieVerificationInst[]>([]);
+  const [selectedSelfieInstructionId, setSelectedSelfieInstructionId] = useState('');
   const [selfieBlob, setSelfieBlob]   = useState<Blob | null>(null);
   const [selfiePreview, setSelfiePreview] = useState<string | null>(null);
   const [submitting, setSubmitting]   = useState(false);
@@ -573,6 +580,7 @@ const RenterForm: React.FC = () => {
 
         if (!repeat) {
           setSelfieInstructions([]);
+          setSelectedSelfieInstructionId('');
           setSelfieBlob(null);
           setSelfiePreview((preview) => {
             if (preview) URL.revokeObjectURL(preview);
@@ -586,12 +594,21 @@ const RenterForm: React.FC = () => {
           .select('*')
           .order('created_at', { ascending: true });
         if (instructionError) throw instructionError;
-        if (!cancelled) setSelfieInstructions((data ?? []) as RbSelfieVerificationInst[]);
+        if (!cancelled) {
+          const loadedInstructions = (data ?? []) as RbSelfieVerificationInst[];
+          setSelfieInstructions(loadedInstructions);
+          setSelectedSelfieInstructionId((current) => {
+            if (current && loadedInstructions.some((inst) => inst.id === current)) return current;
+            if (renter.selfie_verification_id && loadedInstructions.some((inst) => inst.id === renter.selfie_verification_id)) return renter.selfie_verification_id;
+            return '';
+          });
+        }
       } catch (err) {
         if (!cancelled) {
           const message = err instanceof Error ? err.message : 'Unable to load repeat-renter verification requirements.';
           setIsRepeatRenter(true);
           setSelfieInstructions([]);
+          setSelectedSelfieInstructionId('');
           setRepeatVerificationError(message);
           setSubmitError(message);
         }
@@ -602,7 +619,7 @@ const RenterForm: React.FC = () => {
 
     loadRepeatVerification();
     return () => { cancelled = true; };
-  }, [renter?.id]);
+  }, [renter?.id, renter?.selfie_verification_id]);
 
   useEffect(() => () => {
     if (selfiePreview) URL.revokeObjectURL(selfiePreview);
@@ -662,6 +679,7 @@ const RenterForm: React.FC = () => {
     }
     if (activeStep === 4 && isRepeatRenter) {
       if (repeatVerificationError) e.selfie_verification_img = repeatVerificationError;
+      else if (!selectedSelfieInstructionId) e.selfie_verification_id = 'Please select the selfie instruction you will follow.';
       else if (!selfieBlob) e.selfie_verification_img = 'Live selfie capture is required for repeat renters.';
     }
     setErrors(e);
@@ -692,6 +710,7 @@ const RenterForm: React.FC = () => {
 
       if (isRepeatRenter) {
         if (!renter?.id) throw new Error('Unable to verify renter identity. Please sign in again.');
+        if (!selectedSelfieInstructionId) throw new Error('Please select the selfie instruction you will follow.');
         if (!selfieBlob) throw new Error('Live selfie capture is required for repeat renters.');
 
         setSubmitError('Uploading live selfie verification…');
@@ -709,14 +728,14 @@ const RenterForm: React.FC = () => {
           .from('RB_RENTER')
           .update({
             selfie_verification_img: selfieUrl,
-            selfie_verification_id: selfieInstructions[0]?.id ?? renter.selfie_verification_id,
+            selfie_verification_id: selectedSelfieInstructionId,
           })
           .eq('id', renter.id);
         if (updateRenterError) throw new Error(`Selfie verification update failed: ${updateRenterError.message}`);
         setRenter((current) => current ? {
           ...current,
           selfie_verification_img: selfieUrl,
-          selfie_verification_id: selfieInstructions[0]?.id ?? current.selfie_verification_id,
+          selfie_verification_id: selectedSelfieInstructionId,
         } : current);
       }
 
@@ -825,8 +844,14 @@ const RenterForm: React.FC = () => {
             {isRepeatRenter && (
               <RepeatSelfieVerification
                 instructions={selfieInstructions}
+                selectedInstructionId={selectedSelfieInstructionId}
+                onInstructionSelect={(e) => {
+                  setSelectedSelfieInstructionId(e.target.value);
+                  setErrors((err) => ({ ...err, selfie_verification_id: undefined }));
+                }}
                 selfiePreview={selfiePreview}
                 onSelfieCapture={onSelfieCapture}
+                instructionError={errors.selfie_verification_id}
                 error={errors.selfie_verification_img || repeatVerificationError}
                 loading={repeatCheckLoading}
               />
