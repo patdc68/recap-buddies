@@ -2,7 +2,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Chip, Button, CircularProgress,
   IconButton, Dialog, Select, MenuItem,
-  FormControl, InputLabel, Alert, Tooltip, type SelectChangeEvent,
+  FormControl, InputLabel, Alert, Tooltip, Snackbar, type SelectChangeEvent,
 } from '@mui/material';
 import ArrowBackIcon          from '@mui/icons-material/ArrowBack';
 import CheckCircleIcon        from '@mui/icons-material/CheckCircle';
@@ -24,6 +24,7 @@ import GpsFixedIcon           from '@mui/icons-material/GpsFixed';
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
+import { sendRentalStatusEmail } from '../services/emailService';
 import type { RbRenter, RbRentalForm, RbItem, RbDevice, RbBranch, RbSelfieVerificationInst } from '../service/supabaseClient';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
@@ -120,6 +121,7 @@ const RenterVerificationPage: React.FC = () => {
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
   const [zoomSrc, setZoomSrc] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
 
   const fetchData = useCallback(async () => {
     if (!rentalId) return;
@@ -189,15 +191,34 @@ const RenterVerificationPage: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleSave = async () => {
-    if (!rentalId) return;
+  const updateRentalStatus = async (newStatus: string) => {
+    if (!rentalId || !data) return;
     setSaving(true);
-    await supabase.from('RB_RENTAL_FORM').update({ status }).eq('id', rentalId);
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-    // Re-fetch to reflect any changes
-    await fetchData();
+
+    try {
+      const { error: updateError } = await supabase.from('RB_RENTAL_FORM').update({ status: newStatus }).eq('id', rentalId);
+      if (updateError) throw updateError;
+
+      try {
+        await sendRentalStatusEmail({ status: newStatus, rental: data.rental, renter: data.renter });
+      } catch (emailError) {
+        console.error('Failed to send verification status email:', emailError);
+        setSnackbar({ open: true, msg: 'Status updated, but email notification failed.', severity: 'warning' });
+      }
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      await fetchData();
+    } catch (statusError) {
+      console.error('Failed to update verification status:', statusError);
+      setSnackbar({ open: true, msg: 'Failed to update status.', severity: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSave = async () => {
+    await updateRentalStatus(status);
   };
 
   // ── Loading / error ───────────────────────────────────────────────────────
@@ -470,12 +491,7 @@ const RenterVerificationPage: React.FC = () => {
                 startIcon={a.icon}
                 onClick={async () => {
                   setStatus(a.val);
-                  setSaving(true);
-                  await supabase.from('RB_RENTAL_FORM').update({ status: a.val }).eq('id', rentalId);
-                  setSaving(false);
-                  setSaved(true);
-                  setTimeout(() => setSaved(false), 2000);
-                  await fetchData();
+                  await updateRentalStatus(a.val);
                 }}
                 disabled={saving || status === a.val}
                 sx={{
@@ -494,6 +510,10 @@ const RenterVerificationPage: React.FC = () => {
         </Paper>
 
       </Box>
+
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar((current) => ({ ...current, open: false }))} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((current) => ({ ...current, open: false }))}>{snackbar.msg}</Alert>
+      </Snackbar>
 
       {/* ── Image zoom dialog ── */}
       <Dialog open={!!zoomSrc} onClose={() => setZoomSrc(null)} maxWidth="lg"
