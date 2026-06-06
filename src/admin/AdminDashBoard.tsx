@@ -81,6 +81,10 @@ const MOBILE_DATA_GRID_PAGINATION_SX = {
       justifyContent: 'flex-start',
       minHeight: 52,
       px: 1,
+      position: 'sticky',
+      left: 0,
+      zIndex: 2,
+      backgroundColor: '#fff',
     },
     '& .MuiTablePagination-root': {
       width: '100%',
@@ -851,6 +855,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
                       getRowId={(row) => row.id}
                       rowHeight={68}
                       columnHeaderHeight={46}
+                      pagination
                       hideFooter={rentals.length <= 10}
                       initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
                       pageSizeOptions={[10, 25, 50]}
@@ -859,7 +864,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
                       sx={{
                         minWidth: 900,
                         minHeight: 400,
-                        height: { xs: 620, sm: 'min(620px, 68vh)', md: 'calc(88vh - 120px)' },
+                        height: { xs: 'calc(92dvh - 136px)', sm: 'min(620px, 68vh)', md: 'calc(88vh - 120px)' },
                         maxHeight: '100%',
                         border: 'none',
                         ...MOBILE_DATA_GRID_PAGINATION_SX,
