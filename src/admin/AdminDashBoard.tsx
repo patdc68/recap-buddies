@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Box, Typography, Paper, Chip, Button, CircularProgress, Avatar,
-  Tabs, Tab, Divider, IconButton, Dialog, DialogTitle, DialogContent,
+  Divider, IconButton, Dialog, DialogTitle, DialogContent,
   DialogActions, Select, MenuItem, FormControl, InputLabel, FormHelperText,
   Switch, FormControlLabel, Tooltip, TextField, type SelectChangeEvent,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Snackbar, Alert, Badge, Menu, ListItemText,
+  AppBar, Toolbar, Drawer, List, ListItemButton, ListItemIcon, useMediaQuery,
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { DataGrid, GridToolbar, type GridColDef, type GridRenderCellParams } from '@mui/x-data-grid';
 import { LocalizationProvider, TimePicker } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
@@ -55,6 +57,7 @@ import CancelIcon             from '@mui/icons-material/Cancel';
 import MonitorHeartIcon       from '@mui/icons-material/MonitorHeart';
 import SettingsSuggestIcon    from '@mui/icons-material/SettingsSuggest';
 import NotificationsIcon      from '@mui/icons-material/Notifications';
+import MenuIcon               from '@mui/icons-material/Menu';
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
@@ -2133,137 +2136,252 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
 // TOP BAR + ROOT
 // ═══════════════════════════════════════════════════════════════════════════════
 
-const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void; onLogout: () => void; rentals: EnrichedRental[] }> = ({ rbUser, tab, onTab, onLogout, rentals }) => {
+const drawerWidth = 260;
+const collapsedDrawerWidth = 84;
+const appBarHeight = 64;
+
+const ADMIN_NAV_ITEMS: Array<{ label: string; icon: React.ReactNode }> = [
+  { label: 'Overview', icon: <DashboardIcon /> },
+  { label: 'Calendar', icon: <CalendarMonthIcon /> },
+  { label: 'Monitoring', icon: <MonitorHeartIcon /> },
+  { label: 'Inventory', icon: <InventoryIcon /> },
+  { label: 'Others', icon: <SettingsSuggestIcon /> },
+];
+
+interface AdminHeaderProps {
+  rbUser: RbUser;
+  onMenuToggle: () => void;
+  onLogout: () => void;
+  rentals: EnrichedRental[];
+  desktopDrawerWidth: number;
+  isMobile: boolean;
+}
+
+const AdminHeader: React.FC<AdminHeaderProps> = ({ rbUser, onMenuToggle, onLogout, rentals, desktopDrawerWidth, isMobile }) => {
   const navigate = useNavigate();
   const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null);
   const submittedRentals = rentals.filter((r) => r.status === 'submitted');
+
   return (
-  <Box sx={{
-    position: 'sticky', top: 0, zIndex: 100,
-    background: 'rgba(255,251,244,0.96)', backdropFilter: 'blur(14px)',
-    borderBottom: `1px solid ${BORDER}`, boxShadow: '0 1px 8px rgba(201,151,58,0.07)',
-    px: { xs: 2, md: 4 }, py: 0,
-    display: 'flex', alignItems: 'center', gap: 2, minHeight: 60,
-  }}>
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mr: 3, flexShrink: 0 }}>
-      <AdminPanelSettingsIcon sx={{ color: AMBER, fontSize: 22 }} />
-      <Typography sx={{ fontFamily: '"Playfair Display", serif', color: ESPRESSO, fontWeight: 700, fontSize: '1rem', display: { xs: 'none', sm: 'block' } }}>recap buddies</Typography>
-      <Chip label={rbUser.role.toUpperCase()} size="small" sx={{ background: 'rgba(201,151,58,0.15)', color: AMBER_DARK, border: `1px solid ${BORDER}`, fontSize: '0.62rem', fontFamily: '"Sora", sans-serif', height: 20 }} />
-    </Box>
+    <AppBar
+      position="fixed"
+      elevation={0}
+      sx={{
+        zIndex: (theme) => theme.zIndex.drawer + 1,
+        ml: { md: `${desktopDrawerWidth}px` },
+        width: { md: `calc(100% - ${desktopDrawerWidth}px)` },
+        background: 'rgba(255,255,255,0.96)',
+        color: INK,
+        backdropFilter: 'blur(14px)',
+        borderBottom: `1px solid ${BORDER}`,
+        boxShadow: '0 1px 10px rgba(17,17,17,0.05)',
+        transition: (theme) => theme.transitions.create(['margin-left', 'width'], {
+          easing: theme.transitions.easing.sharp,
+          duration: theme.transitions.duration.shorter,
+        }),
+      }}
+    >
+      <Toolbar sx={{ minHeight: { xs: appBarHeight, md: appBarHeight }, px: { xs: 1, sm: 2, md: 3 }, gap: { xs: 1, sm: 1.5 } }}>
+        <Tooltip title={isMobile ? 'Open navigation' : 'Collapse navigation'}>
+          <IconButton
+            edge="start"
+            onClick={onMenuToggle}
+            sx={{
+              color: INK,
+              border: `1px solid ${BORDER}`,
+              borderRadius: 2,
+              background: '#fff',
+              '&:hover': { background: 'rgba(201,151,58,0.08)' },
+            }}
+            aria-label="toggle admin navigation"
+          >
+            <MenuIcon fontSize="small" />
+          </IconButton>
+        </Tooltip>
 
-    <Tabs
-  value={tab}
-  onChange={(_, v) => onTab(v)}
-  variant="scrollable"
-  scrollButtons="auto"
-  allowScrollButtonsMobile
-  sx={{
-    flex: 1,
-    '& .MuiTabs-indicator': {
-      background: AMBER,
-      height: 2,
-    },
-    '& .MuiTab-root': {
-      color: MUTED,
-      minHeight: 60,
-      textTransform: 'none',
-      fontFamily: '"Sora", sans-serif',
-      fontWeight: 600,
-      fontSize: '0.82rem',
-      minWidth: 'auto', // ✅ prevents tabs from stretching too wide
-      px: 2,            // ✅ better spacing for scroll
-      '&.Mui-selected': {
-        color: AMBER_DARK,
-      },
-    },
-  }}
->
-  <Tab
-    icon={<DashboardIcon sx={{ fontSize: 16 }} />}
-    iconPosition="start"
-    label="Overview"
-  />
-  <Tab
-    icon={<CalendarMonthIcon sx={{ fontSize: 16 }} />}
-    iconPosition="start"
-    label="Calendar"
-  />
-  <Tab
-    icon={<MonitorHeartIcon sx={{ fontSize: 16 }} />}
-    iconPosition="start"
-    label="Monitoring"
-  />
-  <Tab
-    icon={<InventoryIcon sx={{ fontSize: 16 }} />}
-    iconPosition="start"
-    label="Inventory"
-  />
-  <Tab
-    icon={<SettingsSuggestIcon sx={{ fontSize: 16 }} />}
-    iconPosition="start"
-    label="Others"
-  />
-</Tabs>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+          <AdminPanelSettingsIcon sx={{ color: AMBER, fontSize: 22, display: { xs: 'none', sm: 'block' } }} />
+          <Typography sx={{ fontFamily: '"Playfair Display", serif', color: ESPRESSO, fontWeight: 700, fontSize: { xs: '0.9rem', sm: '1rem' }, whiteSpace: 'nowrap' }}>
+            recap buddies
+          </Typography>
+          <Chip label={rbUser.role.toUpperCase()} size="small" sx={{ background: 'rgba(201,151,58,0.14)', color: AMBER_DARK, border: `1px solid ${BORDER}`, fontSize: '0.62rem', fontFamily: '"Sora", sans-serif', height: 20, display: { xs: 'none', sm: 'inline-flex' } }} />
+        </Box>
 
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexShrink: 0 }}>
-      <Tooltip title="Booking requests">
-        <IconButton onClick={(e) => setNotifAnchor(e.currentTarget)} size="small" sx={{ color: MUTED }}>
-          <Badge badgeContent={submittedRentals.length} color="error" max={99}>
-            <NotificationsIcon fontSize="small" />
-          </Badge>
-        </IconButton>
-      </Tooltip>
-      <Menu
-        anchorEl={notifAnchor}
-        open={Boolean(notifAnchor)}
-        onClose={() => setNotifAnchor(null)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
-        PaperProps={{ sx: { width: 360, maxWidth: '95vw', borderRadius: 2 } }}
-      >
-        {submittedRentals.length === 0 ? (
-          <MenuItem disabled>
-            <ListItemText primary="No new booking requests" />
-          </MenuItem>
-        ) : submittedRentals.map((r, index) => (
-          <React.Fragment key={r.id}>
-            <MenuItem
-              onClick={() => {
-                setNotifAnchor(null);
-                navigate(`/admin/verify/${r.id}`);
-              }}
-              sx={{
-                whiteSpace: 'normal',
-                alignItems: 'flex-start',
-                py: 1.25,
-                transition: 'background-color 0.2s ease',
-                '&:hover': { backgroundColor: 'rgba(201,151,58,0.08)' },
-              }}
-            >
-              <ListItemText
-                primary={`${r.renter?.renter_fname ?? 'Unknown'} ${r.renter?.renter_lname ?? ''}`.trim()}
-                secondary={`${r.item?.device?.cam_name ?? r.item?.code_name ?? 'Unknown unit'} • ${dayjs(r.rent_date_start).format('MMM D, YYYY')} - ${dayjs(r.rent_date_end).format('MMM D, YYYY')}\nSubmitted ${dayjs(r.created_at).format('MMM D, YYYY h:mm A')}`}
-                secondaryTypographyProps={{ sx: { whiteSpace: 'pre-line' } }}
-              />
-            </MenuItem>
-            {index < submittedRentals.length - 1 && <Divider sx={{ my: 0.25 }} />}
-          </React.Fragment>
-        ))}
-      </Menu>
-      <Avatar sx={{ width: 32, height: 32, background: `linear-gradient(135deg, ${AMBER}, ${AMBER_LIGHT})`, fontSize: '0.85rem', fontWeight: 700, fontFamily: '"Sora", sans-serif', color: '#fff' }}>
-        {rbUser.user_fname[0]?.toUpperCase()}
-      </Avatar>
-      <Typography sx={{ color: MUTED, fontSize: '0.8rem', fontFamily: '"Sora", sans-serif', display: { xs: 'none', md: 'block' } }}>{rbUser.user_fname}</Typography>
-      <Tooltip title="Sign out">
-        <IconButton onClick={onLogout} size="small" sx={{ color: MUTED, '&:hover': { color: '#C0392B' } }}><LogoutIcon fontSize="small" /></IconButton>
-      </Tooltip>
+        <Box sx={{ flexGrow: 1 }} />
+
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, sm: 1.25 }, flexShrink: 0 }}>
+          <Tooltip title="Booking requests">
+            <IconButton onClick={(e) => setNotifAnchor(e.currentTarget)} size="small" sx={{ color: MUTED }}>
+              <Badge badgeContent={submittedRentals.length} color="error" max={99}>
+                <NotificationsIcon fontSize="small" />
+              </Badge>
+            </IconButton>
+          </Tooltip>
+          <Menu
+            anchorEl={notifAnchor}
+            open={Boolean(notifAnchor)}
+            onClose={() => setNotifAnchor(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+            PaperProps={{ sx: { width: 360, maxWidth: '95vw', borderRadius: 2 } }}
+          >
+            {submittedRentals.length === 0 ? (
+              <MenuItem disabled>
+                <ListItemText primary="No new booking requests" />
+              </MenuItem>
+            ) : submittedRentals.map((r, index) => (
+              <React.Fragment key={r.id}>
+                <MenuItem
+                  onClick={() => {
+                    setNotifAnchor(null);
+                    navigate(`/admin/verify/${r.id}`);
+                  }}
+                  sx={{
+                    whiteSpace: 'normal',
+                    alignItems: 'flex-start',
+                    py: 1.25,
+                    transition: 'background-color 0.2s ease',
+                    '&:hover': { backgroundColor: 'rgba(201,151,58,0.08)' },
+                  }}
+                >
+                  <ListItemText
+                    primary={`${r.renter?.renter_fname ?? 'Unknown'} ${r.renter?.renter_lname ?? ''}`.trim()}
+                    secondary={`${r.item?.device?.cam_name ?? r.item?.code_name ?? 'Unknown unit'} • ${dayjs(r.rent_date_start).format('MMM D, YYYY')} - ${dayjs(r.rent_date_end).format('MMM D, YYYY')}\nSubmitted ${dayjs(r.created_at).format('MMM D, YYYY h:mm A')}`}
+                    secondaryTypographyProps={{ sx: { whiteSpace: 'pre-line' } }}
+                  />
+                </MenuItem>
+                {index < submittedRentals.length - 1 && <Divider sx={{ my: 0.25 }} />}
+              </React.Fragment>
+            ))}
+          </Menu>
+          <Avatar sx={{ width: 32, height: 32, background: `linear-gradient(135deg, ${AMBER}, ${AMBER_LIGHT})`, fontSize: '0.85rem', fontWeight: 700, fontFamily: '"Sora", sans-serif', color: '#fff' }}>
+            {rbUser.user_fname[0]?.toUpperCase()}
+          </Avatar>
+          <Typography sx={{ color: MUTED, fontSize: '0.8rem', fontFamily: '"Sora", sans-serif', display: { xs: 'none', md: 'block' } }}>{rbUser.user_fname}</Typography>
+          <Tooltip title="Sign out">
+            <IconButton onClick={onLogout} size="small" sx={{ color: MUTED, '&:hover': { color: '#C0392B' } }}><LogoutIcon fontSize="small" /></IconButton>
+          </Tooltip>
+        </Box>
+      </Toolbar>
+    </AppBar>
+  );
+};
+
+interface AdminDrawerProps {
+  tab: number;
+  onTab: (t: number) => void;
+  mobileOpen: boolean;
+  onMobileClose: () => void;
+  collapsed: boolean;
+  isMobile: boolean;
+}
+
+const AdminDrawer: React.FC<AdminDrawerProps> = ({ tab, onTab, mobileOpen, onMobileClose, collapsed, isMobile }) => {
+  const effectiveWidth = collapsed && !isMobile ? collapsedDrawerWidth : drawerWidth;
+
+  const drawerContent = (
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+      <Toolbar sx={{ minHeight: appBarHeight, px: collapsed && !isMobile ? 1.5 : 2.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, overflow: 'hidden' }}>
+          <AdminPanelSettingsIcon sx={{ color: AMBER, fontSize: 24, flexShrink: 0 }} />
+          {(!collapsed || isMobile) && (
+            <Box>
+              <Typography sx={{ color: ESPRESSO, fontWeight: 800, fontSize: '0.95rem', fontFamily: '"Playfair Display", serif', whiteSpace: 'nowrap' }}>
+                Admin Console
+              </Typography>
+              <Typography sx={{ color: MUTED, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', whiteSpace: 'nowrap' }}>
+                Recap Buddies
+              </Typography>
+            </Box>
+          )}
+        </Box>
+      </Toolbar>
+      <Divider />
+      <Box sx={{ px: 1.5, py: 2 }}>
+        {(!collapsed || isMobile) && (
+          <Typography sx={{ px: 1, mb: 1, color: MUTED, fontSize: '0.72rem', fontWeight: 700, fontFamily: '"Sora", sans-serif' }}>
+            Main items
+          </Typography>
+        )}
+        <List disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+          {ADMIN_NAV_ITEMS.map((item, index) => {
+            const selected = tab === index;
+            return (
+              <ListItemButton
+                key={item.label}
+                selected={selected}
+                onClick={() => {
+                  onTab(index);
+                  if (isMobile) onMobileClose();
+                }}
+                sx={{
+                  minHeight: 46,
+                  borderRadius: 2.5,
+                  px: collapsed && !isMobile ? 1.5 : 1.75,
+                  justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
+                  color: selected ? INK : MUTED,
+                  '&.Mui-selected': {
+                    background: 'rgba(201,151,58,0.14)',
+                    color: INK,
+                    boxShadow: 'inset 0 0 0 1px rgba(201,151,58,0.18)',
+                  },
+                  '&.Mui-selected:hover, &:hover': {
+                    background: selected ? 'rgba(201,151,58,0.18)' : 'rgba(17,17,17,0.04)',
+                  },
+                }}
+              >
+                <ListItemIcon sx={{ color: 'inherit', minWidth: collapsed && !isMobile ? 0 : 38, justifyContent: 'center', '& .MuiSvgIcon-root': { fontSize: 20 } }}>
+                  {item.icon}
+                </ListItemIcon>
+                {(!collapsed || isMobile) && (
+                  <ListItemText
+                    primary={item.label}
+                    primaryTypographyProps={{
+                      sx: { fontFamily: '"Sora", sans-serif', fontWeight: selected ? 800 : 600, fontSize: '0.86rem' },
+                    }}
+                  />
+                )}
+              </ListItemButton>
+            );
+          })}
+        </List>
+      </Box>
     </Box>
-  </Box>
-)};
+  );
+
+  return (
+    <Drawer
+      variant={isMobile ? 'temporary' : 'permanent'}
+      open={isMobile ? mobileOpen : true}
+      onClose={onMobileClose}
+      ModalProps={{ keepMounted: true }}
+      sx={{
+        width: effectiveWidth,
+        flexShrink: 0,
+        '& .MuiDrawer-paper': {
+          width: effectiveWidth,
+          boxSizing: 'border-box',
+          borderRight: `1px solid ${BORDER}`,
+          background: '#fff',
+          transition: (theme) => theme.transitions.create('width', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.shorter,
+          }),
+        },
+      }}
+    >
+      {drawerContent}
+    </Drawer>
+  );
+};
 
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const [tab, setTab]           = useState(0);
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+  const [desktopDrawerCollapsed, setDesktopDrawerCollapsed] = useState(false);
   const [rbUser, setRbUser]     = useState<RbUser | null>(null);
   const [rentals, setRentals]   = useState<EnrichedRental[]>([]);
   const [items, setItems]       = useState<EnrichedItem[]>([]);
@@ -2509,31 +2627,64 @@ const AdminDashboard: React.FC = () => {
 
   if (!rbUser) return null;
 
+  const desktopDrawerWidth = desktopDrawerCollapsed ? collapsedDrawerWidth : drawerWidth;
+
   return (
-    <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
-      <TopBar rbUser={rbUser} tab={tab} onTab={setTab} onLogout={handleLogout} rentals={rentals} />
-      <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1400, mx: 'auto' }}>
-        {tab === 0 && <OverviewTab  rentals={rentals} onSave={handleSaveStatus} />}
-        {tab === 1 && <CalendarTab  rentals={rentals} items={items} onSave={handleSaveStatus} />}
-        {tab === 2 && <MonitoringTab rentals={rentals} items={items} branches={branches} onSaved={fetchAll} />}
-        {tab === 3 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
-        {tab === 4 && (
-          <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
-            <Typography sx={{ mb: 2, fontWeight: 700 }}>Terms & Conditions</Typography>
-            <TextField multiline minRows={14} fullWidth value={agreementMd} onChange={(e) => setAgreementMd(e.target.value)} placeholder="Write markdown content here..." />
-            <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-              <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading}>Reload</Button>
-              <Button variant="contained" disabled={agreementSaving || !agreementMd.trim()} onClick={async () => {
-                setAgreementSaving(true);
-                const blob = new Blob([agreementMd], { type: 'text/markdown;charset=utf-8' });
-                const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
-                setAgreementSaving(false);
-                if (error) setSnackbar({ open: true, msg: `Save failed: ${error.message}`, severity: 'error' });
-                else setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
-              }}>Save Changes</Button>
-            </Box>
-          </Paper>
-        )}
+    <Box sx={{ minHeight: '100vh', background: '#FFFFFF', display: 'flex' }}>
+      <AdminHeader
+        rbUser={rbUser}
+        onMenuToggle={() => {
+          if (isMobile) setMobileDrawerOpen(true);
+          else setDesktopDrawerCollapsed((collapsed) => !collapsed);
+        }}
+        onLogout={handleLogout}
+        rentals={rentals}
+        desktopDrawerWidth={desktopDrawerWidth}
+        isMobile={isMobile}
+      />
+      <AdminDrawer
+        tab={tab}
+        onTab={setTab}
+        mobileOpen={mobileDrawerOpen}
+        onMobileClose={() => setMobileDrawerOpen(false)}
+        collapsed={desktopDrawerCollapsed}
+        isMobile={isMobile}
+      />
+      <Box
+        component="main"
+        sx={{
+          flexGrow: 1,
+          width: { xs: '100%', md: `calc(100% - ${desktopDrawerWidth}px)` },
+          pt: `${appBarHeight}px`,
+          transition: (theme) => theme.transitions.create('width', {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.shorter,
+          }),
+        }}
+      >
+        <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1400, mx: 'auto' }}>
+          {tab === 0 && <OverviewTab  rentals={rentals} onSave={handleSaveStatus} />}
+          {tab === 1 && <CalendarTab  rentals={rentals} items={items} onSave={handleSaveStatus} />}
+          {tab === 2 && <MonitoringTab rentals={rentals} items={items} branches={branches} onSaved={fetchAll} />}
+          {tab === 3 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
+          {tab === 4 && (
+            <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
+              <Typography sx={{ mb: 2, fontWeight: 700 }}>Terms & Conditions</Typography>
+              <TextField multiline minRows={14} fullWidth value={agreementMd} onChange={(e) => setAgreementMd(e.target.value)} placeholder="Write markdown content here..." />
+              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading}>Reload</Button>
+                <Button variant="contained" disabled={agreementSaving || !agreementMd.trim()} onClick={async () => {
+                  setAgreementSaving(true);
+                  const blob = new Blob([agreementMd], { type: 'text/markdown;charset=utf-8' });
+                  const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
+                  setAgreementSaving(false);
+                  if (error) setSnackbar({ open: true, msg: `Save failed: ${error.message}`, severity: 'error' });
+                  else setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
+                }}>Save Changes</Button>
+              </Box>
+            </Paper>
+          )}
+        </Box>
       </Box>
       <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>
         <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>{snackbar.msg}</Alert>
