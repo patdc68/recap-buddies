@@ -63,7 +63,7 @@ type RentalFormErrors = Partial<Record<keyof RentalForm | 'proof_of_purpose' | '
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BUCKET = 'verification-images';
-const ADMIN_BOOKING_EMAIL = 'inventra.systems@gmail.com';
+const ADMIN_BOOKING_EMAIL = 'recapbuddies@gmail.com';
 
 const STEPS = [
   { label: 'Camera Selection',  icon: <CameraAltIcon /> },

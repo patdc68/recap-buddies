@@ -102,6 +102,7 @@ const RENTAL_TO_ITEM_STATUS: Partial<Record<string, ItemStatus>> = {
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+const HIDDEN_DASHBOARD_STATUSES = ['declined', 'canceled'];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -805,12 +806,18 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, updates: RentalUpdatePayload) => Promise<void> }> = ({ rentals, onSave }) => {
+  const dashboardRentals = rentals.filter(
+    (rental) =>
+      !HIDDEN_DASHBOARD_STATUSES.includes(
+        String(rental.status ?? '').toLowerCase()
+      )
+  );
   const today = dayjs();
   const navigate = useNavigate();
   const [listDialog, setListDialog]         = useState<{ title: string; items: EnrichedRental[] } | null>(null);
 
   const upcomingDates = [...new Set(
-    rentals
+    dashboardRentals
       .filter((r) => r.status !== 'completed' && dayjs(r.rent_date_start).isSameOrAfter(today, 'day'))
       .map((r) => dayjs(r.rent_date_start).format('YYYY-MM-DD'))
       .sort()
@@ -818,16 +825,16 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
 
   const upcomingGroups = upcomingDates.map((ds) => ({
     date: dayjs(ds),
-    rentals: rentals.filter((r) => dayjs(r.rent_date_start).format('YYYY-MM-DD') === ds),
+    rentals: dashboardRentals.filter((r) => dayjs(r.rent_date_start).format('YYYY-MM-DD') === ds),
   }));
 
   const monthlyData = MONTHS.map((month, i) => ({
     month,
-    count: rentals.filter((r) => { const d = dayjs(r.created_at); return d.year() === today.year() && d.month() === i; }).length,
-    rentals: rentals.filter((r) => { const d = dayjs(r.created_at); return d.year() === today.year() && d.month() === i; }),
+    count: dashboardRentals.filter((r) => { const d = dayjs(r.created_at); return d.year() === today.year() && d.month() === i; }).length,
+    rentals: dashboardRentals.filter((r) => { const d = dayjs(r.created_at); return d.year() === today.year() && d.month() === i; }),
   }));
 
-  const thisMonth = rentals.filter((r) => {
+  const thisMonth = dashboardRentals.filter((r) => {
     const d = dayjs(r.created_at);
     return d.year() === today.year() && d.month() === today.month();
   });
@@ -843,10 +850,10 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
   const topDevices = Object.values(devMap).sort((a, b) => b.count - a.count).slice(0, 6);
 
   const statCards = [
-    { label: 'Total Rentals',    color: AMBER,       items: rentals },
+    { label: 'Total Rentals',    color: AMBER,       items: dashboardRentals },
     { label: 'This Month',       color: AMBER_LIGHT, items: thisMonth },
-    { label: 'Active / Renting', color: '#2E7D32',   items: rentals.filter((r) => r.status === 'renting') },
-    { label: 'Pending Review',   color: '#1565C0',   items: rentals.filter((r) => r.status === 'submitted' || r.status === 'in-review') },
+    { label: 'Active / Renting', color: '#2E7D32',   items: dashboardRentals.filter((r) => r.status === 'renting') },
+    { label: 'Pending Review',   color: '#1565C0',   items: dashboardRentals.filter((r) => r.status === 'submitted' || r.status === 'in-review') },
   ];
 
 
@@ -881,7 +888,7 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
         <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.95rem', mb: 1.5, letterSpacing: '0.06em', textTransform: 'uppercase' }}>Year To Date Analytics</Typography>
         {(() => {
           const yearStart = today.startOf('year');
-          const ytdRentals = rentals.filter((r) => {
+          const ytdRentals = dashboardRentals.filter((r) => {
             const created = dayjs(r.created_at);
             return created.isSameOrAfter(yearStart, 'day') && created.isSameOrBefore(today, 'day');
           });
@@ -1297,8 +1304,8 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
 
   const visibleCalendarRentals = rentals.filter(
-    (rental) => !['canceled', 'declined'].includes(
-      String(rental.status).toLowerCase()
+    (rental) => !HIDDEN_DASHBOARD_STATUSES.includes(
+      String(rental.status ?? '').toLowerCase()
     )
   );
   const filtered = selectedCamera === 'all' ? visibleCalendarRentals : visibleCalendarRentals.filter((r) => r.cam_name_id_fk === selectedCamera);
@@ -2357,7 +2364,7 @@ const AdminDashboard: React.FC = () => {
     if (tab === 4 && !agreementMd && !agreementLoading) void loadAgreement();
   }, [tab, agreementMd, agreementLoading, loadAgreement]);
 
-  const markOverdueRentalsForPenalty = useCallback(async () => {
+  const markOverdueRentalsCompleted = useCallback(async () => {
     const today = dayjs().startOf('day');
     const overdueRentals = rentals.filter((r) => {
       const endDate = dayjs(r.rent_date_end).startOf('day');
@@ -2373,7 +2380,7 @@ const AdminDashboard: React.FC = () => {
       supabase
         .from('RB_RENTAL_FORM')
         .update({
-          status: 'for-penalty',
+          status: 'completed',
           actual_return_date: today.format('YYYY-MM-DD'),
         })
         .eq('id', r.id)
@@ -2386,7 +2393,7 @@ const AdminDashboard: React.FC = () => {
       .map((r) =>
         supabase
           .from('RB_ITEM')
-          .update({ status: 'For Penalty' })
+          .update({ status: 'Available' })
           .eq('id', r.cam_name_id_fk)
       );
 
@@ -2396,9 +2403,9 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!loading && rentals.length > 0) {
-      void markOverdueRentalsForPenalty();
+      void markOverdueRentalsCompleted();
     }
-  }, [loading, rentals, markOverdueRentalsForPenalty]);
+  }, [loading, rentals, markOverdueRentalsCompleted]);
 
   const handleSaveStatus = useCallback(async (
     id: string,
