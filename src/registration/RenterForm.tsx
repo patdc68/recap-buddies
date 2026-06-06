@@ -27,7 +27,8 @@ import AccountBalanceIcon   from '@mui/icons-material/AccountBalance';
 import dayjs, { Dayjs } from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
-import { sendRentalStatusEmail } from '../services/emailService';
+import { sendRentalEmail, sendRentalStatusEmail } from '../services/emailService';
+import { sendDueReminderEmailsIfNeeded } from '../services/rentalReminderService';
 import type { RbItem, RbDevice, RbBranch, RbRenter, RbSelfieVerificationInst, LocUsage } from '../service/supabaseClient';
 import PageLayout from '../components/PageLayout';
 import FileUpload, { type FileUploadResult } from '../components/FileUpload';
@@ -62,6 +63,7 @@ type RentalFormErrors = Partial<Record<keyof RentalForm | 'proof_of_purpose' | '
 // ─── Constants ────────────────────────────────────────────────────────────────
 
 const BUCKET = 'verification-images';
+const ADMIN_BOOKING_EMAIL = 'inventra.systems@gmail.com';
 
 const STEPS = [
   { label: 'Camera Selection',  icon: <CameraAltIcon /> },
@@ -773,8 +775,41 @@ const RenterForm: React.FC = () => {
       try {
         await sendRentalStatusEmail({ status: 'submitted', rental: createdRental, renter });
       } catch (emailError) {
-        console.error('Failed to send booking submitted email:', emailError);
+        console.error('Booking created but renter confirmation email failed:', emailError);
         setSnackbar({ open: true, msg: 'Booking submitted, but confirmation email could not be sent.', severity: 'warning' });
+      }
+
+      try {
+        const selectedPickupBranch = branches.find((branch) => branch.id === form.hub_pick_up_addr)
+          ?? branches.find((branch) => branch.id === selectedItem?.branch_id_fk);
+
+        await sendRentalEmail({
+          type: 'admin_new_booking',
+          email: ADMIN_BOOKING_EMAIL,
+          renterName: `${renter?.renter_fname ?? ''} ${renter?.renter_lname ?? ''}`.trim(),
+          renterEmail: renter?.email,
+          contactNumber: renter?.mobile_no,
+          cameraName: selectedItem?.device?.cam_name ?? selectedItem?.code_name,
+          branchName: form.pickup_mode === 'hub' ? selectedPickupBranch?.location_name : form.delivery_addr,
+          rentalCode: createdRental.id,
+          startDate: createdRental.rent_date_start,
+          endDate: createdRental.rent_date_end,
+          pickupTime: createdRental.pickup_time,
+          returnTime: createdRental.return_time,
+          status: createdRental.status,
+        });
+      } catch (emailError) {
+        console.error('Booking created but admin new booking email failed:', emailError);
+        setSnackbar({ open: true, msg: 'Booking submitted, but one email notification failed.', severity: 'warning' });
+      }
+
+      try {
+        await sendDueReminderEmailsIfNeeded({
+          rental: createdRental,
+          renter,
+        });
+      } catch (reminderError) {
+        console.error('Due reminder email check failed:', reminderError);
       }
 
       setSubmitError('');

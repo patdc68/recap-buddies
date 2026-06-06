@@ -139,5 +139,7 @@ export interface RbRentalForm {
   messenger_link: string | null;
   rent_price: number | null;
   status: RentalStatus;
+  start_reminder_sent?: boolean | null;
+  return_reminder_sent?: boolean | null;
   created_at: string;
 }
