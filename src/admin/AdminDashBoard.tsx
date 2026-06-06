@@ -20,6 +20,7 @@ import isSameOrAfter  from 'dayjs/plugin/isSameOrAfter';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import { sendRentalStatusEmail } from '../services/emailService';
+import { sendDueReminderEmailsIfNeeded } from '../services/rentalReminderService';
 import type {
   RbUser, RbBranch, RbDevice, RbItem, RbRenter,
   RbRentalForm, RbSelfieVerificationInst, ItemStatus, ItemCondition, RentalStatus,
@@ -1053,7 +1054,7 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
   const [editingRental, setEditingRental] = useState<EnrichedRental | null>(null);
   const [editForm, setEditForm] = useState<MonitoringEditForm | null>(null);
   const [saving, setSaving] = useState(false);
-  const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' });
+  const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
 
   const openEditDialog = (rental: EnrichedRental) => {
     setEditingRental(rental);
@@ -1121,6 +1122,15 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
       }
       if (editForm.cam_name_id_fk && itemStatus) {
         await supabase.from('RB_ITEM').update({ status: itemStatus }).eq('id', editForm.cam_name_id_fk);
+      }
+
+      try {
+        await sendDueReminderEmailsIfNeeded({
+          rental: { ...editingRental, ...payload },
+          renter: editingRental.renter,
+        });
+      } catch (reminderError) {
+        console.error('Due reminder email check failed:', reminderError);
       }
 
       await onSaved();
@@ -2442,15 +2452,16 @@ const AdminDashboard: React.FC = () => {
     }
 
     if (targetRental) {
+      const updatedRental = {
+        ...targetRental,
+        ...payload,
+        remarks: updates.remarks.trim() || null,
+      };
+
       try {
         await sendRentalStatusEmail({
           status: updates.status,
-          rental: {
-            ...targetRental,
-            rent_date_start: updates.rent_date_start,
-            rent_date_end: updates.rent_date_end,
-            remarks: updates.remarks.trim() || null,
-          },
+          rental: updatedRental,
           renter: targetRental.renter,
         });
       } catch (emailError) {
@@ -2460,6 +2471,15 @@ const AdminDashboard: React.FC = () => {
           msg: 'Status updated, but email notification failed.',
           severity: 'warning',
         });
+      }
+
+      try {
+        await sendDueReminderEmailsIfNeeded({
+          rental: updatedRental,
+          renter: targetRental.renter,
+        });
+      } catch (reminderError) {
+        console.error('Due reminder email check failed:', reminderError);
       }
     }
 

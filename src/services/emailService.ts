@@ -4,12 +4,20 @@ import type { RentalEmailType } from '../types/email';
 
 export interface RentalEmailPayload {
   type: RentalEmailType;
-  to: string;
+  email?: string;
+  to?: string;
   renterName?: string;
   rentalCode?: string;
   startDate?: string;
   endDate?: string;
   remarks?: string | null;
+  renterEmail?: string;
+  contactNumber?: string;
+  cameraName?: string;
+  branchName?: string;
+  pickupTime?: string | null;
+  returnTime?: string | null;
+  status?: string;
 }
 
 export const EMAIL_TYPE_BY_STATUS: Partial<Record<string, RentalEmailType>> = {
@@ -19,8 +27,13 @@ export const EMAIL_TYPE_BY_STATUS: Partial<Record<string, RentalEmailType>> = {
   declined: 'declined',
 };
 
-const invokeSendRentalEmail = async (payload: RentalEmailPayload) => {
-  const { data, error } = await supabase.functions.invoke('send-rental-email', { body: payload });
+const invokeSendRentalEmail = async ({ email, to, ...payload }: RentalEmailPayload) => {
+  const recipient = email ?? to;
+  if (!recipient) return null;
+
+  const { data, error } = await supabase.functions.invoke('send-rental-email', {
+    body: { ...payload, to: recipient },
+  });
 
   if (error) {
     console.error('Edge function invocation failed:', error);
@@ -34,10 +47,7 @@ const invokeSendRentalEmail = async (payload: RentalEmailPayload) => {
   return data;
 };
 
-export const sendRentalEmail = async ({ type, to, ...payload }: RentalEmailPayload) => {
-  if (!to) return null;
-  return invokeSendRentalEmail({ ...payload, type, to });
-};
+export const sendRentalEmail = async (payload: RentalEmailPayload) => invokeSendRentalEmail(payload);
 
 export const sendRentalStatusEmail = async ({
   status,
@@ -62,7 +72,7 @@ export const sendRentalStatusEmail = async ({
 
   return sendRentalEmail({
     type: emailType,
-    to: renter.email,
+    email: renter.email,
     renterName: `${renter.renter_fname ?? ''} ${renter.renter_lname ?? ''}`.trim(),
     rentalCode: rental.id,
     startDate: rental.rent_date_start,
