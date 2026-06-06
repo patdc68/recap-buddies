@@ -56,6 +56,35 @@ import MonitorHeartIcon       from '@mui/icons-material/MonitorHeart';
 import SettingsSuggestIcon    from '@mui/icons-material/SettingsSuggest';
 import NotificationsIcon      from '@mui/icons-material/Notifications';
 
+import {
+  LinkBubbleMenu,
+  LinkBubbleMenuHandler,
+  MenuButtonBold,
+  MenuButtonItalic,
+  MenuButtonUnderline,
+  MenuButtonStrikethrough,
+  MenuButtonBulletedList,
+  MenuButtonOrderedList,
+  MenuButtonEditLink,
+  MenuButtonTextColor,
+  MenuButtonHighlightColor,
+  MenuButtonUndo,
+  MenuButtonRedo,
+  MenuControlsContainer,
+  MenuDivider,
+  MenuSelectHeading,
+  MenuSelectTextAlign,
+  RichTextEditorProvider,
+} from 'mui-tiptap';
+import { useEditor, EditorContent } from '@tiptap/react';
+import StarterKit from '@tiptap/starter-kit';
+import Underline from '@tiptap/extension-underline';
+import Link from '@tiptap/extension-link';
+import TextAlign from '@tiptap/extension-text-align';
+import { Color } from '@tiptap/extension-color';
+import {TextStyle} from '@tiptap/extension-text-style';
+import Highlight from '@tiptap/extension-highlight';
+
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
 dayjs.extend(isSameOrAfter);
@@ -1978,10 +2007,27 @@ const AdminDashboard: React.FC = () => {
   const [branches, setBranches] = useState<RbBranch[]>([]);
   const [loading, setLoading]   = useState(true);
   const [authUid, setAuthUid]   = useState('');
-  const [agreementMd, setAgreementMd] = useState('');
+  const [agreementHtml, setAgreementHtml] = useState('');
   const [agreementLoading, setAgreementLoading] = useState(false);
   const [agreementSaving, setAgreementSaving] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
+  const editor = useEditor({
+    extensions: [
+      StarterKit,
+      Underline,
+      Link.configure({ openOnClick: false, autolink: true }),
+      TextAlign.configure({ types: ['heading', 'paragraph'] }),
+      TextStyle,
+      Color,
+      Highlight.configure({ multicolor: true }),
+      LinkBubbleMenuHandler,
+    ],
+    content: agreementHtml || '',
+    onUpdate: ({ editor: currentEditor }: { editor: any }) => {
+      setAgreementHtml(currentEditor.getHTML());
+    },
+    editable: !agreementLoading && !agreementSaving,
+  });
 
   const fetchAll = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
@@ -2042,18 +2088,28 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => { fetchAll(); }, [fetchAll]);
   const loadAgreement = useCallback(async () => {
     setAgreementLoading(true);
-    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement.md');
+    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement');
     if (error || !data) {
       setSnackbar({ open: true, msg: `Failed to load agreement: ${error?.message ?? 'Unknown error'}`, severity: 'error' });
       setAgreementLoading(false);
       return;
     }
-    setAgreementMd(await data.text());
+    setAgreementHtml(await data.text());
     setAgreementLoading(false);
   }, []);
   useEffect(() => {
-    if (tab === 4 && !agreementMd && !agreementLoading) void loadAgreement();
-  }, [tab, agreementMd, agreementLoading, loadAgreement]);
+    if (tab === 4 && !agreementHtml && !agreementLoading) void loadAgreement();
+  }, [tab, agreementHtml, agreementLoading, loadAgreement]);
+  useEffect(() => {
+    if (editor && agreementHtml) {
+      editor.commands.setContent(agreementHtml);
+    }
+  }, [editor, agreementHtml]);
+  useEffect(() => {
+    if (editor) {
+      editor.setEditable(!agreementLoading && !agreementSaving);
+    }
+  }, [editor, agreementLoading, agreementSaving]);
 
   const markOverdueRentalsForPenalty = useCallback(async () => {
     const today = dayjs().startOf('day');
@@ -2204,17 +2260,68 @@ const AdminDashboard: React.FC = () => {
         {tab === 4 && (
           <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
             <Typography sx={{ mb: 2, fontWeight: 700 }}>Terms & Conditions</Typography>
-            <TextField multiline minRows={14} fullWidth value={agreementMd} onChange={(e) => setAgreementMd(e.target.value)} placeholder="Write markdown content here..." />
+            <Paper sx={{ borderRadius: 3, border: '1px solid rgba(17,17,17,0.12)', p: 2, backgroundColor: '#fff' }}>
+              <RichTextEditorProvider editor={editor}>
+                <Box
+                  className="terms-toolbar"
+                  sx={{
+                    border: '1px solid #ddd',
+                    borderBottom: 'none',
+                    borderRadius: '16px 16px 0 0',
+                    p: 1.5,
+                    background: '#fff',
+                  }}
+                >
+                  <MenuControlsContainer>
+                    <MenuButtonBold />
+                    <MenuButtonItalic />
+                    <MenuButtonUnderline />
+                    <MenuButtonStrikethrough />
+                    <MenuDivider />
+                    <MenuButtonBulletedList />
+                    <MenuButtonOrderedList />
+                    <MenuDivider />
+                    <MenuSelectHeading />
+                    <MenuSelectTextAlign />
+                    <MenuDivider />
+                    <MenuButtonEditLink />
+                    <MenuButtonTextColor />
+                    <MenuButtonHighlightColor />
+                    <MenuDivider />
+                    <MenuButtonUndo />
+                    <MenuButtonRedo />
+                  </MenuControlsContainer>
+                </Box>
+                <Box
+                  className="terms-editor-content"
+                  sx={{
+                    border: '1px solid #ddd',
+                    borderRadius: '0 0 16px 16px',
+                    minHeight: 500,
+                    p: 3,
+                    background: '#fff',
+                    '& .ProseMirror': {
+                      minHeight: 500,
+                      outline: 'none',
+                    },
+                  }}
+                >
+                  <EditorContent editor={editor} />
+                </Box>
+                <LinkBubbleMenu />
+              </RichTextEditorProvider>
+            </Paper>
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-              <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading}>Reload</Button>
-              <Button variant="contained" disabled={agreementSaving || !agreementMd.trim()} onClick={async () => {
+              <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading || agreementSaving}>{agreementLoading ? 'Loading…' : 'Reload'}</Button>
+              <Button variant="contained" disabled={agreementSaving || agreementLoading || !agreementHtml.trim()} onClick={async () => {
                 setAgreementSaving(true);
-                const blob = new Blob([agreementMd], { type: 'text/markdown;charset=utf-8' });
-                const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
+                const html = editor?.getHTML() ?? '';
+                const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+                const { error } = await supabase.storage.from('terms_and_condition').upload('agreement', blob, { upsert: true, contentType: 'text/html' });
                 setAgreementSaving(false);
                 if (error) setSnackbar({ open: true, msg: `Save failed: ${error.message}`, severity: 'error' });
                 else setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
-              }}>Save Changes</Button>
+              }}>{agreementSaving ? 'Saving…' : 'Save Changes'}</Button>
             </Box>
           </Paper>
         )}
