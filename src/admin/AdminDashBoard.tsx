@@ -217,10 +217,10 @@ const getRentalDayCount = (startDate: string, endDate: string) => {
 };
 
 const getSelfieInstructionTitle = (inst?: RbSelfieVerificationInst | null) =>
-  inst?.title || inst?.name || inst?.instruction_title || inst?.instruction_name || null;
+  inst?.instruction_name ?? null;
 
 const getSelfieInstructionDescription = (inst?: RbSelfieVerificationInst | null) =>
-  inst?.instruction || inst?.description || inst?.instruction_description || inst?.instruction_desc || null;
+  inst?.instruction_desc ?? null;
 
 // ─── Rental Detail Dialog ─────────────────────────────────────────────────────
 
@@ -255,6 +255,8 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
   const [pickupTime, setPickupTime] = useState<Dayjs | null>(null);
   const [returnTime, setReturnTime] = useState<Dayjs | null>(null);
   const [isRepeatRenter, setIsRepeatRenter] = useState(false);
+  const [selfieInstruction, setSelfieInstruction] = useState<RbSelfieVerificationInst | null>(null);
+  const [selfieInstructionLoading, setSelfieInstructionLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
   
@@ -299,10 +301,56 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
 
     void loadDialogData();
   }, [open, rental?.id, rental?.renter_id_fk]);
+
+  useEffect(() => {
+    if (!open) return;
+
+    let isActive = true;
+
+    const loadSelfieInstruction = async () => {
+      const instructionId = rental?.renter?.selfie_verification_id;
+      console.log('Selfie verification ID:', instructionId);
+
+      if (!instructionId) {
+        setSelfieInstruction(null);
+        setSelfieInstructionLoading(false);
+        console.log('Fetched selfie instruction:', null);
+        return;
+      }
+
+      setSelfieInstructionLoading(true);
+
+      const { data, error } = await supabase
+        .from('RB_SELFIE_VERIFICATION_INST')
+        .select('id, instruction_name, instruction_desc')
+        .eq('id', instructionId)
+        .maybeSingle();
+
+      if (!isActive) return;
+
+      if (error) {
+        console.error('Failed to load selfie instruction:', error);
+        setSelfieInstruction(null);
+        console.log('Fetched selfie instruction:', null);
+      } else {
+        const fetchedInstruction = data as RbSelfieVerificationInst | null;
+        setSelfieInstruction(fetchedInstruction);
+        console.log('Fetched selfie instruction:', fetchedInstruction);
+      }
+
+      setSelfieInstructionLoading(false);
+    };
+
+    void loadSelfieInstruction();
+
+    return () => {
+      isActive = false;
+    };
+  }, [open, rental?.renter?.selfie_verification_id]);
   if (!rental) return null;
   const selectedCamera = cameraOptions.find((it) => it.id === cameraId) ?? rental.item;
-  const selfieInstructionTitle = getSelfieInstructionTitle(rental.selfieInstruction);
-  const selfieInstructionDescription = getSelfieInstructionDescription(rental.selfieInstruction);
+  const selfieInstructionTitle = getSelfieInstructionTitle(selfieInstruction);
+  const selfieInstructionDescription = getSelfieInstructionDescription(selfieInstruction);
 
   const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META.submitted;
 
@@ -402,11 +450,11 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
 
         {/* Selfie Verification Instruction */}
         <InfoBox label="Selfie Verification Instruction">
-          <Typography sx={{ color: selfieInstructionTitle ? ESPRESSO : MUTED, fontWeight: 700, fontSize: '0.9rem', mb: 0.5, fontStyle: selfieInstructionTitle ? 'normal' : 'italic' }}>
-            {selfieInstructionTitle ?? 'Not provided'}
+          <Typography sx={{ color: selfieInstructionLoading || selfieInstructionTitle ? ESPRESSO : MUTED, fontWeight: 700, fontSize: '0.9rem', mb: 0.5, fontStyle: !selfieInstructionLoading && !selfieInstructionTitle ? 'italic' : 'normal' }}>
+            {selfieInstructionLoading ? 'Loading…' : selfieInstructionTitle ?? 'Not provided'}
           </Typography>
-          <Typography sx={{ color: selfieInstructionDescription ? MUTED : MUTED, fontSize: '0.82rem', lineHeight: 1.6, whiteSpace: 'pre-wrap', fontStyle: selfieInstructionDescription ? 'normal' : 'italic' }}>
-            {selfieInstructionDescription ?? 'Not provided'}
+          <Typography sx={{ color: MUTED, fontSize: '0.82rem', lineHeight: 1.6, whiteSpace: 'pre-wrap', fontStyle: !selfieInstructionLoading && !selfieInstructionDescription ? 'italic' : 'normal' }}>
+            {selfieInstructionLoading ? 'Loading instruction details…' : selfieInstructionDescription ?? 'Not provided'}
           </Typography>
         </InfoBox>
 
@@ -2260,7 +2308,7 @@ const AdminDashboard: React.FC = () => {
           .filter(Boolean)),
       ] as string[];
       const { data: selfieInstructionsRaw } = selfieInstructionIds.length
-        ? await supabase.from('RB_SELFIE_VERIFICATION_INST').select('*').in('id', selfieInstructionIds)
+        ? await supabase.from('RB_SELFIE_VERIFICATION_INST').select('id, instruction_name, instruction_desc').in('id', selfieInstructionIds)
         : { data: [] };
       const selfieInstructionMap = new Map<string, RbSelfieVerificationInst>(
         ((selfieInstructionsRaw ?? []) as RbSelfieVerificationInst[]).map((instruction) => [instruction.id, instruction])

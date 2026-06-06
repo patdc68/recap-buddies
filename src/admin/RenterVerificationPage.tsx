@@ -63,10 +63,10 @@ const formatTime = (value?: string | null) => {
 };
 
 const getSelfieInstructionTitle = (inst: RbSelfieVerificationInst | null) =>
-  inst?.title || inst?.name || inst?.instruction_title || inst?.instruction_name || null;
+  inst?.instruction_name ?? null;
 
 const getSelfieInstructionDescription = (inst: RbSelfieVerificationInst | null) =>
-  inst?.instruction || inst?.description || inst?.instruction_description || inst?.instruction_desc || null;
+  inst?.instruction_desc ?? null;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -156,14 +156,20 @@ const RenterVerificationPage: React.FC = () => {
       // 5. Selfie instruction: rental form → renter → selfie verification instruction
       let selfieInst: RbSelfieVerificationInst | null = null;
       const selfieInstructionId = renter.selfie_verification_id;
+      console.log('Selfie verification ID:', selfieInstructionId);
       if (selfieInstructionId) {
-        const { data: si } = await supabase
+        const { data: si, error: selfieInstructionError } = await supabase
           .from('RB_SELFIE_VERIFICATION_INST')
-          .select('*')
+          .select('id, instruction_name, instruction_desc')
           .eq('id', selfieInstructionId)
           .maybeSingle();
-        if (si) selfieInst = si as RbSelfieVerificationInst;
+        if (selfieInstructionError) {
+          console.error('Failed to load selfie instruction:', selfieInstructionError);
+        } else {
+          selfieInst = si as RbSelfieVerificationInst | null;
+        }
       }
+      console.log('Fetched selfie instruction:', selfieInst);
 
       setStatus(rental.status);
       setData({
