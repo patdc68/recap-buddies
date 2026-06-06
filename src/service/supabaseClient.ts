@@ -76,6 +76,8 @@ export interface RbRenter {
   renter_lname: string;
   mobile_no: string;
   emergency_contact_no: string;
+  emergency_contact_person: string | null;
+  emergency_contact_relationship: string | null;
   email: string;
   auth_user_id: string;
   primary_id_front: string | null;
@@ -84,16 +86,16 @@ export interface RbRenter {
   secondary_id_back: string | null;
   proof_of_billing: string | null;
   selfie_verification_id: string | null;
+  selfie_verification_inst_id?: string | null;
   selfie_verification_img: string | null;
   created_at: string;
 }
 
 export interface RbSelfieVerificationInst {
   id: string;
-  instruction_name: string;
-  instruction_desc: string;
-  created_at: string;
-  display_order?: number | null;
+  instruction_name?: string | null;
+  instruction_desc?: string | null;
+  created_at?: string;
 }
 
 // ─── Rental Form ──────────────────────────────────────────────────────────────
@@ -126,6 +128,8 @@ export interface RbRentalForm {
   rent_date_end: string;
   pickup_time: string | null;
   return_time: string | null;
+  selfie_verification_inst_id?: string | null;
+  selfie_verification_id?: string | null;
   actual_return_date: string | null;
   hub_pick_up_addr: string | null;   // FK → RB_BRANCHES.id
   delivery_addr: string | null;
@@ -135,5 +139,7 @@ export interface RbRentalForm {
   messenger_link: string | null;
   rent_price: number | null;
   status: RentalStatus;
+  start_reminder_sent?: boolean | null;
+  return_reminder_sent?: boolean | null;
   created_at: string;
 }

@@ -1,8 +1,8 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box, Typography, Paper, Chip, Button, CircularProgress,
-  Divider, IconButton, Dialog, Select, MenuItem,
-  FormControl, InputLabel, Alert, Tooltip, type SelectChangeEvent,
+  IconButton, Dialog, Select, MenuItem,
+  FormControl, InputLabel, Alert, Tooltip, Snackbar, type SelectChangeEvent,
 } from '@mui/material';
 import ArrowBackIcon          from '@mui/icons-material/ArrowBack';
 import CheckCircleIcon        from '@mui/icons-material/CheckCircle';
@@ -10,24 +10,21 @@ import CancelIcon             from '@mui/icons-material/Cancel';
 import HourglassTopIcon       from '@mui/icons-material/HourglassTop';
 import PendingIcon            from '@mui/icons-material/Pending';
 import PhoneIcon              from '@mui/icons-material/Phone';
-import EmailIcon              from '@mui/icons-material/Email';
-import EmergencyIcon          from '@mui/icons-material/LocalHospital';
 import CameraAltIcon          from '@mui/icons-material/CameraAlt';
 import BadgeIcon              from '@mui/icons-material/Badge';
 import ReceiptIcon            from '@mui/icons-material/Receipt';
 import FaceIcon               from '@mui/icons-material/Face';
 import AccountBalanceIcon     from '@mui/icons-material/AccountBalance';
-import InstagramIcon          from '@mui/icons-material/Instagram';
 import LocalShippingIcon      from '@mui/icons-material/LocalShipping';
 import StorefrontIcon         from '@mui/icons-material/Storefront';
 import ZoomInIcon             from '@mui/icons-material/ZoomIn';
 import SaveIcon               from '@mui/icons-material/Save';
 import CloseIcon              from '@mui/icons-material/Close';
-import LocationOnIcon         from '@mui/icons-material/LocationOn';
 import GpsFixedIcon           from '@mui/icons-material/GpsFixed';
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
+import { sendRentalStatusEmail } from '../services/emailService';
 import type { RbRenter, RbRentalForm, RbItem, RbDevice, RbBranch, RbSelfieVerificationInst } from '../service/supabaseClient';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
@@ -36,7 +33,6 @@ const AMBER_DARK = '#111111';
 const CREAM      = '#FFFFFF';
 const CARD_BG    = '#FFFFFF';
 const ESPRESSO   = '#111111';
-const INK        = '#111111';
 const MUTED      = '#666666';
 const BORDER     = 'rgba(201,151,58,0.18)';
 
@@ -59,6 +55,19 @@ interface FullVerification {
   returnBranch: RbBranch | null;
   selfieInst:   RbSelfieVerificationInst | null;
 }
+
+
+const formatTime = (value?: string | null) => {
+  if (!value) return '—';
+  const parsed = dayjs(`2000-01-01 ${value}`);
+  return parsed.isValid() ? parsed.format('h:mm A') : '—';
+};
+
+const getSelfieInstructionTitle = (inst: RbSelfieVerificationInst | null) =>
+  inst?.instruction_name ?? null;
+
+const getSelfieInstructionDescription = (inst: RbSelfieVerificationInst | null) =>
+  inst?.instruction_desc ?? null;
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -112,6 +121,7 @@ const RenterVerificationPage: React.FC = () => {
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
   const [zoomSrc, setZoomSrc] = useState<string | null>(null);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
 
   const fetchData = useCallback(async () => {
     if (!rentalId) return;
@@ -145,12 +155,23 @@ const RenterVerificationPage: React.FC = () => {
         (branches ?? []).forEach((b: RbBranch) => { branchMap[b.id] = b; });
       }
 
-      // 5. Selfie instruction
+      // 5. Selfie instruction: rental form → renter → selfie verification instruction
       let selfieInst: RbSelfieVerificationInst | null = null;
-      if (renter.selfie_verification_id) {
-        const { data: si } = await supabase.from('RB_SELFIE_VERIFICATION_INST').select('*').eq('id', renter.selfie_verification_id).single();
-        if (si) selfieInst = si as RbSelfieVerificationInst;
+      const selfieInstructionId = renter.selfie_verification_id;
+      console.log('Selfie verification ID:', selfieInstructionId);
+      if (selfieInstructionId) {
+        const { data: si, error: selfieInstructionError } = await supabase
+          .from('RB_SELFIE_VERIFICATION_INST')
+          .select('id, instruction_name, instruction_desc')
+          .eq('id', selfieInstructionId)
+          .maybeSingle();
+        if (selfieInstructionError) {
+          console.error('Failed to load selfie instruction:', selfieInstructionError);
+        } else {
+          selfieInst = si as RbSelfieVerificationInst | null;
+        }
       }
+      console.log('Fetched selfie instruction:', selfieInst);
 
       setStatus(rental.status);
       setData({
@@ -170,15 +191,34 @@ const RenterVerificationPage: React.FC = () => {
 
   useEffect(() => { fetchData(); }, [fetchData]);
 
-  const handleSave = async () => {
-    if (!rentalId) return;
+  const updateRentalStatus = async (newStatus: string) => {
+    if (!rentalId || !data) return;
     setSaving(true);
-    await supabase.from('RB_RENTAL_FORM').update({ status }).eq('id', rentalId);
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
-    // Re-fetch to reflect any changes
-    await fetchData();
+
+    try {
+      const { error: updateError } = await supabase.from('RB_RENTAL_FORM').update({ status: newStatus }).eq('id', rentalId);
+      if (updateError) throw updateError;
+
+      try {
+        await sendRentalStatusEmail({ status: newStatus, rental: data.rental, renter: data.renter });
+      } catch (emailError) {
+        console.error('Failed to send verification status email:', emailError);
+        setSnackbar({ open: true, msg: 'Status updated, but email notification failed.', severity: 'warning' });
+      }
+
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+      await fetchData();
+    } catch (statusError) {
+      console.error('Failed to update verification status:', statusError);
+      setSnackbar({ open: true, msg: 'Failed to update status.', severity: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSave = async () => {
+    await updateRentalStatus(status);
   };
 
   // ── Loading / error ───────────────────────────────────────────────────────
@@ -202,6 +242,8 @@ const RenterVerificationPage: React.FC = () => {
   }
 
   const { rental, renter, item, pickupBranch, returnBranch, selfieInst } = data;
+  const selfieInstructionTitle = getSelfieInstructionTitle(selfieInst);
+  const selfieInstructionDescription = getSelfieInstructionDescription(selfieInst);
   const statusMeta = RENTAL_STATUS_META[status] ?? RENTAL_STATUS_META.submitted;
   const days = dayjs(rental.rent_date_end).diff(dayjs(rental.rent_date_start), 'day');
 
@@ -284,6 +326,8 @@ const RenterVerificationPage: React.FC = () => {
             <InfoRow label="Email"             value={renter.email} />
             <InfoRow label="Mobile Number"     value={renter.mobile_no} />
             <InfoRow label="Emergency Contact" value={renter.emergency_contact_no} />
+            <InfoRow label="Emergency Contact Person" value={renter.emergency_contact_person} />
+            <InfoRow label="Emergency Relationship" value={renter.emergency_contact_relationship} />
             <InfoRow label="Registered"        value={dayjs(renter.created_at).format('MMMM D, YYYY')} />
           </Paper>
 
@@ -313,6 +357,8 @@ const RenterVerificationPage: React.FC = () => {
             <InfoRow label="Start Date"     value={dayjs(rental.rent_date_start).format('MMMM D, YYYY')} />
             <InfoRow label="End Date"       value={dayjs(rental.rent_date_end).format('MMMM D, YYYY')} />
             <InfoRow label="Duration"       value={`${days} day${days !== 1 ? 's' : ''}`} />
+            <InfoRow label="Pickup Time"    value={formatTime(rental.pickup_time)} />
+            <InfoRow label="Return Time"    value={formatTime(rental.return_time)} />
             <InfoRow label="Location Type"  value={rental.loc_usage ? rental.loc_usage.charAt(0).toUpperCase() + rental.loc_usage.slice(1) : null} />
             <InfoRow label="Social Handle"  value={rental.username} />
             <InfoRow label="Discount Code"  value={rental.discount_code} />
@@ -413,15 +459,17 @@ const RenterVerificationPage: React.FC = () => {
           <SectionTitle icon={<FaceIcon sx={{ fontSize: 17 }} />} title="Selfie Verification" />
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'flex-start' }}>
             <ImageCard label="Selfie Photo" src={renter.selfie_verification_img} onZoom={setZoomSrc} />
-            {selfieInst && (
-              <Box sx={{ flex: '1 1 220px', p: 2, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
-                <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.1em', mb: 0.5, fontWeight: 700 }}>
-                  Verification Instruction
-                </Typography>
-                <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.9rem', mb: 0.5 }}>{selfieInst.instruction_name}</Typography>
-                <Typography sx={{ color: MUTED, fontSize: '0.82rem', lineHeight: 1.6 }}>{selfieInst.instruction_desc}</Typography>
-              </Box>
-            )}
+            <Box sx={{ flex: '1 1 220px', p: 2, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
+              <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.1em', mb: 0.5, fontWeight: 700 }}>
+                Selfie Verification Instruction
+              </Typography>
+              <Typography sx={{ color: selfieInstructionTitle ? ESPRESSO : MUTED, fontWeight: 700, fontSize: '0.9rem', mb: 0.5, fontStyle: selfieInstructionTitle ? 'normal' : 'italic' }}>
+                {selfieInstructionTitle ?? 'Not provided'}
+              </Typography>
+              <Typography sx={{ color: selfieInstructionDescription ? MUTED : MUTED, fontSize: '0.82rem', lineHeight: 1.6, fontStyle: selfieInstructionDescription ? 'normal' : 'italic', whiteSpace: 'pre-wrap' }}>
+                {selfieInstructionDescription ?? 'Not provided'}
+              </Typography>
+            </Box>
           </Box>
         </Paper>
 
@@ -443,12 +491,7 @@ const RenterVerificationPage: React.FC = () => {
                 startIcon={a.icon}
                 onClick={async () => {
                   setStatus(a.val);
-                  setSaving(true);
-                  await supabase.from('RB_RENTAL_FORM').update({ status: a.val }).eq('id', rentalId);
-                  setSaving(false);
-                  setSaved(true);
-                  setTimeout(() => setSaved(false), 2000);
-                  await fetchData();
+                  await updateRentalStatus(a.val);
                 }}
                 disabled={saving || status === a.val}
                 sx={{
@@ -467,6 +510,10 @@ const RenterVerificationPage: React.FC = () => {
         </Paper>
 
       </Box>
+
+      <Snackbar open={snackbar.open} autoHideDuration={4000} onClose={() => setSnackbar((current) => ({ ...current, open: false }))} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((current) => ({ ...current, open: false }))}>{snackbar.msg}</Alert>
+      </Snackbar>
 
       {/* ── Image zoom dialog ── */}
       <Dialog open={!!zoomSrc} onClose={() => setZoomSrc(null)} maxWidth="lg"
