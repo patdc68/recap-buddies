@@ -55,6 +55,23 @@ import CancelIcon             from '@mui/icons-material/Cancel';
 import MonitorHeartIcon       from '@mui/icons-material/MonitorHeart';
 import SettingsSuggestIcon    from '@mui/icons-material/SettingsSuggest';
 import NotificationsIcon      from '@mui/icons-material/Notifications';
+import FormatBoldIcon         from '@mui/icons-material/FormatBold';
+import FormatItalicIcon       from '@mui/icons-material/FormatItalic';
+import FormatUnderlinedIcon   from '@mui/icons-material/FormatUnderlined';
+import StrikethroughSIcon     from '@mui/icons-material/StrikethroughS';
+import FormatListBulletedIcon from '@mui/icons-material/FormatListBulleted';
+import FormatListNumberedIcon from '@mui/icons-material/FormatListNumbered';
+import LinkIcon               from '@mui/icons-material/Link';
+import FormatColorTextIcon    from '@mui/icons-material/FormatColorText';
+import BrushIcon              from '@mui/icons-material/Brush';
+import FormatAlignLeftIcon    from '@mui/icons-material/FormatAlignLeft';
+import FormatAlignCenterIcon  from '@mui/icons-material/FormatAlignCenter';
+import FormatAlignRightIcon   from '@mui/icons-material/FormatAlignRight';
+import UndoIcon               from '@mui/icons-material/Undo';
+import RedoIcon               from '@mui/icons-material/Redo';
+import CodeIcon               from '@mui/icons-material/Code';
+import HorizontalRuleIcon     from '@mui/icons-material/HorizontalRule';
+import FormatSizeIcon         from '@mui/icons-material/FormatSize';
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
@@ -1968,6 +1985,8 @@ const TopBar: React.FC<{ rbUser: RbUser; tab: number; onTab: (t: number) => void
   </Box>
 )};
 
+const toolbarBtnSx = { minWidth: 34, width: 34, height: 34, borderRadius: 2, border: '1px solid rgba(17,17,17,0.12)', color: '#222', p: 0 };
+
 const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const [tab, setTab]           = useState(0);
@@ -1978,7 +1997,8 @@ const AdminDashboard: React.FC = () => {
   const [branches, setBranches] = useState<RbBranch[]>([]);
   const [loading, setLoading]   = useState(true);
   const [authUid, setAuthUid]   = useState('');
-  const [agreementMd, setAgreementMd] = useState('');
+  const [agreementHtml, setAgreementHtml] = useState('');
+  const [initialAgreementHtml, setInitialAgreementHtml] = useState('');
   const [agreementLoading, setAgreementLoading] = useState(false);
   const [agreementSaving, setAgreementSaving] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
@@ -2042,18 +2062,20 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => { fetchAll(); }, [fetchAll]);
   const loadAgreement = useCallback(async () => {
     setAgreementLoading(true);
-    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement.md');
+    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement');
     if (error || !data) {
       setSnackbar({ open: true, msg: `Failed to load agreement: ${error?.message ?? 'Unknown error'}`, severity: 'error' });
       setAgreementLoading(false);
       return;
     }
-    setAgreementMd(await data.text());
+    const html = await data.text();
+    setAgreementHtml(html);
+    setInitialAgreementHtml(html);
     setAgreementLoading(false);
   }, []);
   useEffect(() => {
-    if (tab === 4 && !agreementMd && !agreementLoading) void loadAgreement();
-  }, [tab, agreementMd, agreementLoading, loadAgreement]);
+    if (tab === 4 && !agreementHtml && !agreementLoading) void loadAgreement();
+  }, [tab, agreementHtml, agreementLoading, loadAgreement]);
 
   const markOverdueRentalsForPenalty = useCallback(async () => {
     const today = dayjs().startOf('day');
@@ -2204,16 +2226,40 @@ const AdminDashboard: React.FC = () => {
         {tab === 4 && (
           <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
             <Typography sx={{ mb: 2, fontWeight: 700 }}>Terms & Conditions</Typography>
-            <TextField multiline minRows={14} fullWidth value={agreementMd} onChange={(e) => setAgreementMd(e.target.value)} placeholder="Write markdown content here..." />
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, p: 1.2, borderRadius: 3, border: '1px solid rgba(17,17,17,0.12)', background: '#FAFAFA' }}>
+              {[
+                { cmd: 'bold', icon: <FormatBoldIcon fontSize="small" /> }, { cmd: 'italic', icon: <FormatItalicIcon fontSize="small" /> }, { cmd: 'underline', icon: <FormatUnderlinedIcon fontSize="small" /> }, { cmd: 'strikeThrough', icon: <StrikethroughSIcon fontSize="small" /> },
+                { cmd: 'insertUnorderedList', icon: <FormatListBulletedIcon fontSize="small" /> }, { cmd: 'insertOrderedList', icon: <FormatListNumberedIcon fontSize="small" /> }, { cmd: 'justifyLeft', icon: <FormatAlignLeftIcon fontSize="small" /> }, { cmd: 'justifyCenter', icon: <FormatAlignCenterIcon fontSize="small" /> }, { cmd: 'justifyRight', icon: <FormatAlignRightIcon fontSize="small" /> }, { cmd: 'undo', icon: <UndoIcon fontSize="small" /> }, { cmd: 'redo', icon: <RedoIcon fontSize="small" /> },
+              ].map((item) => <Button key={item.cmd} sx={toolbarBtnSx} onClick={() => document.execCommand(item.cmd)}>{item.icon}</Button>)}
+              <Button sx={toolbarBtnSx} onClick={() => { const url = window.prompt('Enter link URL'); if (url) document.execCommand('createLink', false, url); }}><LinkIcon fontSize="small" /></Button>
+              <Button sx={toolbarBtnSx} onClick={() => { const value = window.prompt('Hex text color (#111111)') ?? '#111111'; document.execCommand('foreColor', false, value); }}><FormatColorTextIcon fontSize="small" /></Button>
+              <Button sx={toolbarBtnSx} onClick={() => { const value = window.prompt('Hex highlight color (#FFF59D)') ?? '#FFF59D'; document.execCommand('hiliteColor', false, value); }}><BrushIcon fontSize="small" /></Button>
+              <Button sx={toolbarBtnSx} onClick={() => { const value = window.prompt('Font size 1-7', '3') ?? '3'; document.execCommand('fontSize', false, value); }}><FormatSizeIcon fontSize="small" /></Button>
+              <Button sx={toolbarBtnSx} onClick={() => document.execCommand('formatBlock', false, 'h1')}><Typography sx={{ fontSize: 12 }}>H1</Typography></Button>
+              <Button sx={toolbarBtnSx} onClick={() => document.execCommand('formatBlock', false, 'h2')}><Typography sx={{ fontSize: 12 }}>H2</Typography></Button>
+              <Button sx={toolbarBtnSx} onClick={() => document.execCommand('formatBlock', false, 'h3')}><Typography sx={{ fontSize: 12 }}>H3</Typography></Button>
+              <Button sx={toolbarBtnSx} onClick={() => document.execCommand('formatBlock', false, 'pre')}><CodeIcon fontSize="small" /></Button>
+              <Button sx={toolbarBtnSx} onClick={() => document.execCommand('insertHorizontalRule')}><HorizontalRuleIcon fontSize="small" /></Button>
+            </Box>
+            <Box
+              contentEditable
+              suppressContentEditableWarning
+              onInput={(e) => setAgreementHtml((e.target as HTMLDivElement).innerHTML)}
+              dangerouslySetInnerHTML={{ __html: agreementHtml }}
+              sx={{ mt: 2, minHeight: 360, borderRadius: 3, border: '1px solid rgba(17,17,17,0.12)', background: '#fff', p: 2.5, fontFamily: 'GlacialIndifference-Regular, sans-serif', lineHeight: 1.7, '&:focus': { outline: '2px solid rgba(17,17,17,0.2)' } }}
+            />
             <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-              <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading}>Reload</Button>
-              <Button variant="contained" disabled={agreementSaving || !agreementMd.trim()} onClick={async () => {
+              <Button variant="outlined" onClick={() => setAgreementHtml(initialAgreementHtml)} disabled={agreementLoading}>Reset</Button>
+              <Button variant="contained" disabled={agreementSaving || !agreementHtml.trim()} onClick={async () => {
                 setAgreementSaving(true);
-                const blob = new Blob([agreementMd], { type: 'text/markdown;charset=utf-8' });
-                const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
+                const blob = new Blob([agreementHtml], { type: 'text/html;charset=utf-8' });
+                const { error } = await supabase.storage.from('terms_and_condition').upload('agreement', blob, { upsert: true, contentType: 'text/html' });
                 setAgreementSaving(false);
                 if (error) setSnackbar({ open: true, msg: `Save failed: ${error.message}`, severity: 'error' });
-                else setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
+                else {
+                  setInitialAgreementHtml(agreementHtml);
+                  setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
+                }
               }}>Save Changes</Button>
             </Box>
           </Paper>

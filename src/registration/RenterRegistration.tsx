@@ -42,7 +42,6 @@ import type { RbSelfieVerificationInst } from '../service/supabaseClient';
 import PageLayout from '../components/PageLayout';
 import CameraCapture from '../components/CameraCapture';
 import FileUpload, { type FileUploadResult } from '../components/FileUpload';
-import rentalContractAgreement from '../../official rental contract agreement.md?raw';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -444,6 +443,7 @@ const RenterRegistration: React.FC = () => {
   const [done, setDone]                             = useState(false);
   const [countdown, setCountdown]                   = useState(3);
   const [termsOpen, setTermsOpen]                   = useState(false);
+  const [rentalContractAgreement, setRentalContractAgreement] = useState('');
   const [acceptedTerms, setAcceptedTerms]           = useState(false);
   const [primaryGuideOpen, setPrimaryGuideOpen]     = useState(false);
   const [secondaryGuideOpen, setSecondaryGuideOpen] = useState(false);
@@ -456,6 +456,11 @@ const RenterRegistration: React.FC = () => {
       .then(({ data }) => {
         if (data) setSelfieInstructions(data as RbSelfieVerificationInst[]);
       });
+  }, []);
+  useEffect(() => {
+    supabase.storage.from('terms_and_condition').download('agreement').then(async ({ data }) => {
+      if (data) setRentalContractAgreement(await data.text());
+    });
   }, []);
 
   // Countdown redirect — declared before any conditional return
@@ -789,12 +794,10 @@ const RenterRegistration: React.FC = () => {
       >
         <DialogTitle>Official Rental Contract Agreement</DialogTitle>
         <DialogContent dividers>
-          <Typography
-            variant="body2"
-            sx={{ whiteSpace: 'pre-wrap', color: '#3A2A12', lineHeight: 1.7, mb: 2 }}
-          >
-            {rentalContractAgreement}
-          </Typography>
+          <Box
+            sx={{ color: '#3A2A12', lineHeight: 1.7, mb: 2, fontFamily: 'GlacialIndifference-Regular, sans-serif', '& h1,& h2,& h3': { fontFamily: 'GlacialIndifference-Bold, sans-serif' }, '& ul,& ol': { pl: 3 }, '& a': { color: '#1565C0' } }}
+            dangerouslySetInnerHTML={{ __html: rentalContractAgreement }}
+          />
           <FormControlLabel
             control={(
               <Checkbox
