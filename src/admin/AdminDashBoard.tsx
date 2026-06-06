@@ -763,7 +763,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
             <IconButton onClick={onClose} size="small" sx={{ color: MUTED }}><CloseIcon fontSize="small" /></IconButton>
           </Box>
         </DialogTitle>
-        <DialogContent sx={{ p: { xs: 1.5, sm: 2.5 }, pt: '0 !important', overflowX: 'visible' }}>
+        <DialogContent sx={{ p: { xs: 1.5, sm: 2.5 }, pt: '0 !important', overflow: 'visible' }}>
           {rentals.length === 0 ? (
             <Box sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: `1px solid ${BORDER}`, background: '#fff' }}>
               <Typography sx={{ color: MUTED, fontFamily: '"Sora", sans-serif', fontSize: '0.85rem' }}>No rentals in this category.</Typography>
@@ -780,13 +780,13 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
                   mb: 1,
                 }}
               >
-                Swipe left/right to view all columns
+                Swipe left/right and scroll up/down to view all records
               </Typography>
               <Box
                 sx={{
                   width: '100%',
-                  overflowX: 'auto',
-                  overflowY: 'hidden',
+                  maxHeight: { xs: '65vh', sm: '70vh', md: '75vh' },
+                  overflow: 'auto',
                   WebkitOverflowScrolling: 'touch',
                   pb: 0.5,
                 }}
@@ -795,7 +795,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
                   <Box sx={{
                     borderRadius: 3,
                     border: '1px solid #eee',
-                    overflow: 'hidden',
+                    overflow: 'visible',
                     backgroundColor: '#fff',
                     width: '100%',
                     '& .MuiDataGrid-root': { border: 'none' },
@@ -806,6 +806,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
                     '& .MuiDataGrid-row:hover': { backgroundColor: 'rgba(201,151,58,0.05)' },
                   }}>
                     <DataGrid
+                      autoHeight={false}
                       rows={rentals}
                       columns={columns}
                       getRowId={(row) => row.id}
@@ -816,7 +817,12 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
                       pageSizeOptions={[10, 25, 50]}
                       disableRowSelectionOnClick
                       onRowClick={(params) => handleRowClick(params.row as EnrichedRental)}
-                      sx={{ minWidth: 900 }}
+                      sx={{
+                        minWidth: 900,
+                        minHeight: 400,
+                        height: { xs: 620, sm: 620, md: 640 },
+                        border: 'none',
+                      }}
                     />
                   </Box>
                 </Box>
