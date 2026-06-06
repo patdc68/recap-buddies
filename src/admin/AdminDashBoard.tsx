@@ -75,6 +75,42 @@ const INK         = '#111111';
 const MUTED       = '#666666';
 const BORDER      = 'rgba(17,17,17,0.12)';
 
+const MOBILE_DATA_GRID_PAGINATION_SX = {
+  '@media (max-width: 600px)': {
+    '& .MuiDataGrid-footerContainer': {
+      justifyContent: 'flex-start',
+      minHeight: 52,
+      px: 1,
+    },
+    '& .MuiTablePagination-root': {
+      width: '100%',
+      overflow: 'visible',
+    },
+    '& .MuiTablePagination-toolbar': {
+      justifyContent: 'flex-start',
+      gap: 0.5,
+      minHeight: 52,
+      p: 0,
+    },
+    '& .MuiTablePagination-spacer': {
+      display: 'none',
+    },
+    '& .MuiTablePagination-selectLabel, & .MuiTablePagination-input': {
+      display: 'none',
+    },
+    '& .MuiTablePagination-displayedRows': {
+      flexShrink: 0,
+      fontSize: '0.75rem',
+      m: 0,
+      whiteSpace: 'nowrap',
+    },
+    '& .MuiTablePagination-actions': {
+      flexShrink: 0,
+      ml: 0,
+    },
+  },
+};
+
 // ─── Status tables ────────────────────────────────────────────────────────────
 
 const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
@@ -826,6 +862,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
                         height: { xs: 620, sm: 'min(620px, 68vh)', md: 'calc(88vh - 120px)' },
                         maxHeight: '100%',
                         border: 'none',
+                        ...MOBILE_DATA_GRID_PAGINATION_SX,
                       }}
                     />
                   </Box>
@@ -1259,6 +1296,7 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
           '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700 },
           '& .MuiDataGrid-row': { transition: 'background-color 0.2s ease', cursor: 'pointer' },
           '& .MuiDataGrid-row:hover': { backgroundColor: '#f8f8f8' },
+          ...MOBILE_DATA_GRID_PAGINATION_SX,
         }}
       />
 
@@ -2155,6 +2193,7 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
             '& .MuiDataGrid-row:hover': { backgroundColor: '#f8f8f8' },
             '& .MuiDataGrid-cell': { py: 1, fontFamily: '"DM Sans", sans-serif' },
             '& .MuiDataGrid-toolbarContainer': { p: 1.5, gap: 1 },
+            ...MOBILE_DATA_GRID_PAGINATION_SX,
           }}
         />
       </Paper>
