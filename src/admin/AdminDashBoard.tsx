@@ -19,6 +19,7 @@ import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import isSameOrAfter  from 'dayjs/plugin/isSameOrAfter';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
+import { TERMS_BUCKET, TERMS_CONTENT_TYPE, TERMS_FILE_PATH } from '../service/termsStorage';
 import { emailService } from '../services/emailService';
 import { EMAIL_STATUS_MAP } from '../constants/emailStatusMap';
 import type {
@@ -2042,14 +2043,19 @@ const AdminDashboard: React.FC = () => {
   useEffect(() => { fetchAll(); }, [fetchAll]);
   const loadAgreement = useCallback(async () => {
     setAgreementLoading(true);
-    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement.md');
-    if (error || !data) {
-      setSnackbar({ open: true, msg: `Failed to load agreement: ${error?.message ?? 'Unknown error'}`, severity: 'error' });
+    try {
+      const { data, error } = await supabase.storage.from(TERMS_BUCKET).download(TERMS_FILE_PATH);
+      if (error || !data) {
+        console.error('Failed to load terms:', error);
+        throw error ?? new Error('Terms & Conditions file was not found.');
+      }
+      setAgreementMd(await data.text());
+    } catch (error) {
+      const message = error instanceof Error ? error.message : 'Unknown error';
+      setSnackbar({ open: true, msg: `Failed to load agreement: ${message}`, severity: 'error' });
+    } finally {
       setAgreementLoading(false);
-      return;
     }
-    setAgreementMd(await data.text());
-    setAgreementLoading(false);
   }, []);
   useEffect(() => {
     if (tab === 4 && !agreementMd && !agreementLoading) void loadAgreement();
@@ -2209,11 +2215,21 @@ const AdminDashboard: React.FC = () => {
               <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading}>Reload</Button>
               <Button variant="contained" disabled={agreementSaving || !agreementMd.trim()} onClick={async () => {
                 setAgreementSaving(true);
-                const blob = new Blob([agreementMd], { type: 'text/markdown;charset=utf-8' });
-                const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
-                setAgreementSaving(false);
-                if (error) setSnackbar({ open: true, msg: `Save failed: ${error.message}`, severity: 'error' });
-                else setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
+                try {
+                  const html = agreementMd;
+                  const blob = new Blob([html], { type: TERMS_CONTENT_TYPE });
+                  const { error } = await supabase.storage.from(TERMS_BUCKET).upload(TERMS_FILE_PATH, blob, { upsert: true, contentType: TERMS_CONTENT_TYPE });
+                  if (error) {
+                    console.error('Failed to save terms:', error);
+                    throw error;
+                  }
+                  setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
+                } catch (error) {
+                  const message = error instanceof Error ? error.message : 'Unknown error';
+                  setSnackbar({ open: true, msg: `Save failed: ${message}`, severity: 'error' });
+                } finally {
+                  setAgreementSaving(false);
+                }
               }}>Save Changes</Button>
             </Box>
           </Paper>
