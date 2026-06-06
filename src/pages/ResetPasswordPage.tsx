@@ -1,4 +1,4 @@
-import React, { useState, type ChangeEvent } from 'react';
+import React, { useEffect, useState, type ChangeEvent } from 'react';
 import {
   Alert,
   Box,
@@ -15,6 +15,7 @@ import SaveIcon from '@mui/icons-material/Save';
 import { useNavigate } from 'react-router-dom';
 import PageLayout from '../components/PageLayout';
 import { supabase } from '../service/supabaseClient';
+import type { Session } from '@supabase/supabase-js';
 
 interface ResetPasswordForm {
   newPassword: string;
@@ -24,14 +25,92 @@ interface ResetPasswordForm {
 type ResetPasswordErrors = Partial<Record<keyof ResetPasswordForm, string>>;
 
 const MIN_PASSWORD_LENGTH = 8;
+const MISSING_SESSION_MESSAGE = 'Password reset session is missing or expired. Please request a new reset link.';
+const INVALID_LINK_MESSAGE = 'Password reset link is invalid or expired.';
 
 const ResetPasswordPage: React.FC = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState<ResetPasswordForm>({ newPassword: '', confirmPassword: '' });
   const [errors, setErrors] = useState<ResetPasswordErrors>({});
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [errorMessage, setErrorMessage] = useState('');
   const [successOpen, setSuccessOpen] = useState(false);
+  const [recoverySession, setRecoverySession] = useState<Session | null>(null);
+
+
+  useEffect(() => {
+    let isActive = true;
+
+    const initializeRecoverySession = async () => {
+      setLoading(true);
+      setErrorMessage('');
+
+      try {
+        const params = new URLSearchParams(window.location.search);
+        const code = params.get('code');
+
+        if (code) {
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+          if (error) {
+            console.error('Failed to exchange recovery code:', error);
+            if (isActive) setErrorMessage(INVALID_LINK_MESSAGE);
+            return;
+          }
+
+          if (isActive) setRecoverySession(data.session ?? null);
+        }
+
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        const accessToken = hashParams.get('access_token');
+        const refreshToken = hashParams.get('refresh_token');
+        const resetType = hashParams.get('type');
+
+        if (accessToken && refreshToken && resetType === 'recovery') {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: accessToken,
+            refresh_token: refreshToken,
+          });
+
+          if (error) {
+            console.error('Failed to initialize recovery session from URL tokens:', error);
+            if (isActive) setErrorMessage(INVALID_LINK_MESSAGE);
+            return;
+          }
+
+          if (isActive) setRecoverySession(data.session ?? null);
+        }
+
+        const { data } = await supabase.auth.getSession();
+
+        if (!isActive) return;
+
+        setRecoverySession(data.session ?? null);
+
+        if (!data.session) {
+          setErrorMessage(MISSING_SESSION_MESSAGE);
+        }
+      } finally {
+        if (isActive) setLoading(false);
+      }
+    };
+
+    void initializeRecoverySession();
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'PASSWORD_RECOVERY' && session) {
+        setRecoverySession(session);
+        setErrorMessage('');
+      }
+    });
+
+    return () => {
+      isActive = false;
+      subscription.unsubscribe();
+    };
+  }, []);
 
   const validate = (): boolean => {
     const nextErrors: ResetPasswordErrors = {};
@@ -57,7 +136,7 @@ const ResetPasswordPage: React.FC = () => {
     (e: ChangeEvent<HTMLInputElement>) => {
       setForm((current) => ({ ...current, [field]: e.target.value }));
       setErrors((current) => ({ ...current, [field]: undefined }));
-      setErrorMessage('');
+      if (recoverySession) setErrorMessage('');
     };
 
   const handleSubmit = async () => {
@@ -66,25 +145,33 @@ const ResetPasswordPage: React.FC = () => {
     setLoading(true);
     setErrorMessage('');
 
-    const { error } = await supabase.auth.updateUser({
-      password: form.newPassword,
-    });
+    try {
+      const { data } = await supabase.auth.getSession();
 
-    setLoading(false);
+      if (!data.session) {
+        setRecoverySession(null);
+        setErrorMessage(MISSING_SESSION_MESSAGE);
+        return;
+      }
 
-    if (error) {
-      setErrorMessage(error.message);
-      return;
+      setRecoverySession(data.session);
+
+      const { error } = await supabase.auth.updateUser({
+        password: form.newPassword,
+      });
+
+      if (error) {
+        console.error('Failed to update password from recovery session:', error);
+        setErrorMessage('Unable to update your password. Please request a new reset link and try again.');
+        return;
+      }
+
+      setSuccessOpen(true);
+      await supabase.auth.signOut();
+      navigate('/login', { replace: true });
+    } finally {
+      setLoading(false);
     }
-
-    setSuccessOpen(true);
-
-    window.setTimeout(() => {
-      void (async () => {
-        await supabase.auth.signOut();
-        navigate('/login', { replace: true });
-      })();
-    }, 1500);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -150,7 +237,7 @@ const ResetPasswordPage: React.FC = () => {
               onChange={handleTextChange('newPassword')}
               error={!!errors.newPassword}
               helperText={errors.newPassword ?? `Use at least ${MIN_PASSWORD_LENGTH} characters.`}
-              disabled={loading}
+              disabled={loading || successOpen || !recoverySession}
             />
             <TextField
               label="Confirm Password"
@@ -162,19 +249,35 @@ const ResetPasswordPage: React.FC = () => {
               onChange={handleTextChange('confirmPassword')}
               error={!!errors.confirmPassword}
               helperText={errors.confirmPassword}
-              disabled={loading}
+              disabled={loading || successOpen || !recoverySession}
             />
 
-            <Alert severity="info" sx={{ py: 0.75 }}>
-              This page only works after opening the secure reset link from your email.
-            </Alert>
+            {errorMessage ? (
+              <Alert
+                severity="error"
+                action={(
+                  <Button color="inherit" size="small" onClick={() => navigate('/forgot-password')}>
+                    Request link
+                  </Button>
+                )}
+                sx={{ py: 0.75, alignItems: 'center' }}
+              >
+                {errorMessage}
+              </Alert>
+            ) : (
+              <Alert severity={recoverySession ? 'success' : 'info'} sx={{ py: 0.75 }}>
+                {recoverySession
+                  ? 'Secure reset session ready. Enter your new password below.'
+                  : 'This page only works after opening the secure reset link from your email.'}
+              </Alert>
+            )}
 
             <Button
               variant="contained"
               size="large"
               fullWidth
               onClick={handleSubmit}
-              disabled={loading || successOpen}
+              disabled={loading || successOpen || !recoverySession}
               endIcon={
                 loading ? (
                   <CircularProgress size={18} sx={{ color: '#fff' }} />
@@ -184,7 +287,7 @@ const ResetPasswordPage: React.FC = () => {
               }
               sx={{ py: 1.4 }}
             >
-              {loading ? 'Updating…' : 'Update password'}
+              {loading ? 'Preparing…' : 'Update password'}
             </Button>
           </Box>
 
@@ -220,16 +323,6 @@ const ResetPasswordPage: React.FC = () => {
         </Alert>
       </Snackbar>
 
-      <Snackbar
-        open={!!errorMessage}
-        autoHideDuration={6000}
-        onClose={() => setErrorMessage('')}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setErrorMessage('')} severity="error" sx={{ width: '100%' }}>
-          {errorMessage}
-        </Alert>
-      </Snackbar>
     </PageLayout>
   );
 };
