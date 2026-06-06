@@ -86,6 +86,7 @@ export interface RbRenter {
   secondary_id_back: string | null;
   proof_of_billing: string | null;
   selfie_verification_id: string | null;
+  selfie_verification_inst_id?: string | null;
   selfie_verification_img: string | null;
   created_at: string;
 }
@@ -93,7 +94,9 @@ export interface RbRenter {
 export interface RbSelfieVerificationInst {
   id: string;
   instruction_name: string;
+  instruction_title?: string | null;
   instruction_desc: string;
+  instruction_description?: string | null;
   created_at: string;
   display_order?: number | null;
 }
@@ -128,6 +131,8 @@ export interface RbRentalForm {
   rent_date_end: string;
   pickup_time: string | null;
   return_time: string | null;
+  selfie_verification_inst_id?: string | null;
+  selfie_verification_id?: string | null;
   actual_return_date: string | null;
   hub_pick_up_addr: string | null;   // FK → RB_BRANCHES.id
   delivery_addr: string | null;
