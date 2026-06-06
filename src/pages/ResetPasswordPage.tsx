@@ -1,4 +1,4 @@
-import React, { useEffect, useState, type ChangeEvent } from 'react';
+import React, { useEffect, useRef, useState, type ChangeEvent } from 'react';
 import {
   Alert,
   Box,
@@ -29,6 +29,8 @@ type ResetPasswordErrors = Partial<Record<keyof ResetPasswordForm, string>>;
 
 const MIN_PASSWORD_LENGTH = 6;
 const MISSING_SESSION_MESSAGE = 'Password reset session is missing or expired. Please request a new reset link.';
+const MISSING_RECOVERY_CREDENTIALS_MESSAGE =
+  'Password reset link is invalid or missing recovery credentials. Please request a new reset link.';
 const INVALID_LINK_MESSAGE = 'Password reset link is invalid or expired. Please request a new reset link.';
 
 const ResetPasswordPage: React.FC = () => {
@@ -40,111 +42,105 @@ const ResetPasswordPage: React.FC = () => {
   const [sessionReady, setSessionReady] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successDialogOpen, setSuccessDialogOpen] = useState(false);
+  const recoveryCredentialsDetectedRef = useRef(false);
+  const recoverySessionReadyRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
+
+    const markRecoverySessionReady = () => {
+      recoverySessionReadyRef.current = true;
+      setSessionReady(true);
+      setErrorMessage('');
+      setCheckingSession(false);
+    };
+
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+
+      if (event === 'PASSWORD_RECOVERY' && session) {
+        recoveryCredentialsDetectedRef.current = true;
+        markRecoverySessionReady();
+      }
+    });
 
     const initializeRecoverySession = async () => {
       try {
         setCheckingSession(true);
         setSessionReady(false);
         setErrorMessage('');
-
-        console.log('Reset password href:', window.location.href);
-        console.log('Reset password search:', window.location.search);
-        console.log('Reset password hash:', window.location.hash);
+        recoverySessionReadyRef.current = false;
 
         const searchParams = new URLSearchParams(window.location.search);
-        console.log('Reset password search params:', Object.fromEntries(searchParams.entries()));
+        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
         const code = searchParams.get('code');
-        console.log('Reset password code value:', code);
-
-        if (code) {
-          console.log('Recovery code found:', code);
-
-          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
-
-          console.log('exchangeCodeForSession data:', data);
-          console.log('exchangeCodeForSession error:', error);
-
-          if (error) {
-            throw error;
-          }
-        }
-
-        const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
-        console.log('Reset password hash params:', Object.fromEntries(hashParams.entries()));
+        const tokenHash = searchParams.get('token_hash');
+        const queryType = searchParams.get('type');
         const accessToken = hashParams.get('access_token');
         const refreshToken = hashParams.get('refresh_token');
-        const type = hashParams.get('type');
+        const hashType = hashParams.get('type');
+        const hasRecoveryCode = Boolean(code);
+        const hasRecoveryTokenHash = Boolean(tokenHash && queryType === 'recovery');
+        const hasRecoveryHashTokens = Boolean(accessToken && refreshToken && hashType === 'recovery');
+        const hasRecoveryCredentials = hasRecoveryCode || hasRecoveryTokenHash || hasRecoveryHashTokens;
 
-        if (accessToken && refreshToken && type === 'recovery') {
-          console.log('Recovery hash tokens found.');
+        recoveryCredentialsDetectedRef.current = hasRecoveryCredentials;
 
-          const { data, error } = await supabase.auth.setSession({
+        if (!hasRecoveryCredentials) {
+          if (!mounted) return;
+
+          setSessionReady(false);
+          setErrorMessage(MISSING_RECOVERY_CREDENTIALS_MESSAGE);
+          return;
+        }
+
+        if (code) {
+          const { error } = await supabase.auth.exchangeCodeForSession(code);
+
+          if (error) throw error;
+        } else if (tokenHash && queryType === 'recovery') {
+          const { error } = await supabase.auth.verifyOtp({
+            token_hash: tokenHash,
+            type: 'recovery',
+          });
+
+          if (error) throw error;
+        } else if (accessToken && refreshToken && hashType === 'recovery') {
+          const { error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
 
-          console.log('setSession data:', data);
-          console.log('setSession error:', error);
-
-          if (error) {
-            throw error;
-          }
+          if (error) throw error;
         }
-
-        await new Promise((resolve) => setTimeout(resolve, 500));
 
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
-        console.log('Final recovery session:', sessionData.session);
-        console.log('Final recovery session error:', sessionError);
-
+        if (sessionError) throw sessionError;
         if (!mounted) return;
 
         if (sessionData.session) {
-          setSessionReady(true);
-          setErrorMessage('');
+          markRecoverySessionReady();
         } else {
           setSessionReady(false);
           setErrorMessage(MISSING_SESSION_MESSAGE);
         }
       } catch (err) {
-        console.error('Password recovery initialization failed:', err);
-
         if (!mounted) return;
 
+        const message = err instanceof Error && err.message ? err.message : INVALID_LINK_MESSAGE;
         setSessionReady(false);
-        setErrorMessage(INVALID_LINK_MESSAGE);
+        setErrorMessage(message);
       } finally {
-        if (mounted) {
+        if (mounted && !recoverySessionReadyRef.current) {
           setCheckingSession(false);
         }
       }
     };
 
     void initializeRecoverySession();
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      console.log('Reset password auth event:', event, session);
-
-      if (!mounted) return;
-
-      if (event === 'PASSWORD_RECOVERY' && session) {
-        setSessionReady(true);
-        setErrorMessage('');
-        setCheckingSession(false);
-      }
-
-      if (event === 'SIGNED_IN' && session) {
-        setSessionReady(true);
-        setErrorMessage('');
-        setCheckingSession(false);
-      }
-    });
 
     return () => {
       mounted = false;
@@ -190,9 +186,19 @@ const ResetPasswordPage: React.FC = () => {
         return;
       }
 
-      const { data: sessionData } = await supabase.auth.getSession();
+      if (!recoveryCredentialsDetectedRef.current || !recoverySessionReadyRef.current || !sessionReady) {
+        setErrorMessage(MISSING_RECOVERY_CREDENTIALS_MESSAGE);
+        setSubmitting(false);
+        return;
+      }
 
-      console.log('Session before password update:', sessionData.session);
+      const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        setErrorMessage(sessionError.message);
+        setSubmitting(false);
+        return;
+      }
 
       if (!sessionData.session) {
         setSessionReady(false);
@@ -201,13 +207,9 @@ const ResetPasswordPage: React.FC = () => {
         return;
       }
 
-      console.log('Attempting password update...');
-
-      const { data, error } = await supabase.auth.updateUser({
+      const { error } = await supabase.auth.updateUser({
         password: form.newPassword,
       });
-      console.log('Password update data:', data);
-      console.log('Password update error:', error);
 
       if (error) {
         setErrorMessage(error.message || 'Failed to update password.');
