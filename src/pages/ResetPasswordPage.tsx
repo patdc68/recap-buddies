@@ -31,6 +31,7 @@ const ResetPasswordPage: React.FC = () => {
   const [errors, setErrors] = useState<ResetPasswordErrors>({});
   const [loading, setLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
+  const [successOpen, setSuccessOpen] = useState(false);
 
   const validate = (): boolean => {
     const nextErrors: ResetPasswordErrors = {};
@@ -76,12 +77,14 @@ const ResetPasswordPage: React.FC = () => {
       return;
     }
 
-    await supabase.auth.signOut();
+    setSuccessOpen(true);
 
-    navigate('/login', {
-      replace: true,
-      state: { passwordResetSuccess: true },
-    });
+    window.setTimeout(() => {
+      void (async () => {
+        await supabase.auth.signOut();
+        navigate('/login', { replace: true });
+      })();
+    }, 1500);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -171,7 +174,7 @@ const ResetPasswordPage: React.FC = () => {
               size="large"
               fullWidth
               onClick={handleSubmit}
-              disabled={loading}
+              disabled={loading || successOpen}
               endIcon={
                 loading ? (
                   <CircularProgress size={18} sx={{ color: '#fff' }} />
@@ -205,6 +208,17 @@ const ResetPasswordPage: React.FC = () => {
           </Box>
         </Box>
       </Box>
+
+      <Snackbar
+        open={successOpen}
+        autoHideDuration={1500}
+        onClose={() => setSuccessOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setSuccessOpen(false)} severity="success" sx={{ width: '100%' }}>
+          Password updated successfully. Redirecting to login…
+        </Alert>
+      </Snackbar>
 
       <Snackbar
         open={!!errorMessage}
