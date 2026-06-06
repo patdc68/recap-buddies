@@ -89,11 +89,6 @@ const STATUS_CONFIG: Record<RentalStatus, { label: string; bg: string; color: st
     bg: 'rgba(120,120,120,0.10)', color: '#555555', border: 'rgba(120,120,120,0.25)',
     icon: <CancelIcon sx={{ fontSize: 14 }} />,
   },
-  cancelled: {
-    label: 'Cancelled',
-    bg: 'rgba(120,120,120,0.10)', color: '#555555', border: 'rgba(120,120,120,0.25)',
-    icon: <CancelIcon sx={{ fontSize: 14 }} />,
-  },
   declined: {
     label: 'Declined',
     bg: 'rgba(211,47,47,0.08)', color: '#B71C1C', border: 'rgba(211,47,47,0.25)',

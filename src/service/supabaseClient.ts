@@ -111,7 +111,6 @@ export type RentalStatus =
   | 'for-penalty'
   | 'completed'
   | 'canceled'
-  | 'cancelled'
   | 'declined';
 export type LocUsage     = 'domestic' | 'international';
 

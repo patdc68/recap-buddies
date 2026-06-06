@@ -85,7 +85,6 @@ const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: str
   'for-penalty':  { label: 'For Penalty',  color: '#B71C1C', bg: 'rgba(211,47,47,0.10)', border: 'rgba(211,47,47,0.30)' },
   completed:   { label: 'Completed',  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)', border: 'rgba(105,219,124,0.30)' },
   canceled:    { label: 'Canceled',   color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
-  cancelled:   { label: 'Cancelled',  color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
   declined:    { label: 'Declined',   color: '#B71C1C', bg: 'rgba(211,47,47,0.08)',   border: 'rgba(211,47,47,0.25)'   },
 };
 
@@ -1154,11 +1153,15 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
   const weeks: Dayjs[][] = [];
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
 
-  const calendarRentals = rentals.filter((r) => !['canceled', 'cancelled'].includes(r.status?.toLowerCase?.() ?? ''));
-  const filtered = selectedCamera === 'all' ? calendarRentals : calendarRentals.filter((r) => r.cam_name_id_fk === selectedCamera);
+  const visibleCalendarRentals = rentals.filter(
+    (rental) => !['canceled', 'declined'].includes(
+      String(rental.status).toLowerCase()
+    )
+  );
+  const filtered = selectedCamera === 'all' ? visibleCalendarRentals : visibleCalendarRentals.filter((r) => r.cam_name_id_fk === selectedCamera);
 
   const openRentalById = (rentalId: string) => {
-    const clickedRental = calendarRentals.find((r) => r.id === rentalId);
+    const clickedRental = visibleCalendarRentals.find((r) => r.id === rentalId);
     if (clickedRental) setSelectedRental(clickedRental);
   };
 
