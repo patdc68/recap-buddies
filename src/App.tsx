@@ -6,6 +6,8 @@ import theme from './theme/Theme';
 import RenterRegistration      from './registration/RenterRegistration';
 import RenterForm              from './registration/RenterForm';
 import LoginPage               from './registration/LoginPage';
+import ForgotPasswordPage      from './pages/ForgotPasswordPage';
+import ResetPasswordPage       from './pages/ResetPasswordPage';
 import Dashboard               from './registration/Dashboard';
 import AdminLogin              from './admin/AdminLogin';
 import AdminRegistration       from './admin/AdminRegistration';
@@ -22,6 +24,8 @@ const App: React.FC = () => (
       <Routes>
         {/* ── Public / renter ── */}
         <Route path="/login"              element={<LoginPage />} />
+        <Route path="/forgot-password"    element={<ForgotPasswordPage />} />
+        <Route path="/reset-password"     element={<ResetPasswordPage />} />
         <Route path="/renterRegistration" element={<RenterRegistration />} />
 
         {/* ── Protected renter ── */}
