@@ -93,12 +93,9 @@ export interface RbRenter {
 
 export interface RbSelfieVerificationInst {
   id: string;
-  instruction_name: string;
-  instruction_title?: string | null;
-  instruction_desc: string;
-  instruction_description?: string | null;
-  created_at: string;
-  display_order?: number | null;
+  instruction_name?: string | null;
+  instruction_desc?: string | null;
+  created_at?: string;
 }
 
 // ─── Rental Form ──────────────────────────────────────────────────────────────
