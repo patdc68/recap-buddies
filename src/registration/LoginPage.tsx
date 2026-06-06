@@ -7,11 +7,13 @@ import {
   Alert,
   CircularProgress,
   Divider,
+  Link,
+  Snackbar,
 } from '@mui/material';
 import LockOutlinedIcon from '@mui/icons-material/LockOutlined';
 import LoginIcon from '@mui/icons-material/Login';
 import PersonAddIcon from '@mui/icons-material/PersonAdd';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import PageLayout from '../components/PageLayout';
 
@@ -28,12 +30,16 @@ type LoginErrors = Partial<Record<keyof LoginForm, string>>;
 
 const LoginPage: React.FC = () => {
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [form, setForm]       = useState<LoginForm>({ email: '', password: '' });
   const [errors, setErrors]   = useState<LoginErrors>({});
   const [loading, setLoading] = useState(false);
   const [checkingSession, setCheckingSession] = useState(true);
   const [authError, setAuthError] = useState('');
+  const [resetSuccessOpen, setResetSuccessOpen] = useState(
+    Boolean((location.state as { passwordResetSuccess?: boolean } | null)?.passwordResetSuccess)
+  );
 
   useEffect(() => {
     const redirectIfAuthenticated = async () => {
@@ -192,6 +198,18 @@ const LoginPage: React.FC = () => {
               helperText={errors.password}
             />
 
+            <Box sx={{ textAlign: 'right', mt: -1.5 }}>
+              <Link
+                component="button"
+                type="button"
+                underline="hover"
+                onClick={() => navigate('/forgot-password')}
+                sx={{ color: '#111111', fontSize: '0.875rem', fontWeight: 700 }}
+              >
+                Forgot password?
+              </Link>
+            </Box>
+
             {authError && (
               <Alert severity="error" sx={{ py: 0.5 }}>
                 {authError}
@@ -248,6 +266,16 @@ const LoginPage: React.FC = () => {
         </Typography>
       </Box>
       )}
+      <Snackbar
+        open={resetSuccessOpen}
+        autoHideDuration={6000}
+        onClose={() => setResetSuccessOpen(false)}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+      >
+        <Alert onClose={() => setResetSuccessOpen(false)} severity="success" sx={{ width: '100%' }}>
+          Password updated successfully. Please sign in again.
+        </Alert>
+      </Snackbar>
     </PageLayout>
   );
 };
