@@ -4,8 +4,12 @@ import {
   Box,
   Button,
   CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogContentText,
+  DialogTitle,
   Link,
-  Snackbar,
   TextField,
   Typography,
 } from '@mui/material';
@@ -23,7 +27,7 @@ interface ResetPasswordForm {
 
 type ResetPasswordErrors = Partial<Record<keyof ResetPasswordForm, string>>;
 
-const MIN_PASSWORD_LENGTH = 8;
+const MIN_PASSWORD_LENGTH = 6;
 const MISSING_SESSION_MESSAGE = 'Password reset session is missing or expired. Please request a new reset link.';
 const INVALID_LINK_MESSAGE = 'Password reset link is invalid or expired. Please request a new reset link.';
 
@@ -35,105 +39,118 @@ const ResetPasswordPage: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [sessionReady, setSessionReady] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
-  const [successOpen, setSuccessOpen] = useState(false);
+  const [successDialogOpen, setSuccessDialogOpen] = useState(false);
 
   useEffect(() => {
-    let isActive = true;
-
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!isActive) return;
-
-      if (event === 'PASSWORD_RECOVERY' && session) {
-        setSessionReady(true);
-        setErrorMessage('');
-        setCheckingSession(false);
-      }
-    });
+    let mounted = true;
 
     const initializeRecoverySession = async () => {
-      setCheckingSession(true);
-      setSessionReady(false);
-      setErrorMessage('');
-
       try {
-        const params = new URLSearchParams(window.location.search);
-        const code = params.get('code');
+        setCheckingSession(true);
+        setSessionReady(false);
+        setErrorMessage('');
+
+        console.log('Reset password href:', window.location.href);
+        console.log('Reset password search:', window.location.search);
+        console.log('Reset password hash:', window.location.hash);
+
+        const searchParams = new URLSearchParams(window.location.search);
+        console.log('Reset password search params:', Object.fromEntries(searchParams.entries()));
+        const code = searchParams.get('code');
+        console.log('Reset password code value:', code);
 
         if (code) {
-          const { error } = await supabase.auth.exchangeCodeForSession(code);
+          console.log('Recovery code found:', code);
+
+          const { data, error } = await supabase.auth.exchangeCodeForSession(code);
+
+          console.log('exchangeCodeForSession data:', data);
+          console.log('exchangeCodeForSession error:', error);
 
           if (error) {
-            console.error('Failed to exchange recovery code:', error);
+            throw error;
           }
         }
 
-        const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
+        const hashParams = new URLSearchParams(window.location.hash.replace('#', ''));
+        console.log('Reset password hash params:', Object.fromEntries(hashParams.entries()));
         const accessToken = hashParams.get('access_token');
         const refreshToken = hashParams.get('refresh_token');
-        const resetType = hashParams.get('type');
+        const type = hashParams.get('type');
 
-        if (accessToken && refreshToken && (!resetType || resetType === 'recovery')) {
-          const { error } = await supabase.auth.setSession({
+        if (accessToken && refreshToken && type === 'recovery') {
+          console.log('Recovery hash tokens found.');
+
+          const { data, error } = await supabase.auth.setSession({
             access_token: accessToken,
             refresh_token: refreshToken,
           });
 
+          console.log('setSession data:', data);
+          console.log('setSession error:', error);
+
           if (error) {
-            console.error('Failed to initialize recovery session from URL tokens:', error);
+            throw error;
           }
         }
 
-        const { data } = await supabase.auth.getSession();
+        await new Promise((resolve) => setTimeout(resolve, 500));
 
-        if (!isActive) return;
+        const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
 
-        if (data.session) {
+        console.log('Final recovery session:', sessionData.session);
+        console.log('Final recovery session error:', sessionError);
+
+        if (!mounted) return;
+
+        if (sessionData.session) {
           setSessionReady(true);
           setErrorMessage('');
         } else {
           setSessionReady(false);
           setErrorMessage(MISSING_SESSION_MESSAGE);
         }
-      } catch (error) {
-        console.error('Failed to initialize password reset session:', error);
+      } catch (err) {
+        console.error('Password recovery initialization failed:', err);
 
-        if (isActive) {
-          setSessionReady(false);
-          setErrorMessage(INVALID_LINK_MESSAGE);
-        }
+        if (!mounted) return;
+
+        setSessionReady(false);
+        setErrorMessage(INVALID_LINK_MESSAGE);
       } finally {
-        if (isActive) setCheckingSession(false);
+        if (mounted) {
+          setCheckingSession(false);
+        }
       }
     };
 
     void initializeRecoverySession();
 
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event, session) => {
+      console.log('Reset password auth event:', event, session);
+
+      if (!mounted) return;
+
+      if (event === 'PASSWORD_RECOVERY' && session) {
+        setSessionReady(true);
+        setErrorMessage('');
+        setCheckingSession(false);
+      }
+
+      if (event === 'SIGNED_IN' && session) {
+        setSessionReady(true);
+        setErrorMessage('');
+        setCheckingSession(false);
+      }
+    });
+
     return () => {
-      isActive = false;
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
-
-  const validate = (): boolean => {
-    const nextErrors: ResetPasswordErrors = {};
-
-    if (!form.newPassword) {
-      nextErrors.newPassword = 'New password is required';
-    } else if (form.newPassword.length < MIN_PASSWORD_LENGTH) {
-      nextErrors.newPassword = `Password must be at least ${MIN_PASSWORD_LENGTH} characters`;
-    }
-
-    if (!form.confirmPassword) {
-      nextErrors.confirmPassword = 'Please confirm your new password';
-    } else if (form.newPassword !== form.confirmPassword) {
-      nextErrors.confirmPassword = 'Passwords do not match';
-    }
-
-    setErrors(nextErrors);
-    return Object.keys(nextErrors).length === 0;
-  };
 
   const handleTextChange =
     (field: keyof ResetPasswordForm) =>
@@ -143,41 +160,77 @@ const ResetPasswordPage: React.FC = () => {
       if (sessionReady) setErrorMessage('');
     };
 
-  const handleSubmit = async () => {
-    if (!validate()) return;
-
-    setSubmitting(true);
-    setErrorMessage('');
-
+  const handleUpdatePassword = async () => {
     try {
-      const { data } = await supabase.auth.getSession();
+      setSubmitting(true);
+      setErrorMessage('');
+      setErrors({});
 
-      if (!data.session) {
+      if (!form.newPassword || !form.confirmPassword) {
+        setErrors({
+          newPassword: !form.newPassword ? 'New password is required' : undefined,
+          confirmPassword: !form.confirmPassword ? 'Please confirm your new password' : undefined,
+        });
+        setErrorMessage('Please enter and confirm your new password.');
+        setSubmitting(false);
+        return;
+      }
+
+      if (form.newPassword.length < MIN_PASSWORD_LENGTH) {
+        setErrors({ newPassword: `Password must be at least ${MIN_PASSWORD_LENGTH} characters.` });
+        setErrorMessage(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
+        setSubmitting(false);
+        return;
+      }
+
+      if (form.newPassword !== form.confirmPassword) {
+        setErrors({ confirmPassword: 'Passwords do not match.' });
+        setErrorMessage('Passwords do not match.');
+        setSubmitting(false);
+        return;
+      }
+
+      const { data: sessionData } = await supabase.auth.getSession();
+
+      console.log('Session before password update:', sessionData.session);
+
+      if (!sessionData.session) {
         setSessionReady(false);
         setErrorMessage(MISSING_SESSION_MESSAGE);
+        setSubmitting(false);
         return;
       }
 
-      const { error } = await supabase.auth.updateUser({
+      console.log('Attempting password update...');
+
+      const { data, error } = await supabase.auth.updateUser({
         password: form.newPassword,
       });
+      console.log('Password update data:', data);
+      console.log('Password update error:', error);
 
       if (error) {
-        console.error('Failed to update password from recovery session:', error);
-        setErrorMessage(error.message);
+        setErrorMessage(error.message || 'Failed to update password.');
+        setSubmitting(false);
         return;
       }
 
-      setSuccessOpen(true);
-      await supabase.auth.signOut();
-      navigate('/login', { replace: true });
+      setSuccessDialogOpen(true);
+    } catch (err) {
+      console.error('Unexpected password update error:', err);
+      setErrorMessage('Something went wrong while updating your password.');
     } finally {
       setSubmitting(false);
     }
   };
 
+  const handleGoToLogin = async () => {
+    await supabase.auth.signOut();
+    navigate('/login', { replace: true });
+  };
+
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter') void handleSubmit();
+    if (e.key === 'Enter' && sessionReady && !successDialogOpen) void handleUpdatePassword();
   };
 
   return (
@@ -233,19 +286,7 @@ const ResetPasswordPage: React.FC = () => {
               <CircularProgress size={22} />
               <Typography sx={{ color: '#666666' }}>Verifying password reset link...</Typography>
             </Box>
-          ) : !sessionReady ? (
-            <Alert
-              severity={errorMessage ? 'error' : 'info'}
-              action={errorMessage ? (
-                <Button color="inherit" size="small" onClick={() => navigate('/forgot-password')}>
-                  Request link
-                </Button>
-              ) : undefined}
-              sx={{ py: 0.75, alignItems: 'center' }}
-            >
-              {errorMessage || 'This page only works after opening the secure reset link from your email.'}
-            </Alert>
-          ) : (
+          ) : sessionReady ? (
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
               <TextField
                 label="New Password"
@@ -257,7 +298,7 @@ const ResetPasswordPage: React.FC = () => {
                 onChange={handleTextChange('newPassword')}
                 error={!!errors.newPassword}
                 helperText={errors.newPassword ?? `Use at least ${MIN_PASSWORD_LENGTH} characters.`}
-                disabled={submitting || successOpen}
+                disabled={submitting || successDialogOpen}
               />
               <TextField
                 label="Confirm Password"
@@ -269,7 +310,7 @@ const ResetPasswordPage: React.FC = () => {
                 onChange={handleTextChange('confirmPassword')}
                 error={!!errors.confirmPassword}
                 helperText={errors.confirmPassword}
-                disabled={submitting || successOpen}
+                disabled={submitting || successDialogOpen}
               />
 
               {errorMessage ? (
@@ -294,8 +335,8 @@ const ResetPasswordPage: React.FC = () => {
                 variant="contained"
                 size="large"
                 fullWidth
-                onClick={handleSubmit}
-                disabled={submitting || successOpen}
+                onClick={handleUpdatePassword}
+                disabled={submitting || successDialogOpen}
                 endIcon={
                   submitting ? (
                     <CircularProgress size={18} sx={{ color: '#fff' }} />
@@ -308,6 +349,18 @@ const ResetPasswordPage: React.FC = () => {
                 {submitting ? 'Updating…' : 'Update password'}
               </Button>
             </Box>
+          ) : (
+            <Alert
+              severity="error"
+              action={(
+                <Button color="inherit" size="small" onClick={() => navigate('/forgot-password')}>
+                  Request link
+                </Button>
+              )}
+              sx={{ py: 0.75, alignItems: 'center' }}
+            >
+              {errorMessage || MISSING_SESSION_MESSAGE}
+            </Alert>
           )}
 
           <Box sx={{ textAlign: 'center', mt: 3 }}>
@@ -331,17 +384,19 @@ const ResetPasswordPage: React.FC = () => {
         </Box>
       </Box>
 
-      <Snackbar
-        open={successOpen}
-        autoHideDuration={1500}
-        onClose={() => setSuccessOpen(false)}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-      >
-        <Alert onClose={() => setSuccessOpen(false)} severity="success" sx={{ width: '100%' }}>
-          Password updated successfully. Please sign in again.
-        </Alert>
-      </Snackbar>
-
+      <Dialog open={successDialogOpen} onClose={undefined} maxWidth="xs" fullWidth>
+        <DialogTitle>Password updated successfully</DialogTitle>
+        <DialogContent>
+          <DialogContentText>
+            Your password has been changed. Please sign in using your new password.
+          </DialogContentText>
+        </DialogContent>
+        <DialogActions>
+          <Button variant="contained" onClick={handleGoToLogin} autoFocus>
+            Go to Login
+          </Button>
+        </DialogActions>
+      </Dialog>
     </PageLayout>
   );
 };

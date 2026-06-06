@@ -17,6 +17,11 @@ import PageLayout from '../components/PageLayout';
 import { supabase } from '../service/supabaseClient';
 
 const emailPattern = /\S+@\S+\.\S+/;
+// Supabase Auth URL Configuration must include:
+// https://recap-buddies.com/reset-password
+// The password reset email template must use:
+// {{ .ConfirmationURL }}
+// Do not manually replace {{ .ConfirmationURL }} with a static URL.
 const PASSWORD_RESET_REDIRECT_URL = 'https://recap-buddies.com/reset-password';
 
 const ForgotPasswordPage: React.FC = () => {
