@@ -85,6 +85,7 @@ const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: str
   'for-penalty':  { label: 'For Penalty',  color: '#B71C1C', bg: 'rgba(211,47,47,0.10)', border: 'rgba(211,47,47,0.30)' },
   completed:   { label: 'Completed',  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)', border: 'rgba(105,219,124,0.30)' },
   canceled:    { label: 'Canceled',   color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
+  cancelled:   { label: 'Cancelled',  color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
   declined:    { label: 'Declined',   color: '#B71C1C', bg: 'rgba(211,47,47,0.08)',   border: 'rgba(211,47,47,0.25)'   },
 };
 
@@ -141,7 +142,7 @@ const buildRenterAnalytics = (rentals: EnrichedRental[], branchLookup: Record<st
     const renterType: 'new' | 'repeat' = isRepeatedRenter ? 'repeat' : 'new';
     const branchName = branchLookup[r.item?.branch_id_fk ?? ''] ?? 'Unassigned';
     const units = 1;
-    const revenue = Math.max(getRentalDayCount(r.rent_date_start, r.rent_date_end), 1) * (Number(r.rent_price ?? 0) || 0);
+    const revenue = Number(r.rent_price ?? 0) || 0;
 
     if (!grouped[renterType][branchName]) grouped[renterType][branchName] = { units: 0, revenue: 0 };
     grouped[renterType][branchName].units += units;
@@ -903,9 +904,106 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
   );
 };
 
-const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => {
+interface MonitoringEditForm {
+  rent_date_start: string;
+  pickup_time: Dayjs | null;
+  rent_date_end: string;
+  return_time: Dayjs | null;
+  cam_name_id_fk: string;
+  rentalType: 'pickup' | 'delivery';
+  branch_id_fk: string;
+  delivery_addr: string;
+  rent_price: string;
+  status: RentalStatus;
+}
+
+const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; branches: RbBranch[]; onSaved: () => Promise<void> }> = ({ rentals, items, branches, onSaved }) => {
+  const [editingRental, setEditingRental] = useState<EnrichedRental | null>(null);
+  const [editForm, setEditForm] = useState<MonitoringEditForm | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' }>({ open: false, msg: '', severity: 'success' });
+
+  const openEditDialog = (rental: EnrichedRental) => {
+    setEditingRental(rental);
+    setEditForm({
+      rent_date_start: dayjs(rental.rent_date_start).format('YYYY-MM-DD'),
+      pickup_time: rental.pickup_time ? dayjs(`2000-01-01 ${rental.pickup_time}`) : null,
+      rent_date_end: dayjs(rental.rent_date_end).format('YYYY-MM-DD'),
+      return_time: rental.return_time ? dayjs(`2000-01-01 ${rental.return_time}`) : null,
+      cam_name_id_fk: rental.cam_name_id_fk ?? '',
+      rentalType: rental.delivery_addr ? 'delivery' : 'pickup',
+      branch_id_fk: rental.branch_id_fk ?? rental.hub_pick_up_addr ?? rental.item?.branch_id_fk ?? '',
+      delivery_addr: rental.delivery_addr ?? '',
+      rent_price: rental.rent_price != null ? String(rental.rent_price) : '',
+      status: rental.status,
+    });
+  };
+
+  const closeEditDialog = () => {
+    if (saving) return;
+    setEditingRental(null);
+    setEditForm(null);
+  };
+
+  const saveMonitoringEdit = async () => {
+    if (!editingRental || !editForm) return;
+    if (!editForm.cam_name_id_fk || !editForm.rent_date_start || !editForm.rent_date_end) {
+      setSnackbar({ open: true, msg: 'Please complete the required rental fields.', severity: 'error' });
+      return;
+    }
+    if (dayjs(editForm.rent_date_end).isBefore(dayjs(editForm.rent_date_start), 'day')) {
+      setSnackbar({ open: true, msg: 'Return date must be on or after pickup date.', severity: 'error' });
+      return;
+    }
+    if (editForm.rentalType === 'pickup' && !editForm.branch_id_fk) {
+      setSnackbar({ open: true, msg: 'Please select a pickup hub.', severity: 'error' });
+      return;
+    }
+    if (editForm.rentalType === 'delivery' && !editForm.delivery_addr.trim()) {
+      setSnackbar({ open: true, msg: 'Please enter the delivery address.', severity: 'error' });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const parsedRentPrice = editForm.rent_price.trim() === '' ? null : Number(editForm.rent_price);
+      const payload = {
+        rent_date_start: editForm.rent_date_start,
+        pickup_time: editForm.pickup_time?.format('hh:mm A') ?? null,
+        rent_date_end: editForm.rent_date_end,
+        return_time: editForm.return_time?.format('hh:mm A') ?? null,
+        cam_name_id_fk: editForm.cam_name_id_fk,
+        branch_id_fk: editForm.branch_id_fk || null,
+        hub_pick_up_addr: editForm.rentalType === 'pickup' ? editForm.branch_id_fk : null,
+        delivery_addr: editForm.rentalType === 'delivery' ? editForm.delivery_addr.trim() : null,
+        rent_price: parsedRentPrice == null || Number.isNaN(parsedRentPrice) ? null : Math.max(parsedRentPrice, 0),
+        status: editForm.status,
+      };
+
+      const { error } = await supabase.from('RB_RENTAL_FORM').update(payload).eq('id', editingRental.id);
+      if (error) throw error;
+
+      const itemStatus = RENTAL_TO_ITEM_STATUS[editForm.status];
+      if (editingRental.cam_name_id_fk && editingRental.cam_name_id_fk !== editForm.cam_name_id_fk) {
+        await supabase.from('RB_ITEM').update({ status: 'Available' }).eq('id', editingRental.cam_name_id_fk);
+      }
+      if (editForm.cam_name_id_fk && itemStatus) {
+        await supabase.from('RB_ITEM').update({ status: itemStatus }).eq('id', editForm.cam_name_id_fk);
+      }
+
+      await onSaved();
+      setSnackbar({ open: true, msg: 'Rental monitoring details updated.', severity: 'success' });
+      setEditingRental(null);
+      setEditForm(null);
+    } catch (e) {
+      console.error('Failed to update monitoring rental:', e);
+      setSnackbar({ open: true, msg: 'Failed to update rental monitoring details.', severity: 'error' });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const monitoringRows = rentals.map((r, index) => {
-    const totalDays = getRentalDayCount(r.rent_date_start, r.rent_date_end);
     const rentPrice = Number(r.rent_price ?? 0);
     const renterName = r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—';
     const isRepeatedRenter = rentals.some(
@@ -921,47 +1019,27 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => 
       rd: r.rent_date_end,
       name: renterName,
       unit: r.item?.device?.cam_name ?? '—',
-      renter: r.renter?.id ? (isRepeatedRenter ? 'Repeated' : 'New') : '—',
+      renter: r.renter?.id ? (isRepeatedRenter ? 'Repeat' : 'New') : '—',
       type: r.delivery_addr == null ? 'Pick-up' : 'Deliver',
       hub: r.pickupBranch?.location_name ?? r.delivery_addr ?? '—',
       groupChat: Boolean(r.messenger_link),
-      rentalFee: Math.max(totalDays, 1) * rentPrice,
+      rentalFee: rentPrice,
       status: RENTAL_STATUS_META[r.status]?.label ?? r.status,
       availableUnit: r.item?.code_name ?? '—',
+      rental: r,
     };
   });
 
   const monitoringColumns: GridColDef[] = [
+    { field: 'actions', headerName: '', width: 70, sortable: false, filterable: false, renderCell: (params) => <Tooltip title="Edit rental details"><IconButton size="small" onClick={(event) => { event.stopPropagation(); openEditDialog(params.row.rental); }}><EditIcon fontSize="small" /></IconButton></Tooltip> },
     { field: 'no', headerName: 'No.', width: 80, type: 'number' },
     { field: 'pd', headerName: 'PD', width: 150, type: 'date', valueGetter: (value: unknown) => value ? dayjs(value as string).toDate() : null, valueFormatter: (value: unknown) => value ? dayjs(value as Date).format('MMM D, YYYY') : '—' },
-    {
-  field: 'pt',
-  headerName: 'PT',
-  width: 120,
-  type: 'string',
-
-  valueFormatter: (value: unknown) => {
-    if (!value) return '—';
-
-    return dayjs(`2000-01-01 ${value}`).format('h:mm A');
-  },
-},
-    {
-      field: 'rt',
-      headerName: 'RT',
-      width: 120,
-      type: 'string',
-      valueFormatter: (value: unknown) => (value ? dayjs(`2000-01-01 ${value}`).format('h:mm A') : '—'),
-      sortComparator: (v1: string, v2: string) => {
-        const t1 = dayjs(`2000-01-01 ${v1}`);
-        const t2 = dayjs(`2000-01-01 ${v2}`);
-        return t1.valueOf() - t2.valueOf();
-      },
-    },
+    { field: 'pt', headerName: 'PT', width: 120, type: 'string', valueFormatter: (value: unknown) => value ? dayjs(`2000-01-01 ${value}`).format('h:mm A') : '—' },
+    { field: 'rt', headerName: 'RT', width: 120, type: 'string', valueFormatter: (value: unknown) => (value ? dayjs(`2000-01-01 ${value}`).format('h:mm A') : '—'), sortComparator: (v1: string, v2: string) => dayjs(`2000-01-01 ${v1}`).valueOf() - dayjs(`2000-01-01 ${v2}`).valueOf() },
     { field: 'rd', headerName: 'RD', width: 150, type: 'date', valueGetter: (value: unknown) => value ? dayjs(value as string).toDate() : null, valueFormatter: (value: unknown) => value ? dayjs(value as Date).format('MMM D, YYYY') : '—' },
     { field: 'name', headerName: 'Name', minWidth: 180, flex: 1 },
     { field: 'unit', headerName: 'Unit', minWidth: 120, flex: 1 },
-    { field: 'renter', headerName: 'Renter', minWidth: 180, flex: 1 },
+    { field: 'renter', headerName: 'Renter', minWidth: 140, flex: 1 },
     { field: 'type', headerName: 'Type', minWidth: 120 },
     { field: 'hub', headerName: 'Hub', minWidth: 160, flex: 1 },
     { field: 'groupChat', headerName: 'Group Chat', type: 'boolean', minWidth: 130, renderCell: (params: { value?: boolean }) => params.value ? <CheckCircleIcon sx={{ color: '#2E7D32' }} /> : <CancelIcon sx={{ color: '#B71C1C' }} /> },
@@ -972,8 +1050,11 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => 
 
   return (
     <Paper elevation={0} sx={{ borderRadius: 4, boxShadow: '0 4px 20px rgba(0,0,0,0.05)', background: '#fff', border: `1px solid ${BORDER}`, p: 2, textAlign: 'center' }}>
-      <Typography sx={{ color: ESPRESSO, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '0.9rem', mb: 1.5, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+      <Typography sx={{ color: ESPRESSO, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '0.9rem', mb: 0.5, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
         Admin Rental Monitoring
+      </Typography>
+      <Typography sx={{ color: MUTED, fontSize: '0.78rem', mb: 1.5 }}>
+        Click a row or the edit icon to safely update rental details. Renter identity and Group Chat indicator are read-only here.
       </Typography>
       <DataGrid
         rows={monitoringRows}
@@ -983,14 +1064,72 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[] }> = ({ rentals }) => 
         pageSizeOptions={[10, 25, 50]}
         initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
         slots={{ toolbar: GridToolbar }}
+        onRowClick={(params) => openEditDialog(params.row.rental)}
         sx={{
           border: 0,
           '& .MuiDataGrid-columnHeaders': { backgroundColor: '#fafafa' },
           '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700 },
-          '& .MuiDataGrid-row': { transition: 'background-color 0.2s ease' },
+          '& .MuiDataGrid-row': { transition: 'background-color 0.2s ease', cursor: 'pointer' },
           '& .MuiDataGrid-row:hover': { backgroundColor: '#f8f8f8' },
         }}
       />
+
+      <Dialog open={!!editingRental && !!editForm} onClose={closeEditDialog} fullWidth maxWidth="sm">
+        <DialogTitle>Edit Rental Monitoring Details</DialogTitle>
+        {editingRental && editForm && (
+          <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
+            <TextField label="Renter Name" value={editingRental.renter ? `${editingRental.renter.renter_fname} ${editingRental.renter.renter_lname}` : '—'} InputProps={{ readOnly: true }} fullWidth />
+            <TextField label="Renter Type" value={monitoringRows.find((row) => row.id === editingRental.id)?.renter ?? '—'} InputProps={{ readOnly: true }} fullWidth />
+            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+              <TextField label="PD" type="date" required value={editForm.rent_date_start} onChange={(e) => setEditForm((f) => f && ({ ...f, rent_date_start: e.target.value }))} InputLabelProps={{ shrink: true }} />
+              <TextField label="RD" type="date" required value={editForm.rent_date_end} onChange={(e) => setEditForm((f) => f && ({ ...f, rent_date_end: e.target.value }))} InputLabelProps={{ shrink: true }} />
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <TimePicker label="PT" value={editForm.pickup_time} onChange={(value) => setEditForm((f) => f && ({ ...f, pickup_time: value }))} slotProps={{ textField: { fullWidth: true } }} />
+              </LocalizationProvider>
+              <LocalizationProvider dateAdapter={AdapterDayjs}>
+                <TimePicker label="RT" value={editForm.return_time} onChange={(value) => setEditForm((f) => f && ({ ...f, return_time: value }))} slotProps={{ textField: { fullWidth: true } }} />
+              </LocalizationProvider>
+            </Box>
+            <FormControl fullWidth required>
+              <InputLabel>Unit / Available Unit</InputLabel>
+              <Select value={editForm.cam_name_id_fk} label="Unit / Available Unit" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, cam_name_id_fk: e.target.value }))}>
+                {items.map((item) => <MenuItem key={item.id} value={item.id}>{item.device?.cam_name ?? 'Unknown camera'} · {item.code_name}</MenuItem>)}
+              </Select>
+            </FormControl>
+            <FormControl fullWidth>
+              <InputLabel>Type</InputLabel>
+              <Select value={editForm.rentalType} label="Type" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, rentalType: e.target.value as 'pickup' | 'delivery' }))}>
+                <MenuItem value="pickup">Pick-up</MenuItem>
+                <MenuItem value="delivery">Deliver</MenuItem>
+              </Select>
+            </FormControl>
+            <FormControl fullWidth required={editForm.rentalType === 'pickup'}>
+              <InputLabel>Hub</InputLabel>
+              <Select value={editForm.branch_id_fk} label="Hub" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, branch_id_fk: e.target.value }))}>
+                {branches.map((branch) => <MenuItem key={branch.id} value={branch.id}>{branch.location_name}</MenuItem>)}
+              </Select>
+            </FormControl>
+            {editForm.rentalType === 'delivery' && (
+              <TextField label="Delivery Address" required multiline minRows={2} value={editForm.delivery_addr} onChange={(e) => setEditForm((f) => f && ({ ...f, delivery_addr: e.target.value }))} fullWidth />
+            )}
+            <TextField label="Rental Fee" type="number" value={editForm.rent_price} onChange={(e) => setEditForm((f) => f && ({ ...f, rent_price: e.target.value }))} inputProps={{ min: 0, step: '0.01' }} fullWidth />
+            <FormControl fullWidth>
+              <InputLabel>Status</InputLabel>
+              <Select value={editForm.status} label="Status" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, status: e.target.value as RentalStatus }))}>
+                {Object.entries(RENTAL_STATUS_META).map(([value, meta]) => <MenuItem key={value} value={value}>{meta.label}</MenuItem>)}
+              </Select>
+            </FormControl>
+          </DialogContent>
+        )}
+        <DialogActions>
+          <Button onClick={closeEditDialog} disabled={saving}>Cancel</Button>
+          <Button variant="contained" onClick={saveMonitoringEdit} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
+        </DialogActions>
+      </Dialog>
+
+      <Snackbar open={snackbar.open} autoHideDuration={3500} onClose={() => setSnackbar((s) => ({ ...s, open: false }))} anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}>
+        <Alert severity={snackbar.severity} onClose={() => setSnackbar((s) => ({ ...s, open: false }))}>{snackbar.msg}</Alert>
+      </Snackbar>
     </Paper>
   );
 };
@@ -1015,10 +1154,11 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
   const weeks: Dayjs[][] = [];
   for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
 
-  const filtered = selectedCamera === 'all' ? rentals : rentals.filter((r) => r.cam_name_id_fk === selectedCamera);
+  const calendarRentals = rentals.filter((r) => !['canceled', 'cancelled'].includes(r.status?.toLowerCase?.() ?? ''));
+  const filtered = selectedCamera === 'all' ? calendarRentals : calendarRentals.filter((r) => r.cam_name_id_fk === selectedCamera);
 
   const openRentalById = (rentalId: string) => {
-    const clickedRental = rentals.find((r) => r.id === rentalId);
+    const clickedRental = calendarRentals.find((r) => r.id === rentalId);
     if (clickedRental) setSelectedRental(clickedRental);
   };
 
@@ -2010,7 +2150,7 @@ const AdminDashboard: React.FC = () => {
       const rf = rentalsRaw as RbRentalForm[];
       const itemIds   = [...new Set(rf.map((r) => r.cam_name_id_fk).filter(Boolean))] as string[];
       const renterIds = [...new Set(rf.map((r) => r.renter_id_fk).filter(Boolean))]   as string[];
-      const bIds      = [...new Set([...rf.map((r) => r.hub_pick_up_addr), ...rf.map((r) => r.hub_return_addr)].filter(Boolean))] as string[];
+      const bIds      = [...new Set([...rf.map((r) => r.branch_id_fk), ...rf.map((r) => r.hub_pick_up_addr), ...rf.map((r) => r.hub_return_addr)].filter(Boolean))] as string[];
 
       const [{ data: rentItemsRaw }, { data: rentersRaw }, { data: rentBranchesRaw }] = await Promise.all([
         itemIds.length   ? supabase.from('RB_ITEM').select('*, device:RB_DEVICES(id,cam_name,device_img)').in('id', itemIds) : Promise.resolve({ data: [] }),
@@ -2199,7 +2339,7 @@ const AdminDashboard: React.FC = () => {
       <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1400, mx: 'auto' }}>
         {tab === 0 && <OverviewTab  rentals={rentals} onSave={handleSaveStatus} />}
         {tab === 1 && <CalendarTab  rentals={rentals} items={items} onSave={handleSaveStatus} />}
-        {tab === 2 && <MonitoringTab rentals={rentals} />}
+        {tab === 2 && <MonitoringTab rentals={rentals} items={items} branches={branches} onSaved={fetchAll} />}
         {tab === 3 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
         {tab === 4 && (
           <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>

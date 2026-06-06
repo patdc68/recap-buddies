@@ -284,6 +284,8 @@ const RenterVerificationPage: React.FC = () => {
             <InfoRow label="Email"             value={renter.email} />
             <InfoRow label="Mobile Number"     value={renter.mobile_no} />
             <InfoRow label="Emergency Contact" value={renter.emergency_contact_no} />
+            <InfoRow label="Emergency Contact Person" value={renter.emergency_contact_person} />
+            <InfoRow label="Emergency Relationship" value={renter.emergency_contact_relationship} />
             <InfoRow label="Registered"        value={dayjs(renter.created_at).format('MMMM D, YYYY')} />
           </Paper>
 

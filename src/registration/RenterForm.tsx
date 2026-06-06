@@ -242,8 +242,10 @@ const StepPurpose: React.FC<StepPurposeProps> = ({ form, onText, onLocUsage, err
 
     <Row>
       <Col half>
-        <TextField label="Facebook / Instagram Handle" placeholder="@yourhandle" fullWidth
-          value={form.username} onChange={onText('username')} helperText="Optional" />
+        <TextField label="Facebook / Instagram Handle" placeholder="@yourhandle" fullWidth required
+          value={form.username} onChange={onText('username')}
+          error={!!errors.username}
+          helperText={errors.username ?? "Exact name or username you’ve been chatting with us"} />
       </Col>
       <Col half>
         <TextField label="Discount Code" placeholder="Enter promo code" fullWidth
@@ -258,7 +260,7 @@ const StepPurpose: React.FC<StepPurposeProps> = ({ form, onText, onLocUsage, err
         <SectionLabel>Bank / Refund Information</SectionLabel>
       </Box>
       <Alert severity="info" sx={{ mb: 1.5, py: 0.5, fontSize: '0.8rem', background: 'rgba(201,151,58,0.06)', color: '#666666', border: '1px solid rgba(201,151,58,0.2)', '& .MuiAlert-icon': { color: '#111111' } }}>
-        Required — this is used to process refunds if your rental is cancelled or if there are any adjustments.
+        Required — this is used to process refunds if your rental is cancelled or if there are any adjustments. For processing 2-3 days after safe return. Any penalties or delivery fees incurred will be deducted.
       </Alert>
       <TextField
         label="Bank Name, Account Number, Account Name" required
@@ -350,7 +352,6 @@ const StepReview: React.FC<StepReviewProps> = ({ form, items, branches, purposeP
   const item      = items.find((i) => i.id === form.cam_name_id_fk);
   const hubPickup = branches.find((b) => b.id === form.hub_pick_up_addr);
   const hubReturn = branches.find((b) => b.id === form.hub_return_addr);
-  const duration  = form.rent_date_start && form.rent_date_end ? `${form.rent_date_end.diff(form.rent_date_start, 'day')} day(s)` : undefined;
 
   return (
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -384,7 +385,6 @@ const StepReview: React.FC<StepReviewProps> = ({ form, items, branches, purposeP
         <Typography variant="caption" sx={{ color: '#111111', mt: 2, mb: 1, display: 'block' }}>RENTAL PERIOD</Typography>
         <ReviewRow label="Start Date" value={form.rent_date_start?.format('MMMM D, YYYY')} />
         <ReviewRow label="End Date"   value={form.rent_date_end?.format('MMMM D, YYYY')} />
-        <ReviewRow label="Duration"   value={duration} />
 
         <Typography variant="caption" sx={{ color: '#111111', mt: 2, mb: 1, display: 'block' }}>PURPOSE</Typography>
         <ReviewRow label="Usage Location"  value={form.loc_usage ? form.loc_usage.charAt(0).toUpperCase() + form.loc_usage.slice(1) : undefined} />
@@ -651,6 +651,7 @@ const RenterForm: React.FC = () => {
     if (activeStep === 2) {
       if (!form.loc_usage)           e.loc_usage        = 'Please select a location type';
       if (!purposeFile)              e.proof_of_purpose = 'Proof of purpose document is required';
+      if (!form.username.trim())     e.username         = 'Facebook / Instagram handle is required';
       if (!form.refund_info.trim())  e.refund_info      = 'Bank / refund information is required';  // ← mandatory
     }
     if (activeStep === 3) {

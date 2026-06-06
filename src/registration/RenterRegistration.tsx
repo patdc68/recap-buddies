@@ -51,6 +51,8 @@ interface RegistrationForm {
   renter_lname: string;
   mobile_no: string;
   emergency_contact_no: string;
+  emergency_contact_person: string;
+  emergency_contact_relationship: string;
   email: string;
   password: string;
   confirmPassword: string;
@@ -84,7 +86,7 @@ const STEPS = [
 
 const INIT_FORM: RegistrationForm = {
   renter_fname: '', renter_lname: '', mobile_no: '',
-  emergency_contact_no: '', email: '', password: '',
+  emergency_contact_no: '', emergency_contact_person: '', emergency_contact_relationship: '', email: '', password: '',
   confirmPassword: '', selfie_verification_id: '',
 };
 
@@ -213,6 +215,20 @@ const StepPersonalInfo: React.FC<StepPersonalInfoProps> = ({ form, onText, error
           label="Emergency Contact Number" fullWidth required placeholder="09XXXXXXXXX"
           value={form.emergency_contact_no} onChange={onText('emergency_contact_no')}
           error={!!errors.emergency_contact_no} helperText={errors.emergency_contact_no}
+        />
+      </Col>
+      <Col half>
+        <TextField
+          label="Emergency Contact Person" fullWidth required placeholder="Juan Dela Cruz"
+          value={form.emergency_contact_person} onChange={onText('emergency_contact_person')}
+          error={!!errors.emergency_contact_person} helperText={errors.emergency_contact_person}
+        />
+      </Col>
+      <Col half>
+        <TextField
+          label="Emergency Contact Relationship" fullWidth required placeholder="Father / Mother / Partner / Sibling / Friend"
+          value={form.emergency_contact_relationship} onChange={onText('emergency_contact_relationship')}
+          error={!!errors.emergency_contact_relationship} helperText={errors.emergency_contact_relationship}
         />
       </Col>
     </Row>
@@ -496,6 +512,8 @@ const RenterRegistration: React.FC = () => {
       else if (!/^09\d{9}$/.test(form.mobile_no)) e.mobile_no      = 'Enter a valid PH number (09XXXXXXXXX)';
       if (!form.emergency_contact_no.trim()) e.emergency_contact_no = 'Emergency contact is required';
       else if (!/^09\d{9}$/.test(form.emergency_contact_no)) e.emergency_contact_no = 'Enter a valid PH number';
+      if (!form.emergency_contact_person.trim()) e.emergency_contact_person = 'Emergency contact person is required';
+      if (!form.emergency_contact_relationship.trim()) e.emergency_contact_relationship = 'Emergency contact relationship is required';
     }
     if (activeStep === 1) {
       if (!form.email.trim())            e.email           = 'Email is required';
@@ -591,6 +609,8 @@ const RenterRegistration: React.FC = () => {
         renter_lname: form.renter_lname,
         mobile_no: form.mobile_no,
         emergency_contact_no: form.emergency_contact_no,
+        emergency_contact_person: form.emergency_contact_person.trim(),
+        emergency_contact_relationship: form.emergency_contact_relationship.trim(),
         email: form.email,
         auth_user_id,
         primary_id_front, primary_id_back,

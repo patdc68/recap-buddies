@@ -8,7 +8,6 @@ import type { RbBranch, RbDevice, RbItem, RbRentalForm } from '../service/supaba
 
 const AMBER = '#111111';
 const CREAM = '#FFFFFF';
-const CARD_BG = '#FFFFFF';
 const ESPRESSO = '#111111';
 const MUTED = '#666666';
 const BORDER = 'rgba(201,151,58,0.18)';
@@ -76,7 +75,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
       const isRepeatedRenter = rentals.some((rental) => rental.renter_id_fk === r.renter_id_fk && rental.status === 'completed' && rental.id !== r.id);
       const type: 'new' | 'repeat' = isRepeatedRenter ? 'repeat' : 'new';
       const branch = branchLookup[r.item?.branch_id_fk ?? ''] ?? 'Unassigned';
-      const revenue = Math.max(dayjs(r.rent_date_end).diff(dayjs(r.rent_date_start), 'day'), 1) * (Number(r.rent_price ?? 0) || 0);
+      const revenue = Number(r.rent_price ?? 0) || 0;
       if (!grouped[type][branch]) grouped[type][branch] = { units: 0, revenue: 0 };
       grouped[type][branch].units += 1;
       grouped[type][branch].revenue += revenue;
@@ -111,7 +110,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
             <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '1.2rem' }}>
               Monthly Revenue Analytics — {dayjs(`${selectedYear}-${selectedMonth}-01`).format('MMMM YYYY')}
             </Typography>
-            <Typography sx={{ color: MUTED, fontSize: '0.82rem' }}>Per-camera revenue computed as rent price × rental duration.</Typography>
+            <Typography sx={{ color: MUTED, fontSize: '0.82rem' }}>Revenue uses the stored total rent price saved on each rental form.</Typography>
           </Box>
         </Box>
 

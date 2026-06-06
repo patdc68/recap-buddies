@@ -76,6 +76,8 @@ export interface RbRenter {
   renter_lname: string;
   mobile_no: string;
   emergency_contact_no: string;
+  emergency_contact_person: string | null;
+  emergency_contact_relationship: string | null;
   email: string;
   auth_user_id: string;
   primary_id_front: string | null;
@@ -109,6 +111,7 @@ export type RentalStatus =
   | 'for-penalty'
   | 'completed'
   | 'canceled'
+  | 'cancelled'
   | 'declined';
 export type LocUsage     = 'domestic' | 'international';
 
