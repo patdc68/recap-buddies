@@ -6,7 +6,7 @@ import {
   Switch, FormControlLabel, Tooltip, TextField, type SelectChangeEvent,
   Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Snackbar, Alert, Badge, Menu, ListItemText,
 } from '@mui/material';
-import { DataGrid, GridToolbar, type GridColDef } from '@mui/x-data-grid';
+import { DataGrid, GridToolbar, type GridColDef, type GridRenderCellParams } from '@mui/x-data-grid';
 import { LocalizationProvider, TimePicker } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
 import {
@@ -587,10 +587,104 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
     }
   };
 
+  const columns = React.useMemo<GridColDef<EnrichedRental>[]>(() => {
+    const longTextSx = {
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap',
+      minWidth: 0,
+    } as const;
+
+    return [
+    {
+      field: 'image',
+      headerName: 'Image',
+      width: 84,
+      minWidth: 72,
+      sortable: false,
+      filterable: false,
+      disableColumnMenu: true,
+      renderCell: ({ row }: GridRenderCellParams<EnrichedRental>) => (
+        <Box sx={{ height: '100%', display: 'flex', alignItems: 'center' }}>
+          {row.item?.device?.device_img
+            ? <img src={row.item.device.device_img} alt="" style={{ width: 52, height: 40, objectFit: 'cover', borderRadius: 8, border: `1px solid ${BORDER}`, display: 'block' }} />
+            : <Box sx={{ width: 52, height: 40, borderRadius: 2, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 18, color: AMBER }} /></Box>}
+        </Box>
+      ),
+    },
+    {
+      field: 'camera',
+      headerName: 'Camera / Code',
+      minWidth: 220,
+      flex: 1.8,
+      valueGetter: (_value, row) => row.item?.device?.cam_name ?? '—',
+      renderCell: ({ row }: GridRenderCellParams<EnrichedRental>) => (
+        <Box sx={{ minWidth: 0, width: '100%', py: 1 }}>
+          <Typography title={row.item?.device?.cam_name ?? '—'} sx={{ ...longTextSx, color: ESPRESSO, fontWeight: 700, fontSize: '0.85rem' }}>{row.item?.device?.cam_name ?? '—'}</Typography>
+          <Typography title={row.item?.code_name ?? '—'} sx={{ ...longTextSx, color: AMBER, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif' }}>{row.item?.code_name ?? '—'}</Typography>
+        </Box>
+      ),
+    },
+    {
+      field: 'renter',
+      headerName: 'Renter Name + Contact',
+      minWidth: 190,
+      flex: 1.15,
+      valueGetter: (_value, row) => row.renter ? `${row.renter.renter_fname} ${row.renter.renter_lname}` : '—',
+      renderCell: ({ row }: GridRenderCellParams<EnrichedRental>) => {
+        const renterName = row.renter ? `${row.renter.renter_fname} ${row.renter.renter_lname}` : '—';
+        return (
+          <Box sx={{ minWidth: 0, width: '100%', py: 1 }}>
+            <Typography title={renterName} sx={{ ...longTextSx, color: INK, fontSize: '0.82rem', fontWeight: 600 }}>{renterName}</Typography>
+            <Typography title={row.renter?.mobile_no ?? ''} sx={{ ...longTextSx, color: MUTED, fontSize: '0.72rem' }}>{row.renter?.mobile_no ?? '—'}</Typography>
+          </Box>
+        );
+      },
+    },
+    {
+      field: 'dateRange',
+      headerName: 'Rental Date Range',
+      minWidth: 170,
+      flex: 1,
+      valueGetter: (_value, row) => `${dayjs(row.rent_date_start).format('MMM D')} – ${dayjs(row.rent_date_end).format('MMM D, YYYY')}`,
+      renderCell: ({ row }: GridRenderCellParams<EnrichedRental>) => (
+        <Typography sx={{ color: MUTED, fontSize: '0.78rem', lineHeight: 1.4 }}>
+          {dayjs(row.rent_date_start).format('MMM D')} –<br />{dayjs(row.rent_date_end).format('MMM D, YYYY')}
+        </Typography>
+      ),
+    },
+    {
+      field: 'status',
+      headerName: 'Status',
+      minWidth: 150,
+      flex: 0.8,
+      renderCell: ({ row }: GridRenderCellParams<EnrichedRental>) => {
+        const meta = RENTAL_STATUS_META[row.status] ?? RENTAL_STATUS_META.submitted;
+        const pending = isPending(row);
+        return (
+          <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.75, py: 1 }}>
+            <Chip
+              label={meta.label} size="small"
+              sx={{ background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.68rem' }}
+            />
+            {pending && (
+              <Chip
+                icon={<VerifiedUserIcon sx={{ fontSize: '0.75rem !important' }} />}
+                label="Review IDs →" size="small"
+                sx={{ background: 'rgba(201,151,58,0.12)', color: AMBER_DARK, border: `1px solid ${BORDER}`, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '0.65rem', cursor: 'pointer' }}
+              />
+            )}
+          </Box>
+        );
+      },
+    },
+  ];
+  }, []);
+
   return (
     <>
-      <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
-        PaperProps={{ sx: { background: CREAM, border: `1px solid ${BORDER}`, borderRadius: 3, maxHeight: '80vh' } }}>
+      <Dialog open={open} onClose={onClose} maxWidth="lg" fullWidth
+        PaperProps={{ sx: { background: CREAM, border: `1px solid ${BORDER}`, borderRadius: 3, maxHeight: '84vh' } }}>
         <DialogTitle sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', display: 'flex', justifyContent: 'space-between', alignItems: 'center', pb: 1 }}>
           {title}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
@@ -598,67 +692,40 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
             <IconButton onClick={onClose} size="small" sx={{ color: MUTED }}><CloseIcon fontSize="small" /></IconButton>
           </Box>
         </DialogTitle>
-        <DialogContent sx={{ p: 0 }}>
+        <DialogContent sx={{ p: { xs: 1.5, sm: 2.5 }, pt: '0 !important' }}>
           {rentals.length === 0 ? (
-            <Box sx={{ p: 4, textAlign: 'center' }}>
+            <Box sx={{ p: 4, textAlign: 'center', borderRadius: 3, border: `1px solid ${BORDER}`, background: '#fff' }}>
               <Typography sx={{ color: MUTED, fontFamily: '"Sora", sans-serif', fontSize: '0.85rem' }}>No rentals in this category.</Typography>
             </Box>
-          ) : rentals.map((r) => {
-            const meta    = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META.submitted;
-            const pending = isPending(r);
-            return (
-              <Box
-                key={r.id}
-                onClick={() => handleRowClick(r)}
-                sx={{
-                  px: 3, py: 2, borderBottom: `1px solid ${BORDER}`,
-                  display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap',
-                  cursor: 'pointer',
-                  '&:hover': { background: pending ? 'rgba(201,151,58,0.06)' : 'rgba(201,151,58,0.04)' },
-                  transition: 'background 0.15s',
-                  '&:last-child': { borderBottom: 'none' },
-                }}
-              >
-                {/* Camera thumb */}
-                {r.item?.device?.device_img
-                  ? <img src={r.item.device.device_img} alt="" style={{ width: 44, height: 34, objectFit: 'cover', borderRadius: 6, border: `1px solid ${BORDER}`, flexShrink: 0 }} />
-                  : <Box sx={{ width: 44, height: 34, borderRadius: 1.5, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><CameraAltIcon sx={{ fontSize: 18, color: AMBER }} /></Box>}
-
-                {/* Camera name */}
-                <Box sx={{ minWidth: 140 }}>
-                  <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.85rem' }}>{r.item?.device?.cam_name ?? '—'}</Typography>
-                  <Typography sx={{ color: AMBER, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif' }}>{r.item?.code_name ?? '—'}</Typography>
-                </Box>
-
-                {/* Renter name */}
-                <Box sx={{ minWidth: 140 }}>
-                  <Typography sx={{ color: INK, fontSize: '0.82rem', fontWeight: 500 }}>
-                    {r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—'}
-                  </Typography>
-                  <Typography sx={{ color: MUTED, fontSize: '0.72rem' }}>{r.renter?.mobile_no}</Typography>
-                </Box>
-
-                {/* Dates */}
-                <Typography sx={{ color: MUTED, fontSize: '0.78rem' }}>
-                  {dayjs(r.rent_date_start).format('MMM D')} – {dayjs(r.rent_date_end).format('MMM D, YYYY')}
-                </Typography>
-
-                <Box sx={{ ml: 'auto', display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Chip
-                    label={meta.label} size="small"
-                    sx={{ background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.68rem' }}
-                  />
-                  {pending && (
-                    <Chip
-                      icon={<VerifiedUserIcon sx={{ fontSize: '0.75rem !important' }} />}
-                      label="Review IDs →" size="small"
-                      sx={{ background: 'rgba(201,151,58,0.12)', color: AMBER_DARK, border: `1px solid ${BORDER}`, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '0.65rem', cursor: 'pointer' }}
-                    />
-                  )}
-                </Box>
-              </Box>
-            );
-          })}
+          ) : (
+            <Box sx={{
+              borderRadius: 3,
+              border: '1px solid #eee',
+              overflow: 'hidden',
+              backgroundColor: '#fff',
+              width: '100%',
+              '& .MuiDataGrid-root': { border: 'none' },
+              '& .MuiDataGrid-columnHeaders': { background: '#fafafa', borderBottom: `1px solid ${BORDER}` },
+              '& .MuiDataGrid-columnHeaderTitle': { fontFamily: '"Sora", sans-serif', fontSize: '0.68rem', fontWeight: 800, color: MUTED, textTransform: 'uppercase', letterSpacing: '0.08em' },
+              '& .MuiDataGrid-cell': { borderColor: 'rgba(17,17,17,0.08)', alignItems: 'center' },
+              '& .MuiDataGrid-row': { cursor: 'pointer' },
+              '& .MuiDataGrid-row:hover': { backgroundColor: 'rgba(201,151,58,0.05)' },
+            }}>
+              <DataGrid
+                rows={rentals}
+                columns={columns}
+                getRowId={(row) => row.id}
+                rowHeight={68}
+                columnHeaderHeight={46}
+                hideFooter={rentals.length <= 10}
+                initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
+                pageSizeOptions={[10, 25, 50]}
+                disableRowSelectionOnClick
+                onRowClick={(params) => handleRowClick(params.row as EnrichedRental)}
+                sx={{ minWidth: { xs: 780, md: 'auto' } }}
+              />
+            </Box>
+          )}
         </DialogContent>
       </Dialog>
       <RentalDetailDialog rental={detail} open={!!detail} onClose={() => setDetail(null)} onSave={onSave} />
