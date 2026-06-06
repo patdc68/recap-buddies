@@ -17,6 +17,7 @@ import PageLayout from '../components/PageLayout';
 import { supabase } from '../service/supabaseClient';
 
 const emailPattern = /\S+@\S+\.\S+/;
+const PASSWORD_RESET_REDIRECT_URL = 'https://recap-buddies.com/reset-password';
 
 const ForgotPasswordPage: React.FC = () => {
   const navigate = useNavigate();
@@ -57,7 +58,7 @@ const ForgotPasswordPage: React.FC = () => {
     setErrorMessage('');
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: PASSWORD_RESET_REDIRECT_URL,
     });
 
     setLoading(false);
