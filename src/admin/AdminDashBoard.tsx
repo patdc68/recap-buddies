@@ -126,6 +126,7 @@ const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: str
   'for-return':   { label: 'For Return',   color: '#E65100', bg: 'rgba(255,165,0,0.12)', border: 'rgba(255,165,0,0.35)' },
   'for-refund':   { label: 'For Refund',   color: '#6A1B9A', bg: 'rgba(156,39,176,0.10)', border: 'rgba(156,39,176,0.30)' },
   'for-penalty':  { label: 'For Penalty',  color: '#B71C1C', bg: 'rgba(211,47,47,0.10)', border: 'rgba(211,47,47,0.30)' },
+  extended:       { label: 'Extended',     color: '#7c3aed', bg: '#f3e8ff', border: '#d8b4fe' },
   completed:   { label: 'Completed',  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)', border: 'rgba(105,219,124,0.30)' },
   canceled:    { label: 'Canceled',   color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
   declined:    { label: 'Declined',   color: '#B71C1C', bg: 'rgba(211,47,47,0.08)',   border: 'rgba(211,47,47,0.25)'   },
@@ -140,12 +141,14 @@ const RENTAL_TO_ITEM_STATUS: Partial<Record<string, ItemStatus>> = {
   'for-return': 'For Return',
   'for-refund': 'For Refund',
   'for-penalty': 'For Penalty',
+  extended: 'Renting',
   completed: 'Available',
 };
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const HIDDEN_DASHBOARD_STATUSES = ['declined', 'canceled'];
+const ACTIVE_RENTAL_STATUSES: RentalStatus[] = ['in-review', 'for-delivery', 'renting', 'delivered', 'for-return', 'extended'];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -923,7 +926,7 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
   const statCards = [
     { label: 'Total Rentals',    color: AMBER,       items: dashboardRentals },
     { label: 'This Month',       color: AMBER_LIGHT, items: thisMonth },
-    { label: 'Active / Renting', color: '#2E7D32',   items: dashboardRentals.filter((r) => r.status === 'renting') },
+    { label: 'Active / Renting', color: '#2E7D32',   items: dashboardRentals.filter((r) => ACTIVE_RENTAL_STATUSES.includes(r.status)) },
     { label: 'Pending Review',   color: '#1565C0',   items: dashboardRentals.filter((r) => r.status === 'submitted' || r.status === 'in-review') },
   ];
 
@@ -1616,7 +1619,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
 
       {/* Legend — statuses relevant to calendar scheduling */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2.5 }}>
-        {(['in-review', 'for-delivery', 'delivered', 'renting', 'for-return', 'for-refund', 'for-penalty', 'completed'] as const).map((key) => {
+        {(['in-review', 'for-delivery', 'delivered', 'renting', 'for-return', 'extended', 'for-refund', 'for-penalty', 'completed'] as const).map((key) => {
           const meta = RENTAL_STATUS_META[key];
           return (
             <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>

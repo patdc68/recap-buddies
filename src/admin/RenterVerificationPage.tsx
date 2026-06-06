@@ -39,7 +39,13 @@ const BORDER     = 'rgba(201,151,58,0.18)';
 const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
   submitted:   { label: 'Submitted',  color: '#B8860B', bg: 'rgba(255,212,59,0.10)',  border: 'rgba(255,212,59,0.30)'  },
   'in-review': { label: 'In Review',  color: '#1565C0', bg: 'rgba(100,149,237,0.10)', border: 'rgba(100,149,237,0.30)' },
+  'for-delivery': { label: 'For Delivery', color: '#1565C0', bg: 'rgba(100,149,237,0.12)', border: 'rgba(100,149,237,0.35)' },
+  delivered:      { label: 'Delivered',    color: '#1A237E', bg: 'rgba(100,149,237,0.08)', border: 'rgba(100,149,237,0.25)' },
   renting:     { label: 'Renting',    color: '#7A4F00', bg: 'rgba(201,151,58,0.12)',  border: 'rgba(201,151,58,0.40)'  },
+  'for-return':   { label: 'For Return',   color: '#E65100', bg: 'rgba(255,165,0,0.12)', border: 'rgba(255,165,0,0.35)' },
+  'for-refund':   { label: 'For Refund',   color: '#6A1B9A', bg: 'rgba(156,39,176,0.10)', border: 'rgba(156,39,176,0.30)' },
+  'for-penalty':  { label: 'For Penalty',  color: '#B71C1C', bg: 'rgba(211,47,47,0.10)', border: 'rgba(211,47,47,0.30)' },
+  extended:       { label: 'Extended',     color: '#7c3aed', bg: '#f3e8ff', border: '#d8b4fe' },
   completed:   { label: 'Completed',  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)', border: 'rgba(105,219,124,0.30)' },
   canceled:    { label: 'Canceled',   color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
   declined:    { label: 'Declined',   color: '#B71C1C', bg: 'rgba(211,47,47,0.08)',   border: 'rgba(211,47,47,0.25)'   },
@@ -478,6 +484,7 @@ const RenterVerificationPage: React.FC = () => {
             {[
               { label: 'Approve → In Review',  val: 'in-review', icon: <HourglassTopIcon />, color: '#1565C0', bg: 'rgba(100,149,237,0.08)' },
               { label: 'Mark as Renting',       val: 'renting',   icon: <CameraAltIcon />,   color: '#7A4F00', bg: 'rgba(201,151,58,0.10)' },
+              { label: 'Mark as Extended',      val: 'extended',  icon: <CameraAltIcon />,   color: '#7c3aed', bg: '#f3e8ff' },
               { label: 'Mark as Completed',     val: 'completed', icon: <CheckCircleIcon />,  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)' },
               { label: 'Decline', val: 'declined',  icon: <CancelIcon />,       color: '#B71C1C', bg: 'rgba(211,47,47,0.08)'  },
               { label: 'Return to Submitted',   val: 'submitted', icon: <PendingIcon />,      color: '#B8860B', bg: 'rgba(255,212,59,0.08)'  },

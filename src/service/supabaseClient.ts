@@ -109,6 +109,7 @@ export type RentalStatus =
   | 'for-return'
   | 'for-refund'
   | 'for-penalty'
+  | 'extended'
   | 'completed'
   | 'canceled'
   | 'declined';

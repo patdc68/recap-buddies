@@ -79,6 +79,11 @@ const STATUS_CONFIG: Record<RentalStatus, { label: string; bg: string; color: st
     bg: 'rgba(211,47,47,0.10)', color: '#B71C1C', border: 'rgba(211,47,47,0.30)',
     icon: <WarningAmberIcon sx={{ fontSize: 14 }} />,
   },
+  extended: {
+    label: 'Extended',
+    bg: '#f3e8ff', color: '#7c3aed', border: '#d8b4fe',
+    icon: <CameraIcon sx={{ fontSize: 14 }} />,
+  },
   completed: {
     label: 'Completed',
     bg: 'rgba(105,219,124,0.10)', color: '#2E7D32', border: 'rgba(105,219,124,0.30)',

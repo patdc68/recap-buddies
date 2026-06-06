@@ -26,13 +26,15 @@ type ResetPasswordErrors = Partial<Record<keyof ResetPasswordForm, string>>;
 
 const MIN_PASSWORD_LENGTH = 8;
 const MISSING_SESSION_MESSAGE = 'Password reset session is missing or expired. Please request a new reset link.';
-const INVALID_LINK_MESSAGE = 'Password reset link is invalid or expired.';
+const INVALID_LINK_MESSAGE = 'Password reset link is invalid or expired. Please request a new reset link.';
 
 const ResetPasswordPage: React.FC = () => {
   const navigate = useNavigate();
   const [form, setForm] = useState<ResetPasswordForm>({ newPassword: '', confirmPassword: '' });
   const [errors, setErrors] = useState<ResetPasswordErrors>({});
-  const [loading, setLoading] = useState(true);
+  const [checkingSession, setCheckingSession] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+  const [sessionReady, setSessionReady] = useState(false);
   const [errorMessage, setErrorMessage] = useState('');
   const [successOpen, setSuccessOpen] = useState(false);
   const [recoverySession, setRecoverySession] = useState<Session | null>(null);
@@ -42,7 +44,7 @@ const ResetPasswordPage: React.FC = () => {
     let isActive = true;
 
     const initializeRecoverySession = async () => {
-      setLoading(true);
+      setCheckingSession(true);
       setErrorMessage('');
 
       try {
@@ -54,11 +56,17 @@ const ResetPasswordPage: React.FC = () => {
 
           if (error) {
             console.error('Failed to exchange recovery code:', error);
-            if (isActive) setErrorMessage(INVALID_LINK_MESSAGE);
+            if (isActive) {
+              setSessionReady(false);
+              setErrorMessage(INVALID_LINK_MESSAGE);
+            }
             return;
           }
 
-          if (isActive) setRecoverySession(data.session ?? null);
+          if (isActive) {
+            setRecoverySession(data.session ?? null);
+            setSessionReady(!!data.session);
+          }
         }
 
         const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
@@ -74,11 +82,17 @@ const ResetPasswordPage: React.FC = () => {
 
           if (error) {
             console.error('Failed to initialize recovery session from URL tokens:', error);
-            if (isActive) setErrorMessage(INVALID_LINK_MESSAGE);
+            if (isActive) {
+              setSessionReady(false);
+              setErrorMessage(INVALID_LINK_MESSAGE);
+            }
             return;
           }
 
-          if (isActive) setRecoverySession(data.session ?? null);
+          if (isActive) {
+            setRecoverySession(data.session ?? null);
+            setSessionReady(!!data.session);
+          }
         }
 
         const { data } = await supabase.auth.getSession();
@@ -86,12 +100,13 @@ const ResetPasswordPage: React.FC = () => {
         if (!isActive) return;
 
         setRecoverySession(data.session ?? null);
+        setSessionReady(!!data.session);
 
         if (!data.session) {
           setErrorMessage(MISSING_SESSION_MESSAGE);
         }
       } finally {
-        if (isActive) setLoading(false);
+        if (isActive) setCheckingSession(false);
       }
     };
 
@@ -103,6 +118,7 @@ const ResetPasswordPage: React.FC = () => {
       if (event === 'PASSWORD_RECOVERY' && session) {
         setRecoverySession(session);
         setErrorMessage('');
+        setSessionReady(true);
       }
     });
 
@@ -142,7 +158,7 @@ const ResetPasswordPage: React.FC = () => {
   const handleSubmit = async () => {
     if (!validate()) return;
 
-    setLoading(true);
+    setSubmitting(true);
     setErrorMessage('');
 
     try {
@@ -150,6 +166,7 @@ const ResetPasswordPage: React.FC = () => {
 
       if (!data.session) {
         setRecoverySession(null);
+        setSessionReady(false);
         setErrorMessage(MISSING_SESSION_MESSAGE);
         return;
       }
@@ -162,7 +179,7 @@ const ResetPasswordPage: React.FC = () => {
 
       if (error) {
         console.error('Failed to update password from recovery session:', error);
-        setErrorMessage('Unable to update your password. Please request a new reset link and try again.');
+        setErrorMessage(error.message);
         return;
       }
 
@@ -170,7 +187,7 @@ const ResetPasswordPage: React.FC = () => {
       await supabase.auth.signOut();
       navigate('/login', { replace: true });
     } finally {
-      setLoading(false);
+      setSubmitting(false);
     }
   };
 
@@ -226,70 +243,87 @@ const ResetPasswordPage: React.FC = () => {
           }}
           onKeyDown={handleKeyDown}
         >
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-            <TextField
-              label="New Password"
-              type="password"
-              fullWidth
-              required
-              autoComplete="new-password"
-              value={form.newPassword}
-              onChange={handleTextChange('newPassword')}
-              error={!!errors.newPassword}
-              helperText={errors.newPassword ?? `Use at least ${MIN_PASSWORD_LENGTH} characters.`}
-              disabled={loading || successOpen || !recoverySession}
-            />
-            <TextField
-              label="Confirm Password"
-              type="password"
-              fullWidth
-              required
-              autoComplete="new-password"
-              value={form.confirmPassword}
-              onChange={handleTextChange('confirmPassword')}
-              error={!!errors.confirmPassword}
-              helperText={errors.confirmPassword}
-              disabled={loading || successOpen || !recoverySession}
-            />
-
-            {errorMessage ? (
-              <Alert
-                severity="error"
-                action={(
-                  <Button color="inherit" size="small" onClick={() => navigate('/forgot-password')}>
-                    Request link
-                  </Button>
-                )}
-                sx={{ py: 0.75, alignItems: 'center' }}
-              >
-                {errorMessage}
-              </Alert>
-            ) : (
-              <Alert severity={recoverySession ? 'success' : 'info'} sx={{ py: 0.75 }}>
-                {recoverySession
-                  ? 'Secure reset session ready. Enter your new password below.'
-                  : 'This page only works after opening the secure reset link from your email.'}
-              </Alert>
-            )}
-
-            <Button
-              variant="contained"
-              size="large"
-              fullWidth
-              onClick={handleSubmit}
-              disabled={loading || successOpen || !recoverySession}
-              endIcon={
-                loading ? (
-                  <CircularProgress size={18} sx={{ color: '#fff' }} />
-                ) : (
-                  <SaveIcon />
-                )
-              }
-              sx={{ py: 1.4 }}
+          {checkingSession ? (
+            <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 1.5, py: 4 }}>
+              <CircularProgress size={22} />
+              <Typography sx={{ color: '#666666' }}>Checking password reset session…</Typography>
+            </Box>
+          ) : !sessionReady ? (
+            <Alert
+              severity={errorMessage ? 'error' : 'info'}
+              action={errorMessage ? (
+                <Button color="inherit" size="small" onClick={() => navigate('/forgot-password')}>
+                  Request link
+                </Button>
+              ) : undefined}
+              sx={{ py: 0.75, alignItems: 'center' }}
             >
-              {loading ? 'Preparing…' : 'Update password'}
-            </Button>
-          </Box>
+              {errorMessage || 'This page only works after opening the secure reset link from your email.'}
+            </Alert>
+          ) : (
+            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+              <TextField
+                label="New Password"
+                type="password"
+                fullWidth
+                required
+                autoComplete="new-password"
+                value={form.newPassword}
+                onChange={handleTextChange('newPassword')}
+                error={!!errors.newPassword}
+                helperText={errors.newPassword ?? `Use at least ${MIN_PASSWORD_LENGTH} characters.`}
+                disabled={submitting || successOpen}
+              />
+              <TextField
+                label="Confirm Password"
+                type="password"
+                fullWidth
+                required
+                autoComplete="new-password"
+                value={form.confirmPassword}
+                onChange={handleTextChange('confirmPassword')}
+                error={!!errors.confirmPassword}
+                helperText={errors.confirmPassword}
+                disabled={submitting || successOpen}
+              />
+
+              {errorMessage ? (
+                <Alert
+                  severity="error"
+                  action={(
+                    <Button color="inherit" size="small" onClick={() => navigate('/forgot-password')}>
+                      Request link
+                    </Button>
+                  )}
+                  sx={{ py: 0.75, alignItems: 'center' }}
+                >
+                  {errorMessage}
+                </Alert>
+              ) : (
+                <Alert severity="success" sx={{ py: 0.75 }}>
+                  Secure reset session ready. Enter your new password below.
+                </Alert>
+              )}
+
+              <Button
+                variant="contained"
+                size="large"
+                fullWidth
+                onClick={handleSubmit}
+                disabled={submitting || successOpen}
+                endIcon={
+                  submitting ? (
+                    <CircularProgress size={18} sx={{ color: '#fff' }} />
+                  ) : (
+                    <SaveIcon />
+                  )
+                }
+                sx={{ py: 1.4 }}
+              >
+                {submitting ? 'Updating…' : 'Update password'}
+              </Button>
+            </Box>
+          )}
 
           <Box sx={{ textAlign: 'center', mt: 3 }}>
             <Link
@@ -319,7 +353,7 @@ const ResetPasswordPage: React.FC = () => {
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
         <Alert onClose={() => setSuccessOpen(false)} severity="success" sx={{ width: '100%' }}>
-          Password updated successfully. Redirecting to login…
+          Password updated successfully. Please sign in again.
         </Alert>
       </Snackbar>
 
