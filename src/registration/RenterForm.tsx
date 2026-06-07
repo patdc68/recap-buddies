@@ -107,12 +107,10 @@ const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => 
 );
 
 // ─── Step 1: Camera Selection ─────────────────────────────────────────────────
-// Items are pre-filtered to status='Available' at the DB level — no disabled rows needed.
+// Camera options come directly from RB_DEVICES and stay independent of stock counts.
 
 interface StepCameraProps {
   devices: RbDevice[];
-  items: EnrichedItem[];
-  selectedItems: EnrichedItem[];
   form: RentalForm;
   onDeviceChange: (index: number, deviceId: string) => void;
   onAddDevice: () => void;
@@ -123,21 +121,16 @@ interface StepCameraProps {
 const getAvailableItemsForDevice = (items: EnrichedItem[], deviceId: string) =>
   items.filter((item) => item.status === 'Available' && item.device_id_fk === deviceId);
 
-const resolveSelectedDeviceItems = (deviceIds: string[], items: EnrichedItem[], devices: RbDevice[]) => {
+const resolveSelectedDeviceItems = (deviceIds: string[], items: EnrichedItem[]) => {
   const usedItemIds = new Set<string>();
   const selectedItems: EnrichedItem[] = [];
 
   for (const deviceId of deviceIds.filter(Boolean)) {
     const nextItem = getAvailableItemsForDevice(items, deviceId).find((item) => !usedItemIds.has(item.id));
     if (!nextItem) {
-      const requestedCount = deviceIds.filter((id) => id === deviceId).length;
-      const availableCount = getAvailableItemsForDevice(items, deviceId).length;
-      const deviceName = devices.find((device) => device.id === deviceId)?.cam_name ?? 'this camera';
       return {
         selectedItems,
-        error: availableCount === 0
-          ? `${deviceName} has no available units for the selected dates.`
-          : `Only ${availableCount} unit${availableCount === 1 ? '' : 's'} of ${deviceName} ${availableCount === 1 ? 'is' : 'are'} available for the selected dates. You selected ${requestedCount}.`,
+        error: 'Unable to process the selected device. Please try again or contact support.',
       };
     }
     usedItemIds.add(nextItem.id);
@@ -147,7 +140,33 @@ const resolveSelectedDeviceItems = (deviceIds: string[], items: EnrichedItem[], 
   return { selectedItems, error: '' };
 };
 
-const StepCamera: React.FC<StepCameraProps> = ({ devices, items, selectedItems, form, onDeviceChange, onAddDevice, onRemoveDevice, errors }) => (
+const getUniqueDeviceOptions = (devices: RbDevice[]) => {
+  const seenNames = new Set<string>();
+  return devices.filter((device) => {
+    const normalizedName = device.cam_name.trim().toLocaleLowerCase();
+    if (seenNames.has(normalizedName)) return false;
+    seenNames.add(normalizedName);
+    return true;
+  });
+};
+
+const renderDeviceOption = (device: RbDevice) => (
+  <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 1.5, minWidth: 0 }}>
+    {device.device_img
+      ? <img src={device.device_img} alt={device.cam_name} style={{ width: 54, height: 42, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(17,17,17,0.08)', flexShrink: 0, background: '#ffffff' }} />
+      : <Box sx={{ width: 54, height: 42, borderRadius: 2, background: '#f8f5ef', border: '1px solid rgba(17,17,17,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+          <CameraAltIcon sx={{ fontSize: 20, color: 'rgba(17,17,17,0.35)' }} />
+        </Box>}
+    <Typography sx={{ fontWeight: 700, color: '#111111', fontSize: '0.95rem', lineHeight: 1.25, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      {device.cam_name}
+    </Typography>
+  </Box>
+);
+
+const StepCamera: React.FC<StepCameraProps> = ({ devices, form, onDeviceChange, onAddDevice, onRemoveDevice, errors }) => {
+  const deviceOptions = getUniqueDeviceOptions(devices);
+
+  return (
   <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
     <SectionLabel>Select the devices you want to rent</SectionLabel>
     <Alert severity="info" sx={{ background: 'rgba(201,151,58,0.06)', border: '1px solid rgba(201,151,58,0.2)', color: '#666666' }}>
@@ -160,11 +179,8 @@ const StepCamera: React.FC<StepCameraProps> = ({ devices, items, selectedItems, 
     )}
 
     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
-      {form.selected_device_ids.map((deviceId, index) => {
-        const selectedDevice = devices.find((device) => device.id === deviceId);
-        const assignedItem = selectedItems[index];
-        return (
-          <Paper key={index} elevation={0} sx={{ p: 2, borderRadius: 2.5, border: '1px solid rgba(201,151,58,0.16)', background: '#fffdf8' }}>
+      {form.selected_device_ids.map((deviceId, index) => (
+          <Paper key={index} elevation={0} sx={{ p: 2, borderRadius: 2.5, border: '1px solid rgba(17,17,17,0.08)', background: '#ffffff' }}>
             <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1.5, mb: 1.5 }}>
               <Typography sx={{ fontWeight: 800, color: '#111111', fontSize: '0.92rem' }}>Device Selection #{index + 1}</Typography>
               {index > 0 && (
@@ -180,59 +196,48 @@ const StepCamera: React.FC<StepCameraProps> = ({ devices, items, selectedItems, 
                 value={deviceId}
                 onChange={(e) => onDeviceChange(index, e.target.value)}
                 label="Camera / Equipment"
+                renderValue={(value) => {
+                  const device = deviceOptions.find((option) => option.id === value);
+                  return device ? renderDeviceOption(device) : <Typography sx={{ color: '#8a8a8a' }}>Select a camera</Typography>;
+                }}
+                MenuProps={{
+                  PaperProps: {
+                    sx: {
+                      mt: 1,
+                      p: 0.75,
+                      borderRadius: 2,
+                      border: '1px solid rgba(17,17,17,0.08)',
+                      boxShadow: '0 12px 28px rgba(0,0,0,0.10)',
+                      '& .MuiMenuItem-root': { borderRadius: 1.5, mb: 0.5, background: '#ffffff' },
+                      '& .MuiMenuItem-root:last-of-type': { mb: 0 },
+                      '& .MuiMenuItem-root.Mui-selected': { background: '#f8f5ef' },
+                    },
+                  },
+                }}
               >
-                {devices.map((device) => {
-                  const availableCount = getAvailableItemsForDevice(items, device.id).length;
-                  return (
-                    <MenuItem key={device.id} value={device.id}>
-                      <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', gap: 1.5 }}>
-                        {device.device_img
-                          ? <img src={device.device_img} alt={device.cam_name} style={{ width: 48, height: 36, objectFit: 'cover', borderRadius: 6, border: '1px solid rgba(201,151,58,0.2)', flexShrink: 0 }} />
-                          : <Box sx={{ width: 48, height: 36, borderRadius: 1.5, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                              <CameraAltIcon sx={{ fontSize: 18, color: 'rgba(201,151,58,0.4)' }} />
-                            </Box>}
-                        <Box sx={{ flex: 1, minWidth: 0 }}>
-                          <Typography sx={{ fontWeight: 600, color: '#111111', fontSize: '0.9rem', lineHeight: 1.3 }}>
-                            {device.cam_name}
-                          </Typography>
-                          <Typography sx={{ color: '#666666', fontSize: '0.76rem' }}>{availableCount} available unit{availableCount === 1 ? '' : 's'}</Typography>
-                        </Box>
-                      </Box>
-                    </MenuItem>
-                  );
-                })}
+                {deviceOptions.map((device) => (
+                  <MenuItem key={device.id} value={device.id}>
+                    {renderDeviceOption(device)}
+                  </MenuItem>
+                ))}
               </Select>
               {index === form.selected_device_ids.length - 1 && (errors.selected_device_ids || errors.selected_item_ids || errors.cam_name_id_fk) && (
                 <FormHelperText>{errors.selected_device_ids ?? errors.selected_item_ids ?? errors.cam_name_id_fk}</FormHelperText>
               )}
             </FormControl>
-
-            {selectedDevice && (
-              <Paper elevation={0} sx={{ mt: 1.5, p: 1.25, borderRadius: 2, border: '1px solid rgba(201,151,58,0.16)', background: '#ffffff', display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
-                {selectedDevice.device_img
-                  ? <img src={selectedDevice.device_img} alt={selectedDevice.cam_name} style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 8, border: '1px solid rgba(201,151,58,0.2)' }} />
-                  : <Box sx={{ width: 56, height: 42, borderRadius: 2, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ color: '#C9973A' }} /></Box>}
-                <Box sx={{ flex: 1, minWidth: 0 }}>
-                  <Typography sx={{ fontWeight: 700, color: '#111111', fontSize: '0.88rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{selectedDevice.cam_name}</Typography>
-                  <Typography sx={{ color: '#666666', fontSize: '0.74rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                    {assignedItem ? `Assigned available unit: ${assignedItem.code_name || 'No code name'}${assignedItem.branch?.location_name ? ` · ${assignedItem.branch.location_name}` : ''}` : 'Available unit will be assigned before submission.'}
-                  </Typography>
-                </Box>
-              </Paper>
-            )}
           </Paper>
-        );
-      })}
+        ))}
     </Box>
 
     <Button variant="outlined" startIcon={<AddCircleOutlineIcon />} onClick={onAddDevice} sx={{ alignSelf: 'flex-start', textTransform: 'none', borderColor: 'rgba(201,151,58,0.35)', color: '#111111' }}>
       Add another device
     </Button>
     <Typography variant="body2" sx={{ color: '#666666', fontSize: '0.78rem' }}>
-      Please select at least one camera type. You may choose the same camera type again when another physical unit is available.
+      Please select at least one camera type. You may choose the same camera type again in another row.
     </Typography>
   </Box>
-);
+  );
+};
 
 // ─── Step 2: Rental Period ────────────────────────────────────────────────────
 
@@ -720,7 +725,7 @@ const RenterForm: React.FC = () => {
     setErrors((err) => ({ ...err, [field]: undefined }));
   };
   const syncSelectedDeviceIds = (deviceIds: string[]) => {
-    const { selectedItems } = resolveSelectedDeviceItems(deviceIds, items, devices);
+    const { selectedItems } = resolveSelectedDeviceItems(deviceIds, items);
     return {
       selected_device_ids: deviceIds.length > 0 ? deviceIds : [''],
       selected_item_ids: selectedItems.map((item) => item.id),
@@ -768,13 +773,8 @@ const RenterForm: React.FC = () => {
     const e: RentalFormErrors = {};
     if (activeStep === 0) {
       const selectedDeviceIds = form.selected_device_ids.filter(Boolean);
-      const { selectedItems, error } = resolveSelectedDeviceItems(form.selected_device_ids, items, devices);
-      const uniqueItemIds = new Set(selectedItems.map((item) => item.id));
       if (selectedDeviceIds.length === 0) e.selected_device_ids = 'Please select at least one device';
       else if (form.selected_device_ids.some((deviceId) => !deviceId)) e.selected_device_ids = 'Each added device row must have a selected camera type';
-      else if (error) e.selected_item_ids = error;
-      else if (selectedItems.length !== selectedDeviceIds.length) e.selected_item_ids = 'Every selected camera type must resolve to an available physical unit';
-      else if (uniqueItemIds.size !== selectedItems.length) e.selected_item_ids = 'A physical device was assigned more than once. Please adjust your selections.';
     }
     if (activeStep === 1) {
       if (!form.rent_date_start) e.rent_date_start = 'Start date is required';
@@ -812,14 +812,14 @@ const RenterForm: React.FC = () => {
     setSubmitting(true);
     setSubmitError('');
     try {
-      const { selectedItems, error: selectedItemsError } = resolveSelectedDeviceItems(form.selected_device_ids, items, devices);
+      const { selectedItems, error: selectedItemsError } = resolveSelectedDeviceItems(form.selected_device_ids, items);
       const selectedDeviceIds = form.selected_device_ids.filter(Boolean);
       const selectedItemIds = selectedItems.map((item) => item.id);
       if (selectedDeviceIds.length === 0) throw new Error('Please select at least one device.');
       if (form.selected_device_ids.some((deviceId) => !deviceId)) throw new Error('Each added device row must have a selected camera type.');
-      if (selectedItemsError) throw new Error(selectedItemsError);
-      if (selectedItems.length !== selectedDeviceIds.length) throw new Error('Every selected camera type must resolve to an available physical unit.');
-      if (new Set(selectedItemIds).size !== selectedItemIds.length) throw new Error('A physical device was assigned more than once. Please adjust your selections.');
+      if (selectedItemsError || selectedItems.length !== selectedDeviceIds.length || new Set(selectedItemIds).size !== selectedItemIds.length) {
+        throw new Error('Unable to process the selected device. Please try again or contact support.');
+      }
 
       setSubmitError('Uploading proof of purpose…');
       let proof_of_purpose_of_rental: string | null = null;
@@ -864,8 +864,6 @@ const RenterForm: React.FC = () => {
       }
 
       setSubmitError('Saving rental form…');
-      const unavailableItems = selectedItems.filter((item) => item.status !== 'Available');
-      if (unavailableItems.length > 0) throw new Error(`These devices are no longer available: ${unavailableItems.map((item) => item.device?.cam_name ?? item.code_name).join(', ')}`);
       const selectedItem = selectedItems[0];
       const rentPriceTotal = calculateRentalItemsTotal(selectedItems);
       const rentalPayload = {
@@ -1020,7 +1018,7 @@ const RenterForm: React.FC = () => {
         </Box>
         <Divider sx={{ borderColor: 'rgba(201,151,58,0.15)', mb: 3 }} />
 
-        {activeStep === 0 && <StepCamera devices={devices} items={items} selectedItems={resolveSelectedDeviceItems(form.selected_device_ids, items, devices).selectedItems} form={form} onDeviceChange={onDeviceChange} onAddDevice={onAddDevice} onRemoveDevice={onRemoveDevice} errors={errors} />}
+        {activeStep === 0 && <StepCamera devices={devices} form={form} onDeviceChange={onDeviceChange} onAddDevice={onAddDevice} onRemoveDevice={onRemoveDevice} errors={errors} />}
         {activeStep === 1 && <StepPeriod form={form} setForm={setForm} errors={errors} />}
         {activeStep === 2 && <StepPurpose form={form} onText={onText} onLocUsage={onLocUsage} errors={errors} purposeFile={purposeFile} onPurposeFile={setPurposeFile} />}
         {activeStep === 3 && <StepDelivery form={form} setForm={setForm} branches={branches} errors={errors} />}
