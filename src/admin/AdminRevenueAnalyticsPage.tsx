@@ -63,7 +63,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
   }, [navigate, selectedMonth, selectedYear]);
 
   useEffect(() => {
-    void fetchAnalyticsData();
+    void Promise.resolve().then(fetchAnalyticsData);
   }, [fetchAnalyticsData]);
 
   const analytics = useMemo(() => {
