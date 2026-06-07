@@ -121,9 +121,16 @@ export type RentalStatus =
   | 'declined';
 export type LocUsage     = 'domestic' | 'international';
 
+export interface RbRentalItem {
+  id: string;
+  rental_form_id: string;
+  item_id_fk: string;
+  created_at?: string;
+}
+
 export interface RbRentalForm {
   id: string;
-  cam_name_id_fk: string;            // FK → RB_ITEM.id
+  cam_name_id_fk: string | null;       // FK → RB_ITEM.id (legacy single-device rentals)
   renter_id_fk: string;              // FK → RB_RENTER.id
   branch_id_fk: string | null;       // FK → RB_BRANCHES.id (auto-set from item's branch)
   loc_usage: LocUsage;

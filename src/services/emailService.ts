@@ -14,6 +14,7 @@ export interface RentalEmailPayload {
   renterEmail?: string;
   contactNumber?: string;
   cameraName?: string;
+  devices?: { name: string; codeName?: string | null }[];
   branchName?: string;
   pickupTime?: string | null;
   returnTime?: string | null;

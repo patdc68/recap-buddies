@@ -27,6 +27,10 @@ import type {
   RbUser, RbBranch, RbDevice, RbItem, RbRenter,
   RbRentalForm, RbSelfieVerificationInst, ItemStatus, ItemCondition, RentalStatus,
 } from '../service/supabaseClient';
+import {
+  formatCompactRentalItems, formatCompactRentalItemCodes, formatRentalItemsTooltip,
+  getPrimaryRentalItem, getRentalItemIds, getRentalItems, type RentalItemLink,
+} from '../utils/rentalItems';
 
 import DashboardIcon          from '@mui/icons-material/Dashboard';
 import CalendarMonthIcon      from '@mui/icons-material/CalendarMonth';
@@ -156,6 +160,8 @@ interface EnrichedItem extends RbItem { device?: RbDevice; }
 
 interface EnrichedRental extends RbRentalForm {
   item?:              EnrichedItem;
+  items?:             EnrichedItem[];
+  rentalItems?:       RentalItemLink[];
   renter?:            RbRenter;
   pickupBranch?:      RbBranch;
   returnBranch?:      RbBranch;
@@ -187,7 +193,7 @@ const buildRenterAnalytics = (rentals: EnrichedRental[], branchLookup: Record<st
     if (!r.renter?.id) return;
     const isRepeatedRenter = rentals.some((rental) => rental.renter?.id === r.renter?.id && rental.status === 'completed' && rental.id !== r.id);
     const renterType: 'new' | 'repeat' = isRepeatedRenter ? 'repeat' : 'new';
-    const branchName = branchLookup[r.item?.branch_id_fk ?? ''] ?? 'Unassigned';
+    const branchName = branchLookup[getPrimaryRentalItem(r)?.branch_id_fk ?? ''] ?? 'Unassigned';
     const units = 1;
     const revenue = Number(r.rent_price ?? 0) || 0;
 
@@ -390,7 +396,7 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
     };
   }, [open, rental?.renter?.selfie_verification_id]);
   if (!rental) return null;
-  const selectedCamera = cameraOptions.find((it) => it.id === cameraId) ?? rental.item;
+  const rentalDisplayItems = getRentalItems(rental);
   const selfieInstructionTitle = getSelfieInstructionTitle(selfieInstruction);
   const selfieInstructionDescription = getSelfieInstructionDescription(selfieInstruction);
 
@@ -432,15 +438,19 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
       <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
 
         {/* Camera */}
-        <InfoBox label="Camera">
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-            {selectedCamera?.device?.device_img
-              ? <img src={selectedCamera.device.device_img} alt="" style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 6, border: `1px solid ${BORDER}` }} />
-              : <Box sx={{ width: 56, height: 42, borderRadius: 1.5, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 20, color: AMBER }} /></Box>}
-            <Box>
-              <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.95rem' }}>{selectedCamera?.device?.cam_name ?? '—'}</Typography>
-              <Typography sx={{ color: MUTED, fontSize: '0.75rem', fontFamily: '"Sora", sans-serif' }}>{selectedCamera?.code_name ?? '—'} · S/N {selectedCamera?.serial_no ?? '—'}</Typography>
-            </Box>
+        <InfoBox label="Devices">
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 1 }}>
+            {rentalDisplayItems.map((item) => (
+              <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                {item.device?.device_img
+                  ? <img src={item.device.device_img} alt="" style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 6, border: `1px solid ${BORDER}` }} />
+                  : <Box sx={{ width: 56, height: 42, borderRadius: 1.5, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 20, color: AMBER }} /></Box>}
+                <Box>
+                  <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.95rem' }}>{item.device?.cam_name ?? '—'}</Typography>
+                  <Typography sx={{ color: MUTED, fontSize: '0.75rem', fontFamily: '"Sora", sans-serif' }}>{item.code_name ?? '—'} · S/N {item.serial_no ?? '—'}</Typography>
+                </Box>
+              </Box>
+            ))}
           </Box>
           <FormControl size="small" fullWidth>
             <InputLabel>Select Camera</InputLabel>
@@ -710,8 +720,8 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
       disableColumnMenu: true,
       renderCell: ({ row }: GridRenderCellParams<EnrichedRental>) => (
         <Box sx={{ height: '100%', display: 'flex', alignItems: 'center' }}>
-          {row.item?.device?.device_img
-            ? <img src={row.item.device.device_img} alt="" style={{ width: 52, height: 40, objectFit: 'cover', borderRadius: 8, border: `1px solid ${BORDER}`, display: 'block' }} />
+          {getPrimaryRentalItem(row)?.device?.device_img
+            ? <img src={getPrimaryRentalItem(row)?.device?.device_img ?? undefined} alt="" style={{ width: 52, height: 40, objectFit: 'cover', borderRadius: 8, border: `1px solid ${BORDER}`, display: 'block' }} />
             : <Box sx={{ width: 52, height: 40, borderRadius: 2, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 18, color: AMBER }} /></Box>}
         </Box>
       ),
@@ -721,11 +731,11 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
       headerName: 'Camera / Code',
       minWidth: 220,
       flex: 1.8,
-      valueGetter: (_value, row) => row.item?.device?.cam_name ?? '—',
+      valueGetter: (_value, row) => formatCompactRentalItems(row),
       renderCell: ({ row }: GridRenderCellParams<EnrichedRental>) => (
         <Box sx={{ minWidth: 0, width: '100%', py: 1 }}>
-          <Typography title={row.item?.device?.cam_name ?? '—'} sx={{ ...longTextSx, color: ESPRESSO, fontWeight: 700, fontSize: '0.85rem' }}>{row.item?.device?.cam_name ?? '—'}</Typography>
-          <Typography title={row.item?.code_name ?? '—'} sx={{ ...longTextSx, color: AMBER, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif' }}>{row.item?.code_name ?? '—'}</Typography>
+          <Typography title={formatRentalItemsTooltip(row)} sx={{ ...longTextSx, color: ESPRESSO, fontWeight: 700, fontSize: '0.85rem' }}>{formatCompactRentalItems(row)}</Typography>
+          <Typography title={formatRentalItemsTooltip(row)} sx={{ ...longTextSx, color: AMBER, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif' }}>{formatCompactRentalItemCodes(row)}</Typography>
         </Box>
       ),
     },
@@ -915,8 +925,8 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
 
   const devMap: Record<string, { name: string; count: number; rentals: EnrichedRental[] }> = {};
   thisMonth.forEach((r) => {
-    const name = r.item?.device?.cam_name ?? 'Unknown';
-    const key  = r.item?.device_id_fk ?? 'unknown';
+    const name = formatCompactRentalItems(r);
+    const key  = getPrimaryRentalItem(r)?.device_id_fk ?? 'unknown';
     if (!devMap[key]) devMap[key] = { name, count: 0, rentals: [] };
     devMap[key].count++;
     devMap[key].rentals.push(r);
@@ -1033,12 +1043,12 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
                           transition: 'background 0.15s',
                         }}
                       >
-                        {r.item?.device?.device_img
-                          ? <img src={r.item.device.device_img} alt="" style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 8, border: `1px solid ${BORDER}` }} />
+                        {getPrimaryRentalItem(r)?.device?.device_img
+                          ? <img src={getPrimaryRentalItem(r)?.device?.device_img ?? undefined} alt="" style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 8, border: `1px solid ${BORDER}` }} />
                           : <Box sx={{ width: 56, height: 42, borderRadius: 2, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 18, color: AMBER }} /></Box>}
                         <Box sx={{ minWidth: 0 }}>
-                          <Typography sx={{ color: ESPRESSO, fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.item?.device?.cam_name ?? '—'}</Typography>
-                          <Typography sx={{ color: AMBER, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.item?.code_name ?? '—'}</Typography>
+                          <Typography sx={{ color: ESPRESSO, fontWeight: 600, fontSize: '0.85rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatCompactRentalItems(r)}</Typography>
+                          <Typography sx={{ color: AMBER, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{formatCompactRentalItemCodes(r)}</Typography>
                         </Box>
                         <Box sx={{ minWidth: 0, gridColumn: { xs: '2', md: 'auto' } }}>
                           <Typography sx={{ color: INK, fontSize: '0.82rem', fontWeight: 500, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—'}</Typography>
@@ -1226,11 +1236,9 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
       if (error) throw error;
 
       const itemStatus = RENTAL_TO_ITEM_STATUS[editForm.status];
-      if (editingRental.cam_name_id_fk && editingRental.cam_name_id_fk !== editForm.cam_name_id_fk) {
-        await supabase.from('RB_ITEM').update({ status: 'Available' }).eq('id', editingRental.cam_name_id_fk);
-      }
-      if (editForm.cam_name_id_fk && itemStatus) {
-        await supabase.from('RB_ITEM').update({ status: itemStatus }).eq('id', editForm.cam_name_id_fk);
+      if (itemStatus) {
+        const itemIdsToUpdate = editingRental.rentalItems?.length ? getRentalItemIds(editingRental) : [editForm.cam_name_id_fk].filter(Boolean);
+        await Promise.all(itemIdsToUpdate.map((itemId) => supabase.from('RB_ITEM').update({ status: itemStatus }).eq('id', itemId)));
       }
 
       try {
@@ -1269,14 +1277,14 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
       rt: r.return_time,
       rd: r.rent_date_end,
       name: renterName,
-      unit: r.item?.device?.cam_name ?? '—',
+      unit: formatCompactRentalItems(r),
       renter: r.renter?.id ? (isRepeatedRenter ? 'Repeat' : 'New') : '—',
       type: r.delivery_addr == null ? 'Pick-up' : 'Deliver',
       hub: r.pickupBranch?.location_name ?? r.delivery_addr ?? '—',
       groupChat: Boolean(r.messenger_link),
       rentalFee: rentPrice,
       status: RENTAL_STATUS_META[r.status]?.label ?? r.status,
-      availableUnit: r.item?.code_name ?? '—',
+      availableUnit: formatCompactRentalItemCodes(r),
       rental: r,
     };
   });
@@ -1536,7 +1544,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                 const isEnd    = rEnd.isSameOrAfter(weekStart, 'day')   && rEnd.isSameOrBefore(weekEnd, 'day');
                 const slot     = slotMap[r.id] ?? 0;
                 const meta     = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META.submitted;
-                const firstName = r.renter?.renter_fname ?? r.item?.code_name ?? '?';
+                const firstName = r.renter?.renter_fname ?? getPrimaryRentalItem(r)?.code_name ?? '?';
 
                 return (
                   <Box
@@ -1655,7 +1663,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                   }}
                   sx={{ p: 1.4, borderRadius: 2, border: `1px solid ${BORDER}`, background: 'rgba(201,151,58,0.04)', cursor: 'pointer', '&:hover': { background: 'rgba(201,151,58,0.09)' } }}
                 >
-                  <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.86rem' }}>{r.item?.device?.cam_name ?? '—'}</Typography>
+                  <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.86rem' }}>{formatCompactRentalItems(r)}</Typography>
                   <Typography sx={{ color: INK, fontSize: '0.8rem' }}>{r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—'}</Typography>
                   <Typography sx={{ color: MUTED, fontSize: '0.76rem' }}>{r.renter?.mobile_no ?? 'No contact number'}</Typography>
                 </Box>
@@ -2347,7 +2355,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ rbUser, onMenuToggle, onLogou
                 >
                   <ListItemText
                     primary={`${r.renter?.renter_fname ?? 'Unknown'} ${r.renter?.renter_lname ?? ''}`.trim()}
-                    secondary={`${r.item?.device?.cam_name ?? r.item?.code_name ?? 'Unknown unit'} • ${dayjs(r.rent_date_start).format('MMM D, YYYY')} - ${dayjs(r.rent_date_end).format('MMM D, YYYY')}\nSubmitted ${dayjs(r.created_at).format('MMM D, YYYY h:mm A')}`}
+                    secondary={`${formatCompactRentalItems(r)} • ${dayjs(r.rent_date_start).format('MMM D, YYYY')} - ${dayjs(r.rent_date_end).format('MMM D, YYYY')}\nSubmitted ${dayjs(r.created_at).format('MMM D, YYYY h:mm A')}`}
                     secondaryTypographyProps={{ sx: { whiteSpace: 'pre-line' } }}
                   />
                 </MenuItem>
@@ -2520,7 +2528,11 @@ const AdminDashboard: React.FC = () => {
 
     if (rentalsRaw && rentalsRaw.length > 0) {
       const rf = rentalsRaw as RbRentalForm[];
-      const itemIds   = [...new Set(rf.map((r) => r.cam_name_id_fk).filter(Boolean))] as string[];
+      const rentalIds = rf.map((r) => r.id);
+      const { data: rentalItemsRaw } = rentalIds.length ? await supabase.from('RB_RENTAL_ITEMS').select('*').in('rental_form_id', rentalIds) : { data: [] };
+      const linkedItemIds = [...new Set((rentalItemsRaw ?? []).map((link: RentalItemLink) => link.item_id_fk).filter(Boolean))] as string[];
+      const legacyItemIds = rf.map((r) => r.cam_name_id_fk).filter(Boolean) as string[];
+      const itemIds   = [...new Set([...linkedItemIds, ...legacyItemIds])];
       const renterIds = [...new Set(rf.map((r) => r.renter_id_fk).filter(Boolean))]   as string[];
       const bIds      = [...new Set([...rf.map((r) => r.branch_id_fk), ...rf.map((r) => r.hub_pick_up_addr), ...rf.map((r) => r.hub_return_addr)].filter(Boolean))] as string[];
 
@@ -2549,11 +2561,21 @@ const AdminDashboard: React.FC = () => {
         ((selfieInstructionsRaw ?? []) as RbSelfieVerificationInst[]).map((instruction) => [instruction.id, instruction])
       );
 
+      const rentalItemsByRental = new Map<string, RentalItemLink[]>();
+      (rentalItemsRaw ?? []).forEach((link: RentalItemLink) => {
+        const enrichedLink = { ...link, item: iMap[link.item_id_fk] };
+        rentalItemsByRental.set(link.rental_form_id, [...(rentalItemsByRental.get(link.rental_form_id) ?? []), enrichedLink]);
+      });
+
       setRentals(rf.map((r) => {
         const renter = r.renter_id_fk ? rMap[r.renter_id_fk] : undefined;
+        const rentalItems = rentalItemsByRental.get(r.id) ?? [];
+        const items = rentalItems.map((link) => link.item).filter((item): item is EnrichedItem => !!item);
         return {
           ...r,
-          item:              r.cam_name_id_fk  ? iMap[r.cam_name_id_fk]   : undefined,
+          rentalItems,
+          items,
+          item:              items[0] ?? (r.cam_name_id_fk ? iMap[r.cam_name_id_fk] : undefined),
           renter,
           pickupBranch:      r.hub_pick_up_addr ? bMap[r.hub_pick_up_addr] : undefined,
           returnBranch:      r.hub_return_addr  ? bMap[r.hub_return_addr]  : undefined,
@@ -2607,14 +2629,14 @@ const AdminDashboard: React.FC = () => {
 
     await Promise.all(updates);
 
-    const itemUpdates = overdueRentals
-      .filter((r) => !!r.cam_name_id_fk)
-      .map((r) =>
+    const itemUpdates = overdueRentals.flatMap((r) =>
+      getRentalItemIds(r).map((itemId) =>
         supabase
           .from('RB_ITEM')
           .update({ status: 'Available' })
-          .eq('id', r.cam_name_id_fk)
-      );
+          .eq('id', itemId)
+      )
+    );
 
     if (itemUpdates.length > 0) await Promise.all(itemUpdates);
     await fetchAll();
@@ -2664,17 +2686,13 @@ const AdminDashboard: React.FC = () => {
 
     const targetRental = rentals.find((r) => r.id === id);
     const itemStatus = RENTAL_TO_ITEM_STATUS[updates.status];
-    if (targetRental?.cam_name_id_fk && itemStatus && targetRental.cam_name_id_fk !== updates.cam_name_id_fk) {
-      await supabase
-        .from('RB_ITEM')
-        .update({ status: 'Available' })
-        .eq('id', targetRental.cam_name_id_fk);
-    }
-    if (updates.cam_name_id_fk && itemStatus) {
-      await supabase
-        .from('RB_ITEM')
-        .update({ status: itemStatus })
-        .eq('id', updates.cam_name_id_fk);
+    if (targetRental && itemStatus) {
+      const previousItemIds = getRentalItemIds(targetRental);
+      const nextItemIds = targetRental.rentalItems?.length ? previousItemIds : [updates.cam_name_id_fk].filter(Boolean);
+      await Promise.all(previousItemIds
+        .filter((itemId) => !nextItemIds.includes(itemId))
+        .map((itemId) => supabase.from('RB_ITEM').update({ status: 'Available' }).eq('id', itemId)));
+      await Promise.all(nextItemIds.map((itemId) => supabase.from('RB_ITEM').update({ status: itemStatus }).eq('id', itemId)));
     }
 
     if (targetRental) {
