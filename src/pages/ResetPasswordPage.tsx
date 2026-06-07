@@ -16,9 +16,13 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import LockResetIcon from '@mui/icons-material/LockReset';
 import SaveIcon from '@mui/icons-material/Save';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import PageLayout from '../components/PageLayout';
 import { supabase } from '../service/supabaseClient';
+import {
+  getPasswordResetLoginPath,
+  getPasswordResetUserType,
+} from '../utils/passwordResetUserType';
 
 interface ResetPasswordForm {
   newPassword: string;
@@ -35,6 +39,9 @@ const INVALID_LINK_MESSAGE = 'Password reset link is invalid or expired. Please 
 
 const ResetPasswordPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const userType = getPasswordResetUserType(searchParams.get('type'));
+  const loginPath = getPasswordResetLoginPath(userType);
   const [form, setForm] = useState<ResetPasswordForm>({ newPassword: '', confirmPassword: '' });
   const [errors, setErrors] = useState<ResetPasswordErrors>({});
   const [checkingSession, setCheckingSession] = useState(true);
@@ -77,12 +84,14 @@ const ResetPasswordPage: React.FC = () => {
         const hashParams = new URLSearchParams(window.location.hash.replace(/^#/, ''));
         const code = searchParams.get('code');
         const tokenHash = searchParams.get('token_hash');
-        const queryType = searchParams.get('type');
+        const queryTypes = searchParams.getAll('type');
         const accessToken = hashParams.get('access_token');
         const refreshToken = hashParams.get('refresh_token');
         const hashType = hashParams.get('type');
         const hasRecoveryCode = Boolean(code);
-        const hasRecoveryTokenHash = Boolean(tokenHash && queryType === 'recovery');
+        const hasRecoveryTokenHash = Boolean(
+          tokenHash && (queryTypes.includes('recovery') || queryTypes.includes('admin') || queryTypes.includes('renter'))
+        );
         const hasRecoveryHashTokens = Boolean(accessToken && refreshToken && hashType === 'recovery');
         const hasRecoveryCredentials = hasRecoveryCode || hasRecoveryTokenHash || hasRecoveryHashTokens;
 
@@ -100,7 +109,7 @@ const ResetPasswordPage: React.FC = () => {
           const { error } = await supabase.auth.exchangeCodeForSession(code);
 
           if (error) throw error;
-        } else if (tokenHash && queryType === 'recovery') {
+        } else if (tokenHash && hasRecoveryTokenHash) {
           const { error } = await supabase.auth.verifyOtp({
             token_hash: tokenHash,
             type: 'recovery',
@@ -228,7 +237,7 @@ const ResetPasswordPage: React.FC = () => {
 
   const handleGoToLogin = async () => {
     await supabase.auth.signOut();
-    navigate('/login', { replace: true });
+    navigate(loginPath, { replace: true });
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
@@ -319,7 +328,7 @@ const ResetPasswordPage: React.FC = () => {
                 <Alert
                   severity="error"
                   action={(
-                    <Button color="inherit" size="small" onClick={() => navigate('/forgot-password')}>
+                    <Button color="inherit" size="small" onClick={() => navigate(`/forgot-password?type=${userType}`)}>
                       Request link
                     </Button>
                   )}
@@ -355,7 +364,7 @@ const ResetPasswordPage: React.FC = () => {
             <Alert
               severity="error"
               action={(
-                <Button color="inherit" size="small" onClick={() => navigate('/forgot-password')}>
+                <Button color="inherit" size="small" onClick={() => navigate(`/forgot-password?type=${userType}`)}>
                   Request link
                 </Button>
               )}
@@ -370,7 +379,7 @@ const ResetPasswordPage: React.FC = () => {
               component="button"
               type="button"
               underline="hover"
-              onClick={() => navigate('/login')}
+              onClick={() => navigate(loginPath)}
               sx={{
                 color: '#111111',
                 fontWeight: 700,

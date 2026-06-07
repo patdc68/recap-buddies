@@ -203,7 +203,7 @@ const LoginPage: React.FC = () => {
                 component="button"
                 type="button"
                 underline="hover"
-                onClick={() => navigate('/forgot-password')}
+                onClick={() => navigate('/forgot-password?type=renter')}
                 sx={{ color: '#111111', fontSize: '0.875rem', fontWeight: 700 }}
               >
                 Forgot password?
