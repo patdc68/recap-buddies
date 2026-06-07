@@ -62,6 +62,7 @@ export interface RbItem {
   device_id_fk: string;
   code_name: string;
   serial_no: string;
+  image_url?: string | null;
   remarks: string | null;
   branch_id_fk: string | null;
   status: ItemStatus;

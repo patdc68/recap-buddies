@@ -4,7 +4,7 @@ import {
   Divider, IconButton, Dialog, DialogTitle, DialogContent,
   DialogActions, Select, MenuItem, FormControl, InputLabel, FormHelperText,
   Switch, FormControlLabel, Tooltip, TextField, type SelectChangeEvent,
-  Table, TableHead, TableBody, TableRow, TableCell, TableContainer, Snackbar, Alert, Badge, Menu, ListItemText,
+  Snackbar, Alert, Badge, Menu, ListItemText,
   AppBar, Toolbar, Drawer, List, ListItemButton, ListItemIcon, useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -225,36 +225,6 @@ const buildRenterAnalytics = (rentals: EnrichedRental[], branchLookup: Record<st
   };
 };
 
-const BranchAnalyticsTable: React.FC<{ title: string; analytics: RenterTypeAnalytics }> = ({ title, analytics }) => (
-  <Paper elevation={0} sx={{ borderRadius: '20px', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', p: 3, border: `1px solid ${BORDER}` }}>
-    <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '1rem', mb: 1.5 }}>{title}</Typography>
-    <TableContainer>
-      <Table size="small">
-        <TableHead>
-          <TableRow sx={{ backgroundColor: '#fafafa' }}>
-            <TableCell sx={{ fontWeight: 700 }}>Branch</TableCell>
-            <TableCell sx={{ fontWeight: 700 }}>Total Units Rented</TableCell>
-            <TableCell sx={{ fontWeight: 700 }}>Total Revenue</TableCell>
-          </TableRow>
-        </TableHead>
-        <TableBody>
-          {analytics.rows.map((row) => (
-            <TableRow key={`${title}-${row.branch}`}>
-              <TableCell>{row.branch}</TableCell>
-              <TableCell>{row.units}</TableCell>
-              <TableCell>₱{pesoFormatter.format(row.revenue)}</TableCell>
-            </TableRow>
-          ))}
-          <TableRow sx={{ backgroundColor: 'rgba(0,0,0,0.04)' }}>
-            <TableCell sx={{ fontWeight: 700 }}>Total</TableCell>
-            <TableCell sx={{ fontWeight: 700 }}>{analytics.totalUnits}</TableCell>
-            <TableCell sx={{ fontWeight: 700 }}>₱{pesoFormatter.format(analytics.totalRevenue)}</TableCell>
-          </TableRow>
-        </TableBody>
-      </Table>
-    </TableContainer>
-  </Paper>
-);
 const InfoBox: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
   <Box sx={{ p: 2, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
     <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase', mb: 0.5 }}>
@@ -304,12 +274,25 @@ interface EditableRentalDeviceRow {
   itemId: string;
 }
 
-const buildItemOptionLabel = (item?: EnrichedItem | null) => {
-  if (!item) return 'Select a unit';
-  return [item.device?.cam_name ?? 'Unknown camera', item.code_name, item.serial_no ? `S/N ${item.serial_no}` : null]
-    .filter(Boolean)
-    .join(' — ');
+const getItemThumbnailUrl = (item?: EnrichedItem | null) => item?.image_url ?? item?.device?.device_img ?? null;
+
+const DeviceThumbnail: React.FC<{ item?: EnrichedItem | null; size?: 'small' | 'medium' }> = ({ item, size = 'medium' }) => {
+  const imageUrl = getItemThumbnailUrl(item);
+  const dimensions = size === 'small' ? { width: 38, height: 30 } : { width: 56, height: 44 };
+
+  return imageUrl
+    ? <img src={imageUrl} alt={item?.code_name ?? 'Device'} style={{ ...dimensions, objectFit: 'cover', borderRadius: 8, border: `1px solid ${BORDER}`, flexShrink: 0 }} />
+    : <Box sx={{ ...dimensions, borderRadius: 2, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><CameraAltIcon sx={{ fontSize: size === 'small' ? 16 : 20, color: AMBER }} /></Box>;
 };
+
+const CompactDeviceDisplay: React.FC<{ item?: EnrichedItem | null; placeholder?: string; size?: 'small' | 'medium' }> = ({ item, placeholder = 'Select a device', size = 'medium' }) => (
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
+    <DeviceThumbnail item={item} size={size} />
+    <Typography sx={{ color: item ? ESPRESSO : MUTED, fontWeight: 800, fontSize: size === 'small' ? '0.86rem' : '0.95rem', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      {item?.code_name ?? placeholder}
+    </Typography>
+  </Box>
+);
 
 const syncRentalItems = async (rentalId: string, previousLinks: RentalItemLink[], nextRows: RentalUpdateDeviceRow[]) => {
   const previousByLinkId = new Map(previousLinks.filter((link) => link.id).map((link) => [link.id as string, link]));
@@ -373,11 +356,14 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
     setRentPrice(rentalRentPrice);
     setInitialRentPrice(rentalRentPrice);
     setInitialDevicePriceTotal(calculateRentalItemsTotal(initialItems));
-    setDeviceRows((rental.rentalItems?.length ? rental.rentalItems : []).map((link, index) => ({
-      localId: link.id ?? `existing-${link.item_id_fk}-${index}`,
-      rentalItemId: link.id,
-      itemId: link.item_id_fk,
-    })));
+    const initialRows = rental.rentalItems?.length
+      ? rental.rentalItems.map((link, index) => ({
+          localId: link.id ?? `existing-${link.item_id_fk}-${index}`,
+          rentalItemId: link.id,
+          itemId: link.item_id_fk,
+        }))
+      : (rental.cam_name_id_fk ? [{ localId: `legacy-${rental.cam_name_id_fk}`, itemId: rental.cam_name_id_fk }] : []);
+    setDeviceRows(initialRows);
     setDeviceError('');
     setStartDate(dayjs(rental.rent_date_start).format('YYYY-MM-DD'));
     setEndDate(dayjs(rental.rent_date_end).format('YYYY-MM-DD'));
@@ -596,22 +582,22 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
                     </IconButton>
                   </Box>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
-                    {selectedItem?.device?.device_img
-                      ? <img src={selectedItem.device.device_img} alt={selectedItem.device?.cam_name ?? ''} style={{ width: 64, height: 48, objectFit: 'cover', borderRadius: 6, border: `1px solid ${BORDER}` }} />
-                      : <Box sx={{ width: 64, height: 48, borderRadius: 1.5, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 22, color: AMBER }} /></Box>}
-                    <Box sx={{ minWidth: 0 }}>
-                      <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.95rem' }}>{selectedItem?.device?.cam_name ?? 'Select a device'}</Typography>
-                      <Typography sx={{ color: MUTED, fontSize: '0.75rem', fontFamily: '"Sora", sans-serif' }}>
-                        {selectedItem ? `${selectedItem.code_name ?? '—'} · S/N ${selectedItem.serial_no ?? '—'}` : 'Choose an actual rentable unit below.'}
-                      </Typography>
-                    </Box>
+                    <CompactDeviceDisplay item={selectedItem} placeholder="Select a device" />
                   </Box>
                   <FormControl size="small" fullWidth error={duplicateItem || (!!deviceError && !row.itemId)}>
                     <InputLabel>Actual Unit</InputLabel>
-                    <Select value={row.itemId} onChange={(e: SelectChangeEvent) => handleDeviceChange(row.localId, e.target.value)} label="Actual Unit">
+                    <Select
+                      value={row.itemId}
+                      onChange={(e: SelectChangeEvent) => handleDeviceChange(row.localId, e.target.value)}
+                      label="Actual Unit"
+                      renderValue={(selected) => {
+                        const selectedOption = cameraOptions.find((item) => item.id === selected);
+                        return <CompactDeviceDisplay item={selectedOption} placeholder="Select a unit" size="small" />;
+                      }}
+                    >
                       {cameraOptions.map((item) => (
                         <MenuItem key={item.id} value={item.id} disabled={row.itemId !== item.id && deviceRows.some((candidate) => candidate.itemId === item.id)}>
-                          {buildItemOptionLabel(item)}
+                          <CompactDeviceDisplay item={item} size="small" />
                         </MenuItem>
                       ))}
                     </Select>
@@ -2756,7 +2742,7 @@ const AdminDashboard: React.FC = () => {
     setLoading(false);
   }, [navigate]);
 
-  useEffect(() => { fetchAll(); }, [fetchAll]);
+  useEffect(() => { void Promise.resolve().then(fetchAll); }, [fetchAll]);
   const loadAgreement = useCallback(async () => {
     setAgreementLoading(true);
     const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement.md');
@@ -2769,7 +2755,7 @@ const AdminDashboard: React.FC = () => {
     setAgreementLoading(false);
   }, []);
   useEffect(() => {
-    if (tab === 4 && !agreementMd && !agreementLoading) void loadAgreement();
+    if (tab === 4 && !agreementMd && !agreementLoading) void Promise.resolve().then(loadAgreement);
   }, [tab, agreementMd, agreementLoading, loadAgreement]);
 
   const markOverdueRentalsCompleted = useCallback(async () => {
@@ -2811,7 +2797,7 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!loading && rentals.length > 0) {
-      void markOverdueRentalsCompleted();
+      void Promise.resolve().then(markOverdueRentalsCompleted);
     }
   }, [loading, rentals, markOverdueRentalsCompleted]);
 

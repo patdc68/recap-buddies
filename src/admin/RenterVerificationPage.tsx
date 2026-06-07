@@ -20,12 +20,12 @@ import StorefrontIcon         from '@mui/icons-material/Storefront';
 import ZoomInIcon             from '@mui/icons-material/ZoomIn';
 import SaveIcon               from '@mui/icons-material/Save';
 import CloseIcon              from '@mui/icons-material/Close';
-import GpsFixedIcon           from '@mui/icons-material/GpsFixed';
 import dayjs from 'dayjs';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import { sendRentalStatusEmail } from '../services/emailService';
 import type { RbRenter, RbRentalForm, RbItem, RbDevice, RbBranch, RbSelfieVerificationInst } from '../service/supabaseClient';
+import type { RentalItemLink } from '../utils/rentalItems';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const AMBER      = '#111111';
@@ -57,6 +57,8 @@ interface FullVerification {
   rental:       RbRentalForm;
   renter:       RbRenter;
   item:         EnrichedItem | null;
+  items:        EnrichedItem[];
+  rentalItems:  RentalItemLink[];
   pickupBranch: RbBranch | null;
   returnBranch: RbBranch | null;
   selfieInst:   RbSelfieVerificationInst | null;
@@ -74,6 +76,25 @@ const getSelfieInstructionTitle = (inst: RbSelfieVerificationInst | null) =>
 
 const getSelfieInstructionDescription = (inst: RbSelfieVerificationInst | null) =>
   inst?.instruction_desc ?? null;
+
+const getItemThumbnailUrl = (item?: EnrichedItem | null) => item?.image_url ?? item?.device?.device_img ?? null;
+
+const DeviceThumbnail: React.FC<{ item?: EnrichedItem | null }> = ({ item }) => {
+  const imageUrl = getItemThumbnailUrl(item);
+
+  return imageUrl
+    ? <img src={imageUrl} alt={item?.code_name ?? 'Device'} style={{ width: 56, height: 44, objectFit: 'cover', borderRadius: 8, border: `1px solid ${BORDER}`, flexShrink: 0 }} />
+    : <Box sx={{ width: 56, height: 44, borderRadius: 2, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}><CameraAltIcon sx={{ fontSize: 20, color: AMBER }} /></Box>;
+};
+
+const DeviceSummaryRow: React.FC<{ item: EnrichedItem }> = ({ item }) => (
+  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 1.25, background: 'rgba(201,151,58,0.04)', borderRadius: 2, border: `1px solid ${BORDER}` }}>
+    <DeviceThumbnail item={item} />
+    <Typography sx={{ color: ESPRESSO, fontWeight: 800, fontSize: '0.92rem', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+      {item.code_name ?? 'Unnamed device'}
+    </Typography>
+  </Box>
+);
 
 // ─── Sub-components ───────────────────────────────────────────────────────────
 
@@ -143,14 +164,30 @@ const RenterVerificationPage: React.FC = () => {
         .from('RB_RENTER').select('*').eq('id', rental.renter_id_fk).single();
       if (rentErr || !renter) throw new Error('Renter record not found');
 
-      // 3. Item + device
+      // 3. Rental items + item/device data, with legacy single-item fallback
+      const { data: rentalItemsRaw } = await supabase
+        .from('RB_RENTAL_ITEMS')
+        .select('*')
+        .eq('rental_form_id', rental.id);
+      const rentalItemLinks = (rentalItemsRaw ?? []) as RentalItemLink[];
+      const linkedItemIds = rentalItemLinks.map((link) => link.item_id_fk).filter(Boolean);
+      const fallbackItemIds = linkedItemIds.length === 0 && rental.cam_name_id_fk ? [rental.cam_name_id_fk] : [];
+      const itemIds = [...new Set([...linkedItemIds, ...fallbackItemIds])];
       let item: EnrichedItem | null = null;
-      if (rental.cam_name_id_fk) {
-        const { data: itemRaw } = await supabase
+      let items: EnrichedItem[] = [];
+      let rentalItems: RentalItemLink[] = [];
+
+      if (itemIds.length > 0) {
+        const { data: itemsRaw } = await supabase
           .from('RB_ITEM')
           .select('*, device:RB_DEVICES(id, cam_name, device_img)')
-          .eq('id', rental.cam_name_id_fk).single();
-        if (itemRaw) item = itemRaw as EnrichedItem;
+          .in('id', itemIds);
+        const itemMap = new Map((itemsRaw ?? []).map((itemRaw) => [(itemRaw as EnrichedItem).id, itemRaw as EnrichedItem]));
+        rentalItems = rentalItemLinks.map((link) => ({ ...link, item: itemMap.get(link.item_id_fk) }));
+        items = linkedItemIds.length > 0
+          ? rentalItems.map((link) => link.item).filter((linkedItem): linkedItem is EnrichedItem => !!linkedItem)
+          : fallbackItemIds.map((id) => itemMap.get(id)).filter((fallbackItem): fallbackItem is EnrichedItem => !!fallbackItem);
+        item = items[0] ?? null;
       }
 
       // 4. Branches
@@ -184,6 +221,8 @@ const RenterVerificationPage: React.FC = () => {
         rental: rental as RbRentalForm,
         renter: renter as RbRenter,
         item,
+        items,
+        rentalItems,
         pickupBranch: rental.hub_pick_up_addr ? branchMap[rental.hub_pick_up_addr] ?? null : null,
         returnBranch: rental.hub_return_addr  ? branchMap[rental.hub_return_addr]  ?? null : null,
         selfieInst,
@@ -247,7 +286,7 @@ const RenterVerificationPage: React.FC = () => {
     );
   }
 
-  const { rental, renter, item, pickupBranch, returnBranch, selfieInst } = data;
+  const { rental, renter, items, pickupBranch, returnBranch, selfieInst } = data;
   const selfieInstructionTitle = getSelfieInstructionTitle(selfieInst);
   const selfieInstructionDescription = getSelfieInstructionDescription(selfieInst);
   const statusMeta = RENTAL_STATUS_META[status] ?? RENTAL_STATUS_META.submitted;
@@ -340,22 +379,16 @@ const RenterVerificationPage: React.FC = () => {
           <Paper elevation={0} sx={{ flex: '1 1 320px', p: 3, border: `1px solid ${BORDER}`, borderRadius: 3, background: CARD_BG }}>
             <SectionTitle icon={<CameraAltIcon sx={{ fontSize: 17 }} />} title="Rental Details" />
 
-            {/* Camera */}
-            {item && (
-              <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 2, p: 1.5, background: 'rgba(201,151,58,0.04)', borderRadius: 2, border: `1px solid ${BORDER}` }}>
-                {item.device?.device_img
-                  ? <img src={item.device.device_img} alt="" style={{ width: 56, height: 44, objectFit: 'cover', borderRadius: 6, border: `1px solid ${BORDER}` }} />
-                  : <Box sx={{ width: 56, height: 44, borderRadius: 1.5, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 20, color: AMBER }} /></Box>}
-                <Box>
-                  <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.92rem' }}>{item.device?.cam_name ?? '—'}</Typography>
-                  <Typography sx={{ color: MUTED, fontSize: '0.72rem', fontFamily: '"Sora", sans-serif' }}>{item.code_name} · S/N {item.serial_no}</Typography>
-                  {item.gps_installed && (
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-                      <GpsFixedIcon sx={{ fontSize: 11, color: '#2E7D32' }} />
-                      <Typography sx={{ fontSize: '0.68rem', color: '#2E7D32' }}>GPS installed</Typography>
-                    </Box>
-                  )}
-                </Box>
+            <Typography sx={{ color: AMBER_DARK, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase', mb: 0.75, fontWeight: 700 }}>
+              Devices
+            </Typography>
+            {items.length > 0 ? (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 2 }}>
+                {items.map((requestedItem) => <DeviceSummaryRow key={requestedItem.id} item={requestedItem} />)}
+              </Box>
+            ) : (
+              <Box sx={{ p: 1.5, mb: 2, borderRadius: 2, border: `1px dashed ${BORDER}`, background: 'rgba(201,151,58,0.02)' }}>
+                <Typography sx={{ color: MUTED, fontSize: '0.78rem', fontStyle: 'italic' }}>No devices found for this rental.</Typography>
               </Box>
             )}
 
