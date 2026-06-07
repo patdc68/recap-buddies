@@ -12,9 +12,14 @@ import {
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import MailOutlineIcon from '@mui/icons-material/MailOutline';
 import SendIcon from '@mui/icons-material/Send';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import PageLayout from '../components/PageLayout';
 import { supabase } from '../service/supabaseClient';
+import {
+  getPasswordResetLoginPath,
+  getPasswordResetRedirectUrl,
+  getPasswordResetUserType,
+} from '../utils/passwordResetUserType';
 
 const emailPattern = /\S+@\S+\.\S+/;
 // Supabase Auth URL Configuration must include:
@@ -22,10 +27,12 @@ const emailPattern = /\S+@\S+\.\S+/;
 // The password reset email template must use:
 // {{ .ConfirmationURL }}
 // Do not manually replace {{ .ConfirmationURL }} with a static URL.
-const PASSWORD_RESET_REDIRECT_URL = 'https://recap-buddies.com/reset-password';
 
 const ForgotPasswordPage: React.FC = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const userType = getPasswordResetUserType(searchParams.get('type'));
+  const loginPath = getPasswordResetLoginPath(userType);
   const [email, setEmail] = useState('');
   const [emailError, setEmailError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -63,7 +70,7 @@ const ForgotPasswordPage: React.FC = () => {
     setErrorMessage('');
 
     const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-      redirectTo: PASSWORD_RESET_REDIRECT_URL,
+      redirectTo: getPasswordResetRedirectUrl(userType),
     });
 
     setLoading(false);
@@ -172,7 +179,7 @@ const ForgotPasswordPage: React.FC = () => {
               component="button"
               type="button"
               underline="hover"
-              onClick={() => navigate('/login')}
+              onClick={() => navigate(loginPath)}
               sx={{
                 color: '#111111',
                 fontWeight: 700,
