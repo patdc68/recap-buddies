@@ -23,15 +23,16 @@ import ContentCopyIcon        from '@mui/icons-material/ContentCopy';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
-import type { RbRenter, RbRentalForm, RbItem, RbDevice, RbBranch, RentalStatus } from '../service/supabaseClient';
+import type { RbRenter, RbRentalForm, RbBranch, RentalStatus } from '../service/supabaseClient';
+import { formatCompactRentalItems, formatRentalItemsTooltip, getRentalItems, type EnrichedItem, type RentalItemLink } from '../utils/rentalItems';
 import PageLayout from '../components/PageLayout';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
-interface EnrichedItem extends RbItem { device?: RbDevice; }
-
 interface EnrichedRental extends RbRentalForm {
   item?:         EnrichedItem;
+  items?:        EnrichedItem[];
+  rentalItems?:  RentalItemLink[];
   pickupBranch?: RbBranch;
   returnBranch?: RbBranch;
 }
@@ -121,10 +122,12 @@ const RentalCard: React.FC<{
   const isDeliveryPickup = !rental.hub_pick_up_addr && !!rental.delivery_addr;
   const isDeliveryReturn = !rental.hub_return_addr  && !!rental.return_addr;
 
-  const cameraName = rental.item?.device?.cam_name ?? '—';
-  const codeName   = rental.item?.code_name ?? '—';
-  const deviceImg  = rental.item?.device?.device_img ?? null;
-  const hasGps     = rental.item?.gps_installed ?? false;
+  const rentalItems = getRentalItems(rental);
+  const primaryItem = rentalItems[0];
+  const cameraName = formatCompactRentalItems(rental);
+  const codeName   = rentalItems.length > 1 ? `${rentalItems.length} selected devices` : (primaryItem?.code_name ?? '—');
+  const deviceImg  = primaryItem?.device?.device_img ?? null;
+  const hasGps     = primaryItem?.gps_installed ?? false;
 
   return (
       <Paper
@@ -147,7 +150,7 @@ const RentalCard: React.FC<{
                   <CameraAltIcon sx={{ fontSize: 18, color: '#111111' }} />
                 </Box>}
             <Box>
-              <Typography sx={{ fontWeight: 700, color: '#111111', fontSize: '0.95rem', lineHeight: 1.2 }}>{cameraName}</Typography>
+              <Typography title={formatRentalItemsTooltip(rental)} sx={{ fontWeight: 700, color: '#111111', fontSize: '0.95rem', lineHeight: 1.2 }}>{cameraName}</Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
                 <Typography sx={{ fontSize: '0.72rem', color: '#111111', fontFamily: '"Sora", sans-serif' }}>{codeName}</Typography>
                 {hasGps && <GpsFixedIcon sx={{ fontSize: 11, color: '#2E7D32' }} />}
@@ -282,7 +285,13 @@ const Dashboard: React.FC = () => {
 
         if (!rentalData || rentalData.length === 0) { setRentals([]); setLoading(false); return; }
 
-        const itemIds   = [...new Set(rentalData.map((r: RbRentalForm) => r.cam_name_id_fk).filter(Boolean))] as string[];
+        const rentalIds = rentalData.map((r: RbRentalForm) => r.id);
+        const { data: rentalItemsRaw } = rentalIds.length
+          ? await supabase.from('RB_RENTAL_ITEMS').select('*').in('rental_form_id', rentalIds)
+          : { data: [] };
+        const linkedItemIds = [...new Set((rentalItemsRaw ?? []).map((link: RentalItemLink) => link.item_id_fk).filter(Boolean))] as string[];
+        const legacyItemIds = rentalData.map((r: RbRentalForm) => r.cam_name_id_fk).filter(Boolean) as string[];
+        const itemIds = [...new Set([...linkedItemIds, ...legacyItemIds])];
         const branchIds = [...new Set([
           ...rentalData.map((r: RbRentalForm) => r.hub_pick_up_addr),
           ...rentalData.map((r: RbRentalForm) => r.hub_return_addr),
@@ -301,13 +310,24 @@ const Dashboard: React.FC = () => {
         const branchMap: Record<string, RbBranch>    = {};
         (itemsRaw   ?? []).forEach((it: EnrichedItem) => { itemMap[it.id]   = it; });
         (branchesRaw ?? []).forEach((b: RbBranch)    => { branchMap[b.id]  = b;  });
+        const rentalItemsByRental = new Map<string, RentalItemLink[]>();
+        (rentalItemsRaw ?? []).forEach((link: RentalItemLink) => {
+          const enrichedLink = { ...link, item: itemMap[link.item_id_fk] };
+          rentalItemsByRental.set(link.rental_form_id, [...(rentalItemsByRental.get(link.rental_form_id) ?? []), enrichedLink]);
+        });
 
-        setRentals(rentalData.map((r: RbRentalForm) => ({
-          ...r,
-          item:         r.cam_name_id_fk   ? itemMap[r.cam_name_id_fk]     : undefined,
-          pickupBranch: r.hub_pick_up_addr  ? branchMap[r.hub_pick_up_addr]  : undefined,
-          returnBranch: r.hub_return_addr   ? branchMap[r.hub_return_addr]   : undefined,
-        })));
+        setRentals(rentalData.map((r: RbRentalForm) => {
+          const rentalItems = rentalItemsByRental.get(r.id) ?? [];
+          const items = rentalItems.map((link) => link.item).filter((item): item is EnrichedItem => !!item);
+          return {
+            ...r,
+            rentalItems,
+            items,
+            item:         items[0] ?? (r.cam_name_id_fk ? itemMap[r.cam_name_id_fk] : undefined),
+            pickupBranch: r.hub_pick_up_addr  ? branchMap[r.hub_pick_up_addr]  : undefined,
+            returnBranch: r.hub_return_addr   ? branchMap[r.hub_return_addr]   : undefined,
+          };
+        }));
       } catch (err) {
         console.error('Dashboard load error:', err);
       } finally {
@@ -517,8 +537,14 @@ const Dashboard: React.FC = () => {
       <Dialog open={!!selectedRental} onClose={() => setSelectedRental(null)} fullWidth maxWidth="sm">
         <DialogTitle>Rental Details</DialogTitle>
         {selectedRental && <DialogContent dividers>
-          <TextField margin="dense" fullWidth label="Camera name" value={selectedRental.item?.device?.cam_name ?? '—'} InputProps={{ readOnly: true }} />
-          <TextField margin="dense" fullWidth label="Camera codename" value={selectedRental.item?.code_name ?? '—'} InputProps={{ readOnly: true }} />
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 1 }}>
+            {getRentalItems(selectedRental).map((item) => (
+              <Paper key={item.id} elevation={0} sx={{ p: 1.25, border: '1px solid rgba(201,151,58,0.15)', borderRadius: 2, display: 'flex', gap: 1.25, alignItems: 'center' }}>
+                {item.device?.device_img ? <img src={item.device.device_img} alt={item.device.cam_name} style={{ width: 52, height: 40, objectFit: 'cover', borderRadius: 8 }} /> : <CameraAltIcon />}
+                <Box><Typography sx={{ fontWeight: 700 }}>{item.device?.cam_name ?? '—'}</Typography><Typography sx={{ fontSize: '0.78rem', color: '#666666' }}>{item.code_name ?? '—'}</Typography></Box>
+              </Paper>
+            ))}
+          </Box>
           <TextField margin="dense" fullWidth label="Rental period" value={`${dayjs(selectedRental.rent_date_start).format('MMM D, YYYY')} - ${dayjs(selectedRental.rent_date_end).format('MMM D, YYYY')}`} InputProps={{ readOnly: true }} />
           <TextField margin="dense" fullWidth label="Pickup date" value={dayjs(selectedRental.rent_date_start).format('MMM D, YYYY')} InputProps={{ readOnly: true }} />
           <TextField margin="dense" fullWidth label="Pickup time" value={selectedRental.pickup_time ?? '—'} InputProps={{ readOnly: true }} />

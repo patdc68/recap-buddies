@@ -55,7 +55,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
         const createdAt = dayjs(r.created_at);
         return createdAt.year() === selectedYear && createdAt.month() + 1 === selectedMonth;
       })
-      .map((r) => ({ ...r, item: itemMap[r.cam_name_id_fk] }));
+      .map((r) => ({ ...r, item: r.cam_name_id_fk ? itemMap[r.cam_name_id_fk] : undefined }));
 
     setBranches((branchesRaw as RbBranch[]) ?? []);
     setRentals(monthRentals);
@@ -63,7 +63,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
   }, [navigate, selectedMonth, selectedYear]);
 
   useEffect(() => {
-    void fetchAnalyticsData();
+    void Promise.resolve().then(fetchAnalyticsData);
   }, [fetchAnalyticsData]);
 
   const analytics = useMemo(() => {
