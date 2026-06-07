@@ -1,7 +1,7 @@
 import React, { useEffect, useState, type ChangeEvent } from 'react';
 import {
   Box, Typography, TextField, Button, Alert, CircularProgress,
-  Paper, Chip,
+  Paper, Chip, Link,
 } from '@mui/material';
 import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import LoginIcon from '@mui/icons-material/Login';
@@ -105,6 +105,17 @@ const AdminLogin: React.FC = () => {
               label="Password" type="password" fullWidth
               value={password} onChange={(e: ChangeEvent<HTMLInputElement>) => { setPassword(e.target.value); setError(''); }}
             />
+            <Box sx={{ textAlign: 'right', mt: -1.5 }}>
+              <Link
+                component="button"
+                type="button"
+                underline="hover"
+                onClick={() => navigate('/forgot-password')}
+                sx={{ color: '#111111', fontSize: '0.875rem', fontWeight: 700 }}
+              >
+                Forgot password?
+              </Link>
+            </Box>
             {error && <Alert severity="error" sx={{ py: 0.5 }}>{error}</Alert>}
             <Button
               variant="contained" size="large" fullWidth onClick={handleLogin} disabled={loading}
