@@ -29,7 +29,7 @@ import type {
 } from '../service/supabaseClient';
 import {
   formatCompactRentalItems, formatCompactRentalItemCodes, formatRentalItemsTooltip,
-  getPrimaryRentalItem, getRentalItemIds, getRentalItems, type RentalItemLink,
+  calculateRentalItemsTotal, getPrimaryRentalItem, getRentalItemIds, getRentalItems, type RentalItemLink,
 } from '../utils/rentalItems';
 
 import DashboardIcon          from '@mui/icons-material/Dashboard';
@@ -62,6 +62,7 @@ import MonitorHeartIcon       from '@mui/icons-material/MonitorHeart';
 import SettingsSuggestIcon    from '@mui/icons-material/SettingsSuggest';
 import NotificationsIcon      from '@mui/icons-material/Notifications';
 import MenuIcon               from '@mui/icons-material/Menu';
+import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
@@ -279,24 +280,77 @@ interface RentalDetailDialogProps {
   onSave: (id: string, updates: RentalUpdatePayload) => Promise<void>;
 }
 
+interface RentalUpdateDeviceRow {
+  rentalItemId?: string;
+  itemId: string;
+}
+
 interface RentalUpdatePayload {
   status: string;
   remarks: string;
   messenger_link: string;
   rent_price: string;
   cam_name_id_fk: string;
+  rentalItems?: RentalUpdateDeviceRow[];
   rent_date_start: string;
   rent_date_end: string;
   pickup_time: string;
   return_time: string;
 }
 
+interface EditableRentalDeviceRow {
+  localId: string;
+  rentalItemId?: string;
+  itemId: string;
+}
+
+const buildItemOptionLabel = (item?: EnrichedItem | null) => {
+  if (!item) return 'Select a unit';
+  return [item.device?.cam_name ?? 'Unknown camera', item.code_name, item.serial_no ? `S/N ${item.serial_no}` : null]
+    .filter(Boolean)
+    .join(' — ');
+};
+
+const syncRentalItems = async (rentalId: string, previousLinks: RentalItemLink[], nextRows: RentalUpdateDeviceRow[]) => {
+  const previousByLinkId = new Map(previousLinks.filter((link) => link.id).map((link) => [link.id as string, link]));
+  const nextLinkIds = new Set(nextRows.map((row) => row.rentalItemId).filter(Boolean) as string[]);
+
+  const deleteIds = previousLinks
+    .filter((link) => link.id && !nextLinkIds.has(link.id))
+    .map((link) => link.id as string);
+
+  if (deleteIds.length > 0) {
+    const { error } = await supabase.from('RB_RENTAL_ITEMS').delete().in('id', deleteIds);
+    if (error) throw error;
+  }
+
+  const updatePromises = nextRows
+    .filter((row) => row.rentalItemId && previousByLinkId.get(row.rentalItemId)?.item_id_fk !== row.itemId)
+    .map((row) => supabase.from('RB_RENTAL_ITEMS').update({ item_id_fk: row.itemId }).eq('id', row.rentalItemId as string));
+
+  const insertRows = nextRows
+    .filter((row) => !row.rentalItemId || !previousByLinkId.has(row.rentalItemId))
+    .map((row) => ({ rental_form_id: rentalId, item_id_fk: row.itemId }));
+
+  const results = await Promise.all(updatePromises);
+  const updateError = results.find((result) => result.error)?.error;
+  if (updateError) throw updateError;
+
+  if (insertRows.length > 0) {
+    const { error } = await supabase.from('RB_RENTAL_ITEMS').insert(insertRows);
+    if (error) throw error;
+  }
+};
+
 const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, onClose, onSave }) => {
   const [status, setStatus] = useState<RentalStatus>(rental?.status ?? 'submitted');
   const [remarks, setRemarks] = useState('');
   const [messengerLink, setMessengerLink] = useState('');
   const [rentPrice, setRentPrice] = useState('');
-  const [cameraId, setCameraId] = useState('');
+  const [deviceRows, setDeviceRows] = useState<EditableRentalDeviceRow[]>([]);
+  const [deviceError, setDeviceError] = useState('');
+  const [initialDevicePriceTotal, setInitialDevicePriceTotal] = useState(0);
+  const [initialRentPrice, setInitialRentPrice] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   const [cameraOptions, setCameraOptions] = useState<EnrichedItem[]>([]);
@@ -314,8 +368,17 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
     setStatus(rental.status);
     setRemarks(rental.remarks ?? '');
     setMessengerLink(rental.messenger_link ?? '');
-    setRentPrice(rental.rent_price != null ? String(rental.rent_price) : '');
-    setCameraId(rental.cam_name_id_fk ?? '');
+    const rentalRentPrice = rental.rent_price != null ? String(rental.rent_price) : '';
+    const initialItems = getRentalItems(rental);
+    setRentPrice(rentalRentPrice);
+    setInitialRentPrice(rentalRentPrice);
+    setInitialDevicePriceTotal(calculateRentalItemsTotal(initialItems));
+    setDeviceRows((rental.rentalItems?.length ? rental.rentalItems : []).map((link, index) => ({
+      localId: link.id ?? `existing-${link.item_id_fk}-${index}`,
+      rentalItemId: link.id,
+      itemId: link.item_id_fk,
+    })));
+    setDeviceError('');
     setStartDate(dayjs(rental.rent_date_start).format('YYYY-MM-DD'));
     setEndDate(dayjs(rental.rent_date_end).format('YYYY-MM-DD'));
     setPickupTime(rental.pickup_time ? dayjs(`2000-01-01 ${rental.pickup_time}`) : null);
@@ -330,7 +393,33 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
         .from('RB_ITEM')
         .select('*, device:RB_DEVICES(id,cam_name,device_img)')
         .order('created_at', { ascending: false });
-      setCameraOptions((itemsRaw ?? []) as EnrichedItem[]);
+      const loadedItems = (itemsRaw ?? []) as EnrichedItem[];
+      setCameraOptions(loadedItems);
+
+      if (rental?.id) {
+        const { data: rentalItemsRaw } = await supabase
+          .from('RB_RENTAL_ITEMS')
+          .select('*')
+          .eq('rental_form_id', rental.id);
+
+        const links = (rentalItemsRaw ?? []) as RentalItemLink[];
+        const rows = links.length > 0
+          ? links.map((link, index) => ({
+              localId: link.id ?? `existing-${link.item_id_fk}-${index}`,
+              rentalItemId: link.id,
+              itemId: link.item_id_fk,
+            }))
+          : (rental.cam_name_id_fk ? [{ localId: `legacy-${rental.cam_name_id_fk}`, itemId: rental.cam_name_id_fk }] : []);
+
+        const selectedItems = rows
+          .map((row) => loadedItems.find((item) => item.id === row.itemId))
+          .filter((item): item is EnrichedItem => !!item);
+        const rentalRentPrice = rental.rent_price != null ? String(rental.rent_price) : '';
+
+        setDeviceRows(rows);
+        setInitialRentPrice(rentalRentPrice);
+        setInitialDevicePriceTotal(calculateRentalItemsTotal(selectedItems));
+      }
 
       if (!rental?.renter_id_fk) {
         setIsRepeatRenter(false);
@@ -348,7 +437,7 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
     };
 
     void loadDialogData();
-  }, [open, rental?.id, rental?.renter_id_fk]);
+  }, [open, rental?.id, rental?.renter_id_fk, rental?.cam_name_id_fk, rental?.rent_price]);
 
   useEffect(() => {
     if (!open) return;
@@ -395,32 +484,84 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
       isActive = false;
     };
   }, [open, rental?.renter?.selfie_verification_id]);
+  const updateRentPriceIfAuto = (rows: EditableRentalDeviceRow[]) => {
+    const originalPrice = Number(initialRentPrice);
+    const isAutoCalculated = initialRentPrice === '' || Number.isNaN(originalPrice) || originalPrice === initialDevicePriceTotal;
+    const hasNotManuallyEditedPrice = rentPrice === initialRentPrice || Number(rentPrice) === initialDevicePriceTotal;
+    if (!isAutoCalculated || !hasNotManuallyEditedPrice) return;
+
+    const nextItems = rows
+      .map((row) => cameraOptions.find((item) => item.id === row.itemId))
+      .filter((item): item is EnrichedItem => !!item);
+    setRentPrice(String(calculateRentalItemsTotal(nextItems)));
+  };
+
+  const updateDeviceRows = (updater: (rows: EditableRentalDeviceRow[]) => EditableRentalDeviceRow[]) => {
+    setDeviceRows((rows) => {
+      const nextRows = updater(rows);
+      const selectedIds = nextRows.map((row) => row.itemId).filter(Boolean);
+      const hasDuplicate = new Set(selectedIds).size !== selectedIds.length;
+      setDeviceError(hasDuplicate ? 'This unit is already selected for this rental.' : '');
+      updateRentPriceIfAuto(nextRows);
+      return nextRows;
+    });
+  };
+
+  const handleDeviceChange = (localId: string, itemId: string) => {
+    updateDeviceRows((rows) => rows.map((row) => row.localId === localId ? { ...row, itemId } : row));
+  };
+
+  const handleAddDevice = () => {
+    updateDeviceRows((rows) => [...rows, { localId: `new-${Date.now()}-${rows.length}`, itemId: '' }]);
+  };
+
+  const handleRemoveDevice = (localId: string) => {
+    updateDeviceRows((rows) => rows.filter((row) => row.localId !== localId));
+  };
+
   if (!rental) return null;
-  const rentalDisplayItems = getRentalItems(rental);
   const selfieInstructionTitle = getSelfieInstructionTitle(selfieInstruction);
   const selfieInstructionDescription = getSelfieInstructionDescription(selfieInstruction);
 
   const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META.submitted;
 
   const isDateRangeInvalid = !!startDate && !!endDate && dayjs(endDate).isBefore(dayjs(startDate), 'day');
-  const isSaveDisabled = saving || !cameraId || !startDate || !endDate || isDateRangeInvalid;
+  const selectedDeviceIds = deviceRows.map((row) => row.itemId).filter(Boolean);
+  const hasDuplicateDevices = new Set(selectedDeviceIds).size !== selectedDeviceIds.length;
+  const hasEmptyDeviceRows = deviceRows.some((row) => !row.itemId);
+  const isSaveDisabled = saving || deviceRows.length === 0 || hasEmptyDeviceRows || hasDuplicateDevices || !startDate || !endDate || isDateRangeInvalid;
 
   const handleSave = async () => {
     if (isDateRangeInvalid) return;
+    const selectedRows = deviceRows.filter((row) => row.itemId);
+    const selectedIds = selectedRows.map((row) => row.itemId);
+    if (selectedRows.length === 0) {
+      setDeviceError('Please select at least one device for this rental.');
+      return;
+    }
+    if (new Set(selectedIds).size !== selectedIds.length) {
+      setDeviceError('This unit is already selected for this rental.');
+      return;
+    }
+
     setSaving(true);
-    await onSave(rental.id, {
-      status,
-      remarks,
-      messenger_link: messengerLink,
-      rent_price: rentPrice,
-      cam_name_id_fk: cameraId,
-      rent_date_start: startDate,
-      rent_date_end: endDate,
-      pickup_time: pickupTime?.format('hh:mm A') ?? '',
-      return_time: returnTime?.format('hh:mm A') ?? '',
-    });
-    setSaving(false);
-    onClose();
+    try {
+      await onSave(rental.id, {
+        status,
+        remarks,
+        messenger_link: messengerLink,
+        rent_price: rentPrice,
+        cam_name_id_fk: selectedRows[0]?.itemId ?? rental.cam_name_id_fk ?? '',
+        rentalItems: selectedRows.map((row) => ({ rentalItemId: row.rentalItemId, itemId: row.itemId })),
+        rent_date_start: startDate,
+        rent_date_end: endDate,
+        pickup_time: pickupTime?.format('hh:mm A') ?? '',
+        return_time: returnTime?.format('hh:mm A') ?? '',
+      });
+      onClose();
+    } finally {
+      setSaving(false);
+    }
   };
 
   const isPending = rental.status === 'submitted' || rental.status === 'in-review';
@@ -439,29 +580,55 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
 
         {/* Camera */}
         <InfoBox label="Devices">
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1, mb: 1 }}>
-            {rentalDisplayItems.map((item) => (
-              <Box key={item.id} sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
-                {item.device?.device_img
-                  ? <img src={item.device.device_img} alt="" style={{ width: 56, height: 42, objectFit: 'cover', borderRadius: 6, border: `1px solid ${BORDER}` }} />
-                  : <Box sx={{ width: 56, height: 42, borderRadius: 1.5, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 20, color: AMBER }} /></Box>}
-                <Box>
-                  <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.95rem' }}>{item.device?.cam_name ?? '—'}</Typography>
-                  <Typography sx={{ color: MUTED, fontSize: '0.75rem', fontFamily: '"Sora", sans-serif' }}>{item.code_name ?? '—'} · S/N {item.serial_no ?? '—'}</Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+            {deviceRows.map((row, index) => {
+              const selectedItem = cameraOptions.find((item) => item.id === row.itemId);
+              const duplicateItem = !!row.itemId && deviceRows.filter((candidate) => candidate.itemId === row.itemId).length > 1;
+
+              return (
+                <Box key={row.localId} sx={{ p: 1.25, borderRadius: 2, border: `1px solid ${duplicateItem ? '#d32f2f' : BORDER}`, background: duplicateItem ? 'rgba(211,47,47,0.04)' : CARD_BG }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 1, mb: 1 }}>
+                    <Typography sx={{ color: AMBER_DARK, fontSize: '0.7rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', fontWeight: 700 }}>
+                      Device {index + 1}
+                    </Typography>
+                    <IconButton aria-label={`Remove device ${index + 1}`} size="small" onClick={() => handleRemoveDevice(row.localId)} sx={{ color: MUTED }}>
+                      <RemoveCircleOutlineIcon fontSize="small" />
+                    </IconButton>
+                  </Box>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 1 }}>
+                    {selectedItem?.device?.device_img
+                      ? <img src={selectedItem.device.device_img} alt={selectedItem.device?.cam_name ?? ''} style={{ width: 64, height: 48, objectFit: 'cover', borderRadius: 6, border: `1px solid ${BORDER}` }} />
+                      : <Box sx={{ width: 64, height: 48, borderRadius: 1.5, background: 'rgba(201,151,58,0.08)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}><CameraAltIcon sx={{ fontSize: 22, color: AMBER }} /></Box>}
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.95rem' }}>{selectedItem?.device?.cam_name ?? 'Select a device'}</Typography>
+                      <Typography sx={{ color: MUTED, fontSize: '0.75rem', fontFamily: '"Sora", sans-serif' }}>
+                        {selectedItem ? `${selectedItem.code_name ?? '—'} · S/N ${selectedItem.serial_no ?? '—'}` : 'Choose an actual rentable unit below.'}
+                      </Typography>
+                    </Box>
+                  </Box>
+                  <FormControl size="small" fullWidth error={duplicateItem || (!!deviceError && !row.itemId)}>
+                    <InputLabel>Actual Unit</InputLabel>
+                    <Select value={row.itemId} onChange={(e: SelectChangeEvent) => handleDeviceChange(row.localId, e.target.value)} label="Actual Unit">
+                      {cameraOptions.map((item) => (
+                        <MenuItem key={item.id} value={item.id} disabled={row.itemId !== item.id && deviceRows.some((candidate) => candidate.itemId === item.id)}>
+                          {buildItemOptionLabel(item)}
+                        </MenuItem>
+                      ))}
+                    </Select>
+                  </FormControl>
                 </Box>
-              </Box>
-            ))}
+              );
+            })}
+            {deviceRows.length === 0 && (
+              <Typography sx={{ color: MUTED, fontSize: '0.82rem', fontStyle: 'italic' }}>
+                No devices selected. Add at least one device before saving.
+              </Typography>
+            )}
+            {deviceError && <FormHelperText error sx={{ mx: 0 }}>{deviceError}</FormHelperText>}
+            <Button variant="outlined" size="small" startIcon={<AddIcon />} onClick={handleAddDevice} sx={{ alignSelf: 'flex-start', borderColor: BORDER, color: AMBER_DARK }}>
+              Add Device
+            </Button>
           </Box>
-          <FormControl size="small" fullWidth>
-            <InputLabel>Select Camera</InputLabel>
-            <Select value={cameraId} onChange={(e: SelectChangeEvent) => setCameraId(e.target.value)} label="Select Camera">
-              {cameraOptions.map((item) => (
-                <MenuItem key={item.id} value={item.id}>
-                  {item.code_name ?? '—'}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
         </InfoBox>
 
         {/* Renter */}
@@ -2653,6 +2820,10 @@ const AdminDashboard: React.FC = () => {
     updates: RentalUpdatePayload
   ) => {
     const parsedRentPrice = updates.rent_price.trim() === '' ? null : Number(updates.rent_price);
+    const nextRentalItems = updates.rentalItems ?? [{ itemId: updates.cam_name_id_fk }];
+    const nextItemIds = nextRentalItems.map((row) => row.itemId).filter(Boolean);
+    if (nextItemIds.length === 0) throw new Error('Please select at least one device for this rental.');
+    if (new Set(nextItemIds).size !== nextItemIds.length) throw new Error('This unit is already selected for this rental.');
     const payload: {
       status: string;
       actual_return_date?: string | null;
@@ -2669,7 +2840,7 @@ const AdminDashboard: React.FC = () => {
       remarks: updates.remarks.trim() || null,
       messenger_link: updates.messenger_link.trim() || null,
       rent_price: parsedRentPrice == null || Number.isNaN(parsedRentPrice) ? null : Math.max(parsedRentPrice, 0),
-      cam_name_id_fk: updates.cam_name_id_fk,
+      cam_name_id_fk: nextItemIds[0] ?? updates.cam_name_id_fk,
       rent_date_start: updates.rent_date_start,
       rent_date_end: updates.rent_date_end,
       pickup_time: updates.pickup_time || null,
@@ -2685,10 +2856,13 @@ const AdminDashboard: React.FC = () => {
     }
 
     const targetRental = rentals.find((r) => r.id === id);
+    if (targetRental) {
+      await syncRentalItems(id, targetRental.rentalItems ?? [], nextRentalItems);
+    }
+
     const itemStatus = RENTAL_TO_ITEM_STATUS[updates.status];
     if (targetRental && itemStatus) {
       const previousItemIds = getRentalItemIds(targetRental);
-      const nextItemIds = targetRental.rentalItems?.length ? previousItemIds : [updates.cam_name_id_fk].filter(Boolean);
       await Promise.all(previousItemIds
         .filter((itemId) => !nextItemIds.includes(itemId))
         .map((itemId) => supabase.from('RB_ITEM').update({ status: 'Available' }).eq('id', itemId)));
