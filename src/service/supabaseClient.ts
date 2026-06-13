@@ -108,18 +108,13 @@ export interface RbSelfieVerificationInst {
 // ─── Rental Form ──────────────────────────────────────────────────────────────
 
 export type RentalStatus =
-  | 'submitted'
-  | 'in-review'
-  | 'for-delivery'
-  | 'delivered'
-  | 'renting'
-  | 'for-return'
-  | 'for-refund'
-  | 'for-penalty'
-  | 'extended'
-  | 'completed'
+  | 'for-review'
+  | 'confirmed'
+  | 'declined'
   | 'canceled'
-  | 'declined';
+  | 'extended'
+  | 'ongoing'
+  | 'completed';
 export type LocUsage     = 'domestic' | 'international';
 
 export interface RbRentalItem {

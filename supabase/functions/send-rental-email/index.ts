@@ -12,7 +12,7 @@ const resend = new Resend(resendApiKey);
 
 type RentalEmailType =
   | 'submitted'
-  | 'in_review'
+  | 'confirmed'
   | 'declined'
   | 'start_reminder'
   | 'return_reminder';
@@ -38,11 +38,11 @@ const getTemplate = (payload: SendRentalEmailPayload) => {
       heading: 'Request Received',
       bodyHtml: `<p>Hi ${name},</p><p>Thanks for choosing Recap Buddies. We received ${code} and our team will review it shortly.</p><p>We will notify you as soon as there is a status update.</p>`,
     },
-    in_review: {
-      subject: 'Your rental request is now in review',
-      preheader: 'Our team is currently reviewing your request.',
-      heading: 'Request Under Review',
-      bodyHtml: `<p>Hi ${name},</p><p>${code} is currently being reviewed by our admin team. We may contact you if more details are needed.</p><p>Thank you for your patience while we finalize your request.</p>`,
+    confirmed: {
+      subject: 'Your rental request is confirmed',
+      preheader: 'Your booking has been confirmed.',
+      heading: 'Booking Confirmed',
+      bodyHtml: `<p>Hi ${name},</p><p>Your booking has been confirmed. Kindly wait for the official group chat link with your full rental details. This will be available at least 1–2 days before your rental starts. Thank you, buddy!</p>`,
     },
     declined: {
       subject: 'Update about your rental request',

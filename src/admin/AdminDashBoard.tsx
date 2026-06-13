@@ -4,7 +4,7 @@ import {
   Divider, IconButton, Dialog, DialogTitle, DialogContent,
   DialogActions, Select, MenuItem, FormControl, InputLabel, FormHelperText,
   Switch, FormControlLabel, Tooltip, TextField, type SelectChangeEvent,
-  Snackbar, Alert, Badge, Menu, ListItemText,
+  Snackbar, Alert, Badge, Menu, ListItemText, Accordion, AccordionSummary, AccordionDetails,
   AppBar, Toolbar, Drawer, List, ListItemButton, ListItemIcon, useMediaQuery,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -25,12 +25,14 @@ import { sendRentalStatusEmail } from '../services/emailService';
 import { sendDueReminderEmailsIfNeeded } from '../services/rentalReminderService';
 import type {
   RbUser, RbBranch, RbDevice, RbItem, RbRenter,
-  RbRentalForm, RbSelfieVerificationInst, ItemStatus, ItemCondition, RentalStatus,
+  RbRentalForm, ItemStatus, ItemCondition, RentalStatus,
 } from '../service/supabaseClient';
 import {
   formatCompactRentalItems, formatCompactRentalItemCodes, formatRentalItemsTooltip,
   calculateRentalItemsTotal, getPrimaryRentalItem, getRentalItemIds, getRentalItems, type RentalItemLink,
 } from '../utils/rentalItems';
+import { loadFooterMarkdown, saveFooterMarkdown, loadFooterContactSettings, saveFooterContactSettings, type FooterContactSettings, type FooterRichContentKey } from '../services/footerContentService';
+import { normalizeRentalStatus, shouldDisplayAsOngoing } from '../utils/rentalStatus';
 
 import DashboardIcon          from '@mui/icons-material/Dashboard';
 import CalendarMonthIcon      from '@mui/icons-material/CalendarMonth';
@@ -63,6 +65,7 @@ import SettingsSuggestIcon    from '@mui/icons-material/SettingsSuggest';
 import NotificationsIcon      from '@mui/icons-material/Notifications';
 import MenuIcon               from '@mui/icons-material/Menu';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
@@ -123,29 +126,18 @@ const MOBILE_DATA_GRID_PAGINATION_SX = {
 // ─── Status tables ────────────────────────────────────────────────────────────
 
 const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  submitted:   { label: 'Submitted',  color: '#B8860B', bg: 'rgba(255,212,59,0.10)',  border: 'rgba(255,212,59,0.30)'  },
-  'in-review': { label: 'In Review',  color: '#1565C0', bg: 'rgba(100,149,237,0.10)', border: 'rgba(100,149,237,0.30)' },
-  'for-delivery': { label: 'For Delivery', color: '#1565C0', bg: 'rgba(100,149,237,0.12)', border: 'rgba(100,149,237,0.35)' },
-  delivered:      { label: 'Delivered',    color: '#1A237E', bg: 'rgba(100,149,237,0.08)', border: 'rgba(100,149,237,0.25)' },
-  renting:     { label: 'Renting',    color: '#7A4F00', bg: 'rgba(201,151,58,0.12)',  border: 'rgba(201,151,58,0.40)'  },
-  'for-return':   { label: 'For Return',   color: '#E65100', bg: 'rgba(255,165,0,0.12)', border: 'rgba(255,165,0,0.35)' },
-  'for-refund':   { label: 'For Refund',   color: '#6A1B9A', bg: 'rgba(156,39,176,0.10)', border: 'rgba(156,39,176,0.30)' },
-  'for-penalty':  { label: 'For Penalty',  color: '#B71C1C', bg: 'rgba(211,47,47,0.10)', border: 'rgba(211,47,47,0.30)' },
-  extended:       { label: 'Extended',     color: '#7c3aed', bg: '#f3e8ff', border: '#d8b4fe' },
-  completed:   { label: 'Completed',  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)', border: 'rgba(105,219,124,0.30)' },
-  canceled:    { label: 'Canceled',   color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
-  declined:    { label: 'Declined',   color: '#B71C1C', bg: 'rgba(211,47,47,0.08)',   border: 'rgba(211,47,47,0.25)'   },
+  'for-review': { label: 'For Review', color: '#B8860B', bg: 'rgba(255,212,59,0.10)', border: 'rgba(255,212,59,0.30)' },
+  confirmed: { label: 'Confirmed', color: '#1565C0', bg: 'rgba(100,149,237,0.10)', border: 'rgba(100,149,237,0.30)' },
+  declined: { label: 'Declined', color: '#B71C1C', bg: 'rgba(211,47,47,0.08)', border: 'rgba(211,47,47,0.25)' },
+  canceled: { label: 'Canceled', color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
+  extended: { label: 'Extended', color: '#7c3aed', bg: '#f3e8ff', border: '#d8b4fe' },
+  ongoing: { label: 'Ongoing', color: '#7A4F00', bg: 'rgba(201,151,58,0.12)', border: 'rgba(201,151,58,0.40)' },
+  completed: { label: 'Completed', color: '#2E7D32', bg: 'rgba(105,219,124,0.10)', border: 'rgba(105,219,124,0.30)' },
 };
-
 const RENTAL_TO_ITEM_STATUS: Partial<Record<string, ItemStatus>> = {
-  submitted: 'In Review',
-  'in-review': 'In Review',
-  'for-delivery': 'For Delivery',
-  delivered: 'Delivered',
-  renting: 'Renting',
-  'for-return': 'For Return',
-  'for-refund': 'For Refund',
-  'for-penalty': 'For Penalty',
+  'for-review': 'Available',
+  'confirmed': 'In Review',
+  ongoing: 'Renting',
   extended: 'Renting',
   completed: 'Available',
 };
@@ -153,7 +145,7 @@ const RENTAL_TO_ITEM_STATUS: Partial<Record<string, ItemStatus>> = {
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const HIDDEN_DASHBOARD_STATUSES = ['declined', 'canceled'];
-const ACTIVE_RENTAL_STATUSES: RentalStatus[] = ['in-review', 'for-delivery', 'renting', 'delivered', 'for-return', 'extended'];
+const ACTIVE_RENTAL_STATUSES: RentalStatus[] = ['confirmed', 'ongoing', 'extended'];
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -166,7 +158,6 @@ interface EnrichedRental extends RbRentalForm {
   renter?:            RbRenter;
   pickupBranch?:      RbBranch;
   returnBranch?:      RbBranch;
-  selfieInstruction?: RbSelfieVerificationInst | null;
 }
 
 // ─── Small helpers ────────────────────────────────────────────────────────────
@@ -234,12 +225,6 @@ const InfoBox: React.FC<{ label: string; children: React.ReactNode }> = ({ label
   </Box>
 );
 
-
-const getSelfieInstructionTitle = (inst?: RbSelfieVerificationInst | null) =>
-  inst?.instruction_name ?? null;
-
-const getSelfieInstructionDescription = (inst?: RbSelfieVerificationInst | null) =>
-  inst?.instruction_desc ?? null;
 
 // ─── Rental Detail Dialog ─────────────────────────────────────────────────────
 
@@ -326,7 +311,7 @@ const syncRentalItems = async (rentalId: string, previousLinks: RentalItemLink[]
 };
 
 const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, onClose, onSave }) => {
-  const [status, setStatus] = useState<RentalStatus>(rental?.status ?? 'submitted');
+  const [status, setStatus] = useState<RentalStatus>(rental?.status ?? 'for-review');
   const [remarks, setRemarks] = useState('');
   const [messengerLink, setMessengerLink] = useState('');
   const [rentPrice, setRentPrice] = useState('');
@@ -340,8 +325,6 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
   const [pickupTime, setPickupTime] = useState<Dayjs | null>(null);
   const [returnTime, setReturnTime] = useState<Dayjs | null>(null);
   const [isRepeatRenter, setIsRepeatRenter] = useState(false);
-  const [selfieInstruction, setSelfieInstruction] = useState<RbSelfieVerificationInst | null>(null);
-  const [selfieInstructionLoading, setSelfieInstructionLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
   
@@ -425,51 +408,6 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
     void loadDialogData();
   }, [open, rental?.id, rental?.renter_id_fk, rental?.cam_name_id_fk, rental?.rent_price]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    let isActive = true;
-
-    const loadSelfieInstruction = async () => {
-      const instructionId = rental?.renter?.selfie_verification_id;
-      console.log('Selfie verification ID:', instructionId);
-
-      if (!instructionId) {
-        setSelfieInstruction(null);
-        setSelfieInstructionLoading(false);
-        console.log('Fetched selfie instruction:', null);
-        return;
-      }
-
-      setSelfieInstructionLoading(true);
-
-      const { data, error } = await supabase
-        .from('RB_SELFIE_VERIFICATION_INST')
-        .select('id, instruction_name, instruction_desc')
-        .eq('id', instructionId)
-        .maybeSingle();
-
-      if (!isActive) return;
-
-      if (error) {
-        console.error('Failed to load selfie instruction:', error);
-        setSelfieInstruction(null);
-        console.log('Fetched selfie instruction:', null);
-      } else {
-        const fetchedInstruction = data as RbSelfieVerificationInst | null;
-        setSelfieInstruction(fetchedInstruction);
-        console.log('Fetched selfie instruction:', fetchedInstruction);
-      }
-
-      setSelfieInstructionLoading(false);
-    };
-
-    void loadSelfieInstruction();
-
-    return () => {
-      isActive = false;
-    };
-  }, [open, rental?.renter?.selfie_verification_id]);
   const updateRentPriceIfAuto = (rows: EditableRentalDeviceRow[]) => {
     const originalPrice = Number(initialRentPrice);
     const isAutoCalculated = initialRentPrice === '' || Number.isNaN(originalPrice) || originalPrice === initialDevicePriceTotal;
@@ -506,10 +444,8 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
   };
 
   if (!rental) return null;
-  const selfieInstructionTitle = getSelfieInstructionTitle(selfieInstruction);
-  const selfieInstructionDescription = getSelfieInstructionDescription(selfieInstruction);
 
-  const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META.submitted;
+  const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META['for-review'];
 
   const isDateRangeInvalid = !!startDate && !!endDate && dayjs(endDate).isBefore(dayjs(startDate), 'day');
   const selectedDeviceIds = deviceRows.map((row) => row.itemId).filter(Boolean);
@@ -550,7 +486,7 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
     }
   };
 
-  const isPending = rental.status === 'submitted' || rental.status === 'in-review';
+  const isPending = rental.status === 'for-review' || rental.status === 'confirmed';
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
@@ -653,15 +589,7 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
           </Box>
         </InfoBox>
 
-        {/* Selfie Verification Instruction */}
-        <InfoBox label="Selfie Verification Instruction">
-          <Typography sx={{ color: selfieInstructionLoading || selfieInstructionTitle ? ESPRESSO : MUTED, fontWeight: 700, fontSize: '0.9rem', mb: 0.5, fontStyle: !selfieInstructionLoading && !selfieInstructionTitle ? 'italic' : 'normal' }}>
-            {selfieInstructionLoading ? 'Loading…' : selfieInstructionTitle ?? 'Not provided'}
-          </Typography>
-          <Typography sx={{ color: MUTED, fontSize: '0.82rem', lineHeight: 1.6, whiteSpace: 'pre-wrap', fontStyle: !selfieInstructionLoading && !selfieInstructionDescription ? 'italic' : 'normal' }}>
-            {selfieInstructionLoading ? 'Loading instruction details…' : selfieInstructionDescription ?? 'Not provided'}
-          </Typography>
-        </InfoBox>
+
 
         {/* Dates */}
         <Box sx={{ display: 'flex', gap: 1.5, flexWrap: 'wrap' }}>
@@ -843,7 +771,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
   const navigate = useNavigate();
 
   // Pending rentals go straight to the full verification page
-  const isPending = (r: EnrichedRental) => r.status === 'submitted' || r.status === 'in-review';
+  const isPending = (r: EnrichedRental) => r.status === 'for-review' || r.status === 'confirmed';
 
   const handleRowClick = (r: EnrichedRental) => {
     if (isPending(r)) {
@@ -926,7 +854,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
       minWidth: 150,
       flex: 0.8,
       renderCell: ({ row }: GridRenderCellParams<EnrichedRental>) => {
-        const meta = RENTAL_STATUS_META[row.status] ?? RENTAL_STATUS_META.submitted;
+        const meta = RENTAL_STATUS_META[row.status] ?? RENTAL_STATUS_META['for-review'];
         const pending = isPending(row);
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.75, py: 1 }}>
@@ -1089,8 +1017,8 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
   const statCards = [
     { label: 'Total Rentals',    color: AMBER,       items: dashboardRentals },
     { label: 'This Month',       color: AMBER_LIGHT, items: thisMonth },
-    { label: 'Active / Renting', color: '#2E7D32',   items: dashboardRentals.filter((r) => ACTIVE_RENTAL_STATUSES.includes(r.status)) },
-    { label: 'Pending Review',   color: '#1565C0',   items: dashboardRentals.filter((r) => r.status === 'submitted' || r.status === 'in-review') },
+    { label: 'Active / Ongoing', color: '#2E7D32',   items: dashboardRentals.filter((r) => ACTIVE_RENTAL_STATUSES.includes(r.status)) },
+    { label: 'Pending Review',   color: '#1565C0',   items: dashboardRentals.filter((r) => r.status === 'for-review' || r.status === 'confirmed') },
   ];
 
 
@@ -1171,7 +1099,7 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
 
                 <Box sx={{ overflowX: { xs: 'visible', md: 'auto' } }}>
                   {group.map((r) => {
-                    const meta = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META.submitted;
+                    const meta = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META['for-review'];
                     const isHubPickup = Boolean(r.hub_pick_up_addr);
                     const typeLabel = isHubPickup ? 'Hub' : 'Delivery';
                     const pickupLocation = r.pickupBranch?.location_name ?? r.delivery_addr ?? '—';
@@ -1696,7 +1624,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
                 const isStart  = rStart.isSameOrAfter(weekStart, 'day') && rStart.isSameOrBefore(weekEnd, 'day');
                 const isEnd    = rEnd.isSameOrAfter(weekStart, 'day')   && rEnd.isSameOrBefore(weekEnd, 'day');
                 const slot     = slotMap[r.id] ?? 0;
-                const meta     = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META.submitted;
+                const meta     = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META['for-review'];
                 const firstName = r.renter?.renter_fname ?? getPrimaryRentalItem(r)?.code_name ?? '?';
 
                 return (
@@ -1780,7 +1708,7 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
 
       {/* Legend — statuses relevant to calendar scheduling */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2.5 }}>
-        {(['in-review', 'for-delivery', 'delivered', 'renting', 'for-return', 'extended', 'for-refund', 'for-penalty', 'completed'] as const).map((key) => {
+        {(['for-review', 'confirmed', 'extended', 'ongoing', 'completed', 'declined', 'canceled'] as const).map((key) => {
           const meta = RENTAL_STATUS_META[key];
           return (
             <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
@@ -2422,7 +2350,7 @@ interface AdminHeaderProps {
 const AdminHeader: React.FC<AdminHeaderProps> = ({ rbUser, onMenuToggle, onLogout, rentals, desktopDrawerWidth, isMobile }) => {
   const navigate = useNavigate();
   const [notifAnchor, setNotifAnchor] = useState<null | HTMLElement>(null);
-  const submittedRentals = rentals.filter((r) => r.status === 'submitted');
+  const submittedRentals = rentals.filter((r) => r.status === 'for-review');
 
   return (
     <AppBar
@@ -2508,7 +2436,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ rbUser, onMenuToggle, onLogou
                 >
                   <ListItemText
                     primary={`${r.renter?.renter_fname ?? 'Unknown'} ${r.renter?.renter_lname ?? ''}`.trim()}
-                    secondary={`${formatCompactRentalItems(r)} • ${dayjs(r.rent_date_start).format('MMM D, YYYY')} - ${dayjs(r.rent_date_end).format('MMM D, YYYY')}\nSubmitted ${dayjs(r.created_at).format('MMM D, YYYY h:mm A')}`}
+                    secondary={`${formatCompactRentalItems(r)} • ${dayjs(r.rent_date_start).format('MMM D, YYYY')} - ${dayjs(r.rent_date_end).format('MMM D, YYYY')}\nFor Review ${dayjs(r.created_at).format('MMM D, YYYY h:mm A')}`}
                     secondaryTypographyProps={{ sx: { whiteSpace: 'pre-line' } }}
                   />
                 </MenuItem>
@@ -2654,6 +2582,12 @@ const AdminDashboard: React.FC = () => {
   const [agreementMd, setAgreementMd] = useState('');
   const [agreementLoading, setAgreementLoading] = useState(false);
   const [agreementSaving, setAgreementSaving] = useState(false);
+  const [footerContent, setFooterContent] = useState<Record<FooterRichContentKey, string>>({ terms: '', faqs: '', privacy: '' });
+  const [footerLoading, setFooterLoading] = useState<Record<FooterRichContentKey, boolean>>({ terms: false, faqs: false, privacy: false });
+  const [footerSaving, setFooterSaving] = useState<Record<FooterRichContentKey, boolean>>({ terms: false, faqs: false, privacy: false });
+  const [contactSettings, setContactSettings] = useState<FooterContactSettings>({ email: '', instagram: '', facebook: '' });
+  const [contactLoading, setContactLoading] = useState(false);
+  const [contactSaving, setContactSaving] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
 
   const fetchAll = useCallback(async () => {
@@ -2702,18 +2636,6 @@ const AdminDashboard: React.FC = () => {
       (rentersRaw      ?? []).forEach((r: RbRenter)      => { rMap[r.id]  = r; });
       (rentBranchesRaw ?? []).forEach((b: RbBranch)      => { bMap[b.id]  = b; });
 
-      const selfieInstructionIds = [
-        ...new Set((rentersRaw ?? [])
-          .map((r: RbRenter) => r.selfie_verification_id)
-          .filter(Boolean)),
-      ] as string[];
-      const { data: selfieInstructionsRaw } = selfieInstructionIds.length
-        ? await supabase.from('RB_SELFIE_VERIFICATION_INST').select('id, instruction_name, instruction_desc').in('id', selfieInstructionIds)
-        : { data: [] };
-      const selfieInstructionMap = new Map<string, RbSelfieVerificationInst>(
-        ((selfieInstructionsRaw ?? []) as RbSelfieVerificationInst[]).map((instruction) => [instruction.id, instruction])
-      );
-
       const rentalItemsByRental = new Map<string, RentalItemLink[]>();
       (rentalItemsRaw ?? []).forEach((link: RentalItemLink) => {
         const enrichedLink = { ...link, item: iMap[link.item_id_fk] };
@@ -2726,13 +2648,13 @@ const AdminDashboard: React.FC = () => {
         const items = rentalItems.map((link) => link.item).filter((item): item is EnrichedItem => !!item);
         return {
           ...r,
+          status: shouldDisplayAsOngoing(normalizeRentalStatus(r.status), r.rent_date_start),
           rentalItems,
           items,
           item:              items[0] ?? (r.cam_name_id_fk ? iMap[r.cam_name_id_fk] : undefined),
           renter,
           pickupBranch:      r.hub_pick_up_addr ? bMap[r.hub_pick_up_addr] : undefined,
           returnBranch:      r.hub_return_addr  ? bMap[r.hub_return_addr]  : undefined,
-          selfieInstruction: renter?.selfie_verification_id ? selfieInstructionMap.get(renter.selfie_verification_id) ?? null : null,
         };
       }));
     } else {
@@ -2743,20 +2665,44 @@ const AdminDashboard: React.FC = () => {
   }, [navigate]);
 
   useEffect(() => { void Promise.resolve().then(fetchAll); }, [fetchAll]);
+  const loadFooterSection = useCallback(async (key: FooterRichContentKey) => {
+    setFooterLoading((current) => ({ ...current, [key]: true }));
+    try {
+      const value = await loadFooterMarkdown(key);
+      setFooterContent((current) => ({ ...current, [key]: value }));
+      if (key === 'terms') setAgreementMd(value);
+    } catch (err) {
+      setSnackbar({ open: true, msg: err instanceof Error ? err.message : 'Failed to load footer content.', severity: 'error' });
+    } finally {
+      setFooterLoading((current) => ({ ...current, [key]: false }));
+    }
+  }, []);
+
   const loadAgreement = useCallback(async () => {
     setAgreementLoading(true);
-    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement.md');
-    if (error || !data) {
-      setSnackbar({ open: true, msg: `Failed to load agreement: ${error?.message ?? 'Unknown error'}`, severity: 'error' });
-      setAgreementLoading(false);
-      return;
-    }
-    setAgreementMd(await data.text());
+    await loadFooterSection('terms');
     setAgreementLoading(false);
+  }, [loadFooterSection]);
+
+  const loadContactSettings = useCallback(async () => {
+    setContactLoading(true);
+    try {
+      setContactSettings(await loadFooterContactSettings());
+    } catch (err) {
+      setSnackbar({ open: true, msg: err instanceof Error ? err.message : 'Failed to load contact settings.', severity: 'error' });
+    } finally {
+      setContactLoading(false);
+    }
   }, []);
+
   useEffect(() => {
-    if (tab === 4 && !agreementMd && !agreementLoading) void Promise.resolve().then(loadAgreement);
-  }, [tab, agreementMd, agreementLoading, loadAgreement]);
+    if (tab === 4) {
+      (['terms', 'faqs', 'privacy'] as FooterRichContentKey[]).forEach((key) => {
+        if (!footerContent[key] && !footerLoading[key]) void loadFooterSection(key);
+      });
+      if (!contactLoading && !contactSettings.email && !contactSettings.instagram && !contactSettings.facebook) void loadContactSettings();
+    }
+  }, [tab, footerContent, footerLoading, contactSettings, contactLoading, loadFooterSection, loadContactSettings]);
 
   const markOverdueRentalsCompleted = useCallback(async () => {
     const today = dayjs().startOf('day');
@@ -2764,7 +2710,7 @@ const AdminDashboard: React.FC = () => {
       const endDate = dayjs(r.rent_date_end).startOf('day');
       return (
         endDate.isBefore(today) &&
-        !['completed', 'canceled', 'declined', 'for-penalty'].includes(r.status)
+        !['completed', 'canceled', 'declined', 'for-review'].includes(r.status)
       );
     });
 
@@ -2833,7 +2779,6 @@ const AdminDashboard: React.FC = () => {
       return_time: updates.return_time || null,
     };
     if (updates.status === 'completed') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
-    if (updates.status === 'for-penalty') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
 
     const { error: updateError } = await supabase.from('RB_RENTAL_FORM').update(payload).eq('id', id);
     if (updateError) {
@@ -2863,11 +2808,13 @@ const AdminDashboard: React.FC = () => {
       };
 
       try {
-        await sendRentalStatusEmail({
-          status: updates.status,
-          rental: updatedRental,
-          renter: targetRental.renter,
-        });
+        if (normalizeRentalStatus(targetRental.status) !== normalizeRentalStatus(updates.status)) {
+          await sendRentalStatusEmail({
+            status: updates.status,
+            rental: updatedRental,
+            renter: targetRental.renter,
+          });
+        }
       } catch (emailError) {
         console.error('Failed to send status email:', emailError);
         setSnackbar({
@@ -2947,20 +2894,57 @@ const AdminDashboard: React.FC = () => {
           {tab === 2 && <MonitoringTab rentals={rentals} items={items} branches={branches} onSaved={fetchAll} />}
           {tab === 3 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
           {tab === 4 && (
-            <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
-              <Typography sx={{ mb: 2, fontWeight: 700 }}>Terms & Conditions</Typography>
-              <TextField multiline minRows={14} fullWidth value={agreementMd} onChange={(e) => setAgreementMd(e.target.value)} placeholder="Write markdown content here..." />
-              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-                <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading}>Reload</Button>
-                <Button variant="contained" disabled={agreementSaving || !agreementMd.trim()} onClick={async () => {
-                  setAgreementSaving(true);
-                  const blob = new Blob([agreementMd], { type: 'text/markdown;charset=utf-8' });
-                  const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
-                  setAgreementSaving(false);
-                  if (error) setSnackbar({ open: true, msg: `Save failed: ${error.message}`, severity: 'error' });
-                  else setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
-                }}>Save Changes</Button>
-              </Box>
+            <Paper sx={{ p: { xs: 2, md: 3 }, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
+              <Typography sx={{ mb: 2, fontWeight: 800, fontSize: '1.1rem' }}>Footer Content Management</Typography>
+              {([
+                ['terms', 'Terms and Agreement'],
+                ['faqs', 'FAQs'],
+                ['privacy', 'Privacy Policy'],
+              ] as [FooterRichContentKey, string][]).map(([key, label]) => (
+                <Accordion key={key} defaultExpanded={key === 'terms'} disableGutters sx={{ mb: 1.5, border: `1px solid ${BORDER}`, borderRadius: '18px !important', overflow: 'hidden', boxShadow: 'none', '&:before': { display: 'none' } }}>
+                  <AccordionSummary expandIcon={<ExpandMoreIcon />}>
+                    <Typography sx={{ fontWeight: 800 }}>{label}</Typography>
+                  </AccordionSummary>
+                  <AccordionDetails>
+                    <TextField multiline minRows={10} fullWidth value={key === 'terms' ? agreementMd : footerContent[key]} onChange={(e) => { const value = e.target.value; if (key === 'terms') setAgreementMd(value); setFooterContent((current) => ({ ...current, [key]: value })); }} placeholder={`Write ${label.toLowerCase()} content here...`} />
+                    <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                      <Button variant="outlined" onClick={() => void (key === 'terms' ? loadAgreement() : loadFooterSection(key))} disabled={footerLoading[key] || agreementLoading}>Reload</Button>
+                      <Button variant="contained" disabled={footerSaving[key] || (key === 'terms' ? agreementSaving : false)} onClick={async () => {
+                        setFooterSaving((current) => ({ ...current, [key]: true }));
+                        if (key === 'terms') setAgreementSaving(true);
+                        try {
+                          await saveFooterMarkdown(key, key === 'terms' ? agreementMd : footerContent[key]);
+                          setSnackbar({ open: true, msg: `${label} updated successfully.`, severity: 'success' });
+                        } catch (err) {
+                          setSnackbar({ open: true, msg: err instanceof Error ? err.message : 'Save failed.', severity: 'error' });
+                        } finally {
+                          setFooterSaving((current) => ({ ...current, [key]: false }));
+                          if (key === 'terms') setAgreementSaving(false);
+                        }
+                      }}>Save Changes</Button>
+                    </Box>
+                  </AccordionDetails>
+                </Accordion>
+              ))}
+              <Accordion disableGutters sx={{ border: `1px solid ${BORDER}`, borderRadius: '18px !important', overflow: 'hidden', boxShadow: 'none', '&:before': { display: 'none' } }}>
+                <AccordionSummary expandIcon={<ExpandMoreIcon />}><Typography sx={{ fontWeight: 800 }}>Contact Us / Socials</Typography></AccordionSummary>
+                <AccordionDetails>
+                  <Box sx={{ display: 'grid', gap: 2 }}>
+                    <TextField label="Contact Email" value={contactSettings.email} onChange={(e) => setContactSettings((current) => ({ ...current, email: e.target.value }))} />
+                    <TextField label="Instagram Link" value={contactSettings.instagram} onChange={(e) => setContactSettings((current) => ({ ...current, instagram: e.target.value }))} />
+                    <TextField label="Facebook Link" value={contactSettings.facebook} onChange={(e) => setContactSettings((current) => ({ ...current, facebook: e.target.value }))} />
+                  </Box>
+                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                    <Button variant="outlined" onClick={() => void loadContactSettings()} disabled={contactLoading}>Reload</Button>
+                    <Button variant="contained" disabled={contactSaving} onClick={async () => {
+                      setContactSaving(true);
+                      try { await saveFooterContactSettings(contactSettings); setSnackbar({ open: true, msg: 'Contact settings updated successfully.', severity: 'success' }); }
+                      catch (err) { setSnackbar({ open: true, msg: err instanceof Error ? err.message : 'Save failed.', severity: 'error' }); }
+                      finally { setContactSaving(false); }
+                    }}>Save Contact Settings</Button>
+                  </Box>
+                </AccordionDetails>
+              </Accordion>
             </Paper>
           )}
         </Box>
