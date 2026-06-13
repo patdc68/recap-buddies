@@ -37,20 +37,14 @@ const MUTED      = '#666666';
 const BORDER     = 'rgba(201,151,58,0.18)';
 
 const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  submitted:   { label: 'Submitted',  color: '#B8860B', bg: 'rgba(255,212,59,0.10)',  border: 'rgba(255,212,59,0.30)'  },
-  'in-review': { label: 'In Review',  color: '#1565C0', bg: 'rgba(100,149,237,0.10)', border: 'rgba(100,149,237,0.30)' },
-  'for-delivery': { label: 'For Delivery', color: '#1565C0', bg: 'rgba(100,149,237,0.12)', border: 'rgba(100,149,237,0.35)' },
-  delivered:      { label: 'Delivered',    color: '#1A237E', bg: 'rgba(100,149,237,0.08)', border: 'rgba(100,149,237,0.25)' },
-  renting:     { label: 'Renting',    color: '#7A4F00', bg: 'rgba(201,151,58,0.12)',  border: 'rgba(201,151,58,0.40)'  },
-  'for-return':   { label: 'For Return',   color: '#E65100', bg: 'rgba(255,165,0,0.12)', border: 'rgba(255,165,0,0.35)' },
-  'for-refund':   { label: 'For Refund',   color: '#6A1B9A', bg: 'rgba(156,39,176,0.10)', border: 'rgba(156,39,176,0.30)' },
-  'for-penalty':  { label: 'For Penalty',  color: '#B71C1C', bg: 'rgba(211,47,47,0.10)', border: 'rgba(211,47,47,0.30)' },
-  extended:       { label: 'Extended',     color: '#7c3aed', bg: '#f3e8ff', border: '#d8b4fe' },
-  completed:   { label: 'Completed',  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)', border: 'rgba(105,219,124,0.30)' },
-  canceled:    { label: 'Canceled',   color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
-  declined:    { label: 'Declined',   color: '#B71C1C', bg: 'rgba(211,47,47,0.08)',   border: 'rgba(211,47,47,0.25)'   },
+  'for-review': { label: 'For Review', color: '#B8860B', bg: 'rgba(255,212,59,0.10)', border: 'rgba(255,212,59,0.30)' },
+  confirmed: { label: 'Confirmed', color: '#1565C0', bg: 'rgba(100,149,237,0.10)', border: 'rgba(100,149,237,0.30)' },
+  declined: { label: 'Declined', color: '#B71C1C', bg: 'rgba(211,47,47,0.08)', border: 'rgba(211,47,47,0.25)' },
+  canceled: { label: 'Canceled', color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
+  extended: { label: 'Extended', color: '#7c3aed', bg: '#f3e8ff', border: '#d8b4fe' },
+  ongoing: { label: 'Ongoing', color: '#7A4F00', bg: 'rgba(201,151,58,0.12)', border: 'rgba(201,151,58,0.40)' },
+  completed: { label: 'Completed', color: '#2E7D32', bg: 'rgba(105,219,124,0.10)', border: 'rgba(105,219,124,0.30)' },
 };
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface EnrichedItem extends RbItem { device?: RbDevice; }
 interface FullVerification {
@@ -70,12 +64,6 @@ const formatTime = (value?: string | null) => {
   const parsed = dayjs(`2000-01-01 ${value}`);
   return parsed.isValid() ? parsed.format('h:mm A') : '—';
 };
-
-const getSelfieInstructionTitle = (inst: RbSelfieVerificationInst | null) =>
-  inst?.instruction_name ?? null;
-
-const getSelfieInstructionDescription = (inst: RbSelfieVerificationInst | null) =>
-  inst?.instruction_desc ?? null;
 
 const getItemThumbnailUrl = (item?: EnrichedItem | null) => item?.image_url ?? item?.device?.device_img ?? null;
 
@@ -144,7 +132,7 @@ const RenterVerificationPage: React.FC = () => {
   const [data, setData]       = useState<FullVerification | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError]     = useState('');
-  const [status, setStatus]   = useState('submitted');
+  const [status, setStatus]   = useState('for-review');
   const [saving, setSaving]   = useState(false);
   const [saved, setSaved]     = useState(false);
   const [zoomSrc, setZoomSrc] = useState<string | null>(null);
@@ -198,23 +186,7 @@ const RenterVerificationPage: React.FC = () => {
         (branches ?? []).forEach((b: RbBranch) => { branchMap[b.id] = b; });
       }
 
-      // 5. Selfie instruction: rental form → renter → selfie verification instruction
-      let selfieInst: RbSelfieVerificationInst | null = null;
-      const selfieInstructionId = renter.selfie_verification_id;
-      console.log('Selfie verification ID:', selfieInstructionId);
-      if (selfieInstructionId) {
-        const { data: si, error: selfieInstructionError } = await supabase
-          .from('RB_SELFIE_VERIFICATION_INST')
-          .select('id, instruction_name, instruction_desc')
-          .eq('id', selfieInstructionId)
-          .maybeSingle();
-        if (selfieInstructionError) {
-          console.error('Failed to load selfie instruction:', selfieInstructionError);
-        } else {
-          selfieInst = si as RbSelfieVerificationInst | null;
-        }
-      }
-      console.log('Fetched selfie instruction:', selfieInst);
+      const selfieInst: RbSelfieVerificationInst | null = null;
 
       setStatus(rental.status);
       setData({
@@ -245,7 +217,7 @@ const RenterVerificationPage: React.FC = () => {
       if (updateError) throw updateError;
 
       try {
-        await sendRentalStatusEmail({ status: newStatus, rental: data.rental, renter: data.renter });
+        if (data.rental.status !== newStatus) await sendRentalStatusEmail({ status: newStatus, rental: data.rental, renter: data.renter });
       } catch (emailError) {
         console.error('Failed to send verification status email:', emailError);
         setSnackbar({ open: true, msg: 'Status updated, but email notification failed.', severity: 'warning' });
@@ -286,10 +258,8 @@ const RenterVerificationPage: React.FC = () => {
     );
   }
 
-  const { rental, renter, items, pickupBranch, returnBranch, selfieInst } = data;
-  const selfieInstructionTitle = getSelfieInstructionTitle(selfieInst);
-  const selfieInstructionDescription = getSelfieInstructionDescription(selfieInst);
-  const statusMeta = RENTAL_STATUS_META[status] ?? RENTAL_STATUS_META.submitted;
+  const { rental, renter, items, pickupBranch, returnBranch } = data;
+  const statusMeta = RENTAL_STATUS_META[status] ?? RENTAL_STATUS_META['for-review'];
 
   return (
     <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
@@ -496,17 +466,6 @@ const RenterVerificationPage: React.FC = () => {
           <SectionTitle icon={<FaceIcon sx={{ fontSize: 17 }} />} title="Selfie Verification" />
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'flex-start' }}>
             <ImageCard label="Selfie Photo" src={renter.selfie_verification_img} onZoom={setZoomSrc} />
-            <Box sx={{ flex: '1 1 220px', p: 2, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
-              <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.1em', mb: 0.5, fontWeight: 700 }}>
-                Selfie Verification Instruction
-              </Typography>
-              <Typography sx={{ color: selfieInstructionTitle ? ESPRESSO : MUTED, fontWeight: 700, fontSize: '0.9rem', mb: 0.5, fontStyle: selfieInstructionTitle ? 'normal' : 'italic' }}>
-                {selfieInstructionTitle ?? 'Not provided'}
-              </Typography>
-              <Typography sx={{ color: selfieInstructionDescription ? MUTED : MUTED, fontSize: '0.82rem', lineHeight: 1.6, fontStyle: selfieInstructionDescription ? 'normal' : 'italic', whiteSpace: 'pre-wrap' }}>
-                {selfieInstructionDescription ?? 'Not provided'}
-              </Typography>
-            </Box>
           </Box>
         </Paper>
 
@@ -515,12 +474,12 @@ const RenterVerificationPage: React.FC = () => {
           <Typography sx={{ color: ESPRESSO, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '0.88rem', mb: 2 }}>Quick Actions</Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
             {[
-              { label: 'Approve → In Review',  val: 'in-review', icon: <HourglassTopIcon />, color: '#1565C0', bg: 'rgba(100,149,237,0.08)' },
-              { label: 'Mark as Renting',       val: 'renting',   icon: <CameraAltIcon />,   color: '#7A4F00', bg: 'rgba(201,151,58,0.10)' },
+              { label: 'Mark Confirmed',  val: 'confirmed', icon: <HourglassTopIcon />, color: '#1565C0', bg: 'rgba(100,149,237,0.08)' },
+              { label: 'Mark as Ongoing',       val: 'ongoing',   icon: <CameraAltIcon />,   color: '#7A4F00', bg: 'rgba(201,151,58,0.10)' },
               { label: 'Mark as Extended',      val: 'extended',  icon: <CameraAltIcon />,   color: '#7c3aed', bg: '#f3e8ff' },
               { label: 'Mark as Completed',     val: 'completed', icon: <CheckCircleIcon />,  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)' },
               { label: 'Decline', val: 'declined',  icon: <CancelIcon />,       color: '#B71C1C', bg: 'rgba(211,47,47,0.08)'  },
-              { label: 'Return to Submitted',   val: 'submitted', icon: <PendingIcon />,      color: '#B8860B', bg: 'rgba(255,212,59,0.08)'  },
+              { label: 'Return to For Review',   val: 'for-review', icon: <PendingIcon />,      color: '#B8860B', bg: 'rgba(255,212,59,0.08)'  },
             ].map((a) => (
               <Button
                 key={a.val}

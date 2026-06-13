@@ -2,7 +2,7 @@ import { supabase } from '../service/supabaseClient';
 import type { RbRentalForm, RbRenter } from '../service/supabaseClient';
 import { sendRentalEmail } from './emailService';
 
-const REMINDER_ALLOWED_STATUSES = ['in-review', 'approved'];
+const REMINDER_ALLOWED_STATUSES = ['confirmed', 'approved'];
 
 type ReminderRental = Pick<
   RbRentalForm,

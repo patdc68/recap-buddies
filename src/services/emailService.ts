@@ -22,9 +22,11 @@ export interface RentalEmailPayload {
 }
 
 export const EMAIL_TYPE_BY_STATUS: Partial<Record<string, RentalEmailType>> = {
+  'for-review': 'submitted',
   submitted: 'submitted',
-  'in-review': 'in_review',
-  in_review: 'in_review',
+  confirmed: 'confirmed',
+  'in-review': 'confirmed',
+  in_review: 'confirmed',
   declined: 'declined',
 };
 
@@ -84,7 +86,7 @@ export const sendRentalStatusEmail = async ({
 
 export const emailService = {
   sendSubmittedEmail: (payload: Omit<RentalEmailPayload, 'type'>) => invokeSendRentalEmail({ ...payload, type: 'submitted' }),
-  sendInReviewEmail: (payload: Omit<RentalEmailPayload, 'type'>) => invokeSendRentalEmail({ ...payload, type: 'in_review' }),
+  sendConfirmedEmail: (payload: Omit<RentalEmailPayload, 'type'>) => invokeSendRentalEmail({ ...payload, type: 'confirmed' }),
   sendDeclinedEmail: (payload: Omit<RentalEmailPayload, 'type'>) => invokeSendRentalEmail({ ...payload, type: 'declined' }),
   sendStartReminderEmail: (payload: Omit<RentalEmailPayload, 'type'>) => invokeSendRentalEmail({ ...payload, type: 'start_reminder' }),
   sendReturnReminderEmail: (payload: Omit<RentalEmailPayload, 'type'>) => invokeSendRentalEmail({ ...payload, type: 'return_reminder' }),

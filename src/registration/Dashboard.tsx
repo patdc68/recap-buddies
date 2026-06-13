@@ -17,8 +17,6 @@ import CameraIcon             from '@mui/icons-material/Camera';
 import CancelIcon             from '@mui/icons-material/Cancel';
 import BlockIcon              from '@mui/icons-material/Block';
 import GpsFixedIcon           from '@mui/icons-material/GpsFixed';
-import WarningAmberIcon       from '@mui/icons-material/WarningAmber';
-import LocalOfferIcon         from '@mui/icons-material/LocalOffer';
 import ContentCopyIcon        from '@mui/icons-material/ContentCopy';
 import dayjs from 'dayjs';
 import { useNavigate } from 'react-router-dom';
@@ -40,45 +38,20 @@ interface EnrichedRental extends RbRentalForm {
 // ─── Status config ────────────────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<RentalStatus, { label: string; bg: string; color: string; border: string; icon: React.ReactNode }> = {
-  submitted: {
-    label: 'Submitted',
+  'for-review': {
+    label: 'For Review',
     bg: 'rgba(255,212,59,0.10)', color: '#B8860B', border: 'rgba(255,212,59,0.30)',
     icon: <PendingIcon sx={{ fontSize: 14 }} />,
   },
-  'in-review': {
-    label: 'In Review',
+  'confirmed': {
+    label: 'Confirmed',
     bg: 'rgba(100,149,237,0.10)', color: '#1565C0', border: 'rgba(100,149,237,0.30)',
     icon: <HourglassTopIcon sx={{ fontSize: 14 }} />,
   },
-  renting: {
-    label: 'Renting',
+  ongoing: {
+    label: 'Ongoing',
     bg: 'rgba(201,151,58,0.12)', color: '#7A4F00', border: 'rgba(201,151,58,0.40)',
     icon: <CameraIcon sx={{ fontSize: 14 }} />,
-  },
-  'for-delivery': {
-    label: 'For Delivery',
-    bg: 'rgba(100,149,237,0.12)', color: '#1565C0', border: 'rgba(100,149,237,0.35)',
-    icon: <LocalShippingIcon sx={{ fontSize: 14 }} />,
-  },
-  delivered: {
-    label: 'Delivered',
-    bg: 'rgba(100,149,237,0.08)', color: '#1A237E', border: 'rgba(100,149,237,0.25)',
-    icon: <CheckCircleOutlineIcon sx={{ fontSize: 14 }} />,
-  },
-  'for-return': {
-    label: 'For Return',
-    bg: 'rgba(255,165,0,0.12)', color: '#E65100', border: 'rgba(255,165,0,0.35)',
-    icon: <LocalShippingIcon sx={{ fontSize: 14 }} />,
-  },
-  'for-refund': {
-    label: 'For Refund',
-    bg: 'rgba(156,39,176,0.10)', color: '#6A1B9A', border: 'rgba(156,39,176,0.30)',
-    icon: <LocalOfferIcon sx={{ fontSize: 14 }} />,
-  },
-  'for-penalty': {
-    label: 'For Penalty',
-    bg: 'rgba(211,47,47,0.10)', color: '#B71C1C', border: 'rgba(211,47,47,0.30)',
-    icon: <WarningAmberIcon sx={{ fontSize: 14 }} />,
   },
   extended: {
     label: 'Extended',
@@ -113,7 +86,7 @@ const RentalCard: React.FC<{
   onClick: () => void;
 }> = ({ rental, onClick }) => {
 
-  const status = STATUS_CONFIG[rental.status] ?? STATUS_CONFIG.submitted;
+  const status = STATUS_CONFIG[rental.status] ?? STATUS_CONFIG['for-review'];
   const start  = dayjs(rental.rent_date_start).format('MMM D, YYYY');
   const end    = dayjs(rental.rent_date_end).format('MMM D, YYYY');
 
@@ -215,7 +188,7 @@ const RentalCard: React.FC<{
         {/* Footer */}
         <Box sx={{ px: 3, py: 1, borderTop: '1px solid rgba(201,151,58,0.08)', background: 'rgba(201,151,58,0.02)', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1 }}>
           <Typography sx={{ fontSize: '0.72rem', color: '#666666', fontFamily: '"Sora", sans-serif' }}>
-            Submitted {dayjs(rental.created_at).format('MMMM D, YYYY [at] h:mm A')}
+            For Review {dayjs(rental.created_at).format('MMMM D, YYYY [at] h:mm A')}
           </Typography>
         </Box>
       </Paper>

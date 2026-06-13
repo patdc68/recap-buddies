@@ -16,6 +16,7 @@ import RenterVerificationPage  from './admin/RenterVerificationPage';
 import AdminRevenueAnalyticsPage from './admin/AdminRevenueAnalyticsPage';
 import ProtectedRoute          from './components/ProtectedRoute';
 import AdminProtectedRoute     from './components/AdminProtectedRoute';
+import PublicFooter            from './components/PublicFooter';
 
 const App: React.FC = () => (
   <ThemeProvider theme={theme}>
@@ -23,14 +24,14 @@ const App: React.FC = () => (
     <BrowserRouter>
       <Routes>
         {/* ── Public / renter ── */}
-        <Route path="/login"              element={<LoginPage />} />
-        <Route path="/forgot-password"    element={<ForgotPasswordPage />} />
-        <Route path="/reset-password"     element={<ResetPasswordPage />} />
-        <Route path="/renterRegistration" element={<RenterRegistration />} />
+        <Route path="/login"              element={<><LoginPage /><PublicFooter /></>} />
+        <Route path="/forgot-password"    element={<><ForgotPasswordPage /><PublicFooter /></>} />
+        <Route path="/reset-password"     element={<><ResetPasswordPage /><PublicFooter /></>} />
+        <Route path="/renterRegistration" element={<><RenterRegistration /><PublicFooter /></>} />
 
         {/* ── Protected renter ── */}
-        <Route path="/dashboard"  element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/renterForm" element={<ProtectedRoute><RenterForm /></ProtectedRoute>} />
+        <Route path="/dashboard"  element={<ProtectedRoute><><Dashboard /><PublicFooter /></></ProtectedRoute>} />
+        <Route path="/renterForm" element={<ProtectedRoute><><RenterForm /><PublicFooter /></></ProtectedRoute>} />
 
         {/* ── Admin / staff ── */}
         <Route path="/admin/login"     element={<AdminLogin />} />

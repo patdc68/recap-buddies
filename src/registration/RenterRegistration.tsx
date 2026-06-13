@@ -6,15 +6,10 @@ import {
   Button,
   Alert,
   CircularProgress,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
   Paper,
   Divider,
   Chip,
   LinearProgress,
-  FormHelperText,
   Stepper,
   Step,
   StepLabel,
@@ -26,7 +21,6 @@ import {
   Tooltip,
   FormControlLabel,
   Checkbox,
-  type SelectChangeEvent,
 } from '@mui/material';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import PersonIcon from '@mui/icons-material/Person';
@@ -38,7 +32,6 @@ import HowToRegIcon from '@mui/icons-material/HowToReg';
 import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
-import type { RbSelfieVerificationInst } from '../service/supabaseClient';
 import PageLayout from '../components/PageLayout';
 import CameraCapture from '../components/CameraCapture';
 import FileUpload, { type FileUploadResult } from '../components/FileUpload';
@@ -55,7 +48,6 @@ interface RegistrationForm {
   email: string;
   password: string;
   confirmPassword: string;
-  selfie_verification_id: string;
 }
 
 type ImageField =
@@ -86,7 +78,7 @@ const STEPS = [
 const INIT_FORM: RegistrationForm = {
   renter_fname: '', renter_lname: '', mobile_no: '',
   emergency_contact_no: '', emergency_contact_person: '', emergency_contact_relationship: '', email: '', password: '',
-  confirmPassword: '', selfie_verification_id: '',
+  confirmPassword: '',
 };
 
 const INIT_BLOBS: BlobMap = {
@@ -369,77 +361,30 @@ const StepBilling: React.FC<StepBillingProps> = ({ billingFile, onBillingFile })
 // ─── Step 6: Selfie Verification ─────────────────────────────────────────────
 
 interface StepSelfieProps {
-  selfieInstructions: RbSelfieVerificationInst[];
-  form: RegistrationForm;
-  onSelect: (e: SelectChangeEvent) => void;
   errors: FormErrors;
   previews: PreviewMap;
   onCapture: (field: ImageField, blob: Blob | null) => void;
 }
 
-const StepSelfie: React.FC<StepSelfieProps> = ({
-  selfieInstructions, form, onSelect, errors, previews, onCapture,
-}) => {
-  const selected = selfieInstructions.find((i) => i.id === form.selfie_verification_id);
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-      <Box>
-        <SectionLabel>Selfie Verification</SectionLabel>
-        <Typography variant="body2">
-          Choose a verification instruction and take a live selfie following the given pose.
-        </Typography>
-      </Box>
+const SELFIE_REMINDER = 'Please make sure your selfie is clear and recent. Take the photo in good lighting, with your full face visible. Do not wear a mask, shades, cap, or anything that may cover your face.';
 
-      <FormControl fullWidth error={!!errors.selfie_verification_id}>
-        <InputLabel>Select Verification Instruction</InputLabel>
-        <Select
-          value={form.selfie_verification_id}
-          onChange={onSelect}
-          label="Select Verification Instruction"
-        >
-          {selfieInstructions.map((inst) => (
-            <MenuItem key={inst.id} value={inst.id}>
-              <Box>
-                <Typography sx={{ fontWeight: 600, color: '#111111', fontFamily: '"Sora", sans-serif', fontSize: '0.9rem' }}>
-                  {inst.instruction_name}
-                </Typography>
-                <Typography variant="body2" sx={{ fontSize: '0.78rem' }}>
-                  {inst.instruction_desc}
-                </Typography>
-              </Box>
-            </MenuItem>
-          ))}
-        </Select>
-        {errors.selfie_verification_id && (
-          <FormHelperText>{errors.selfie_verification_id}</FormHelperText>
-        )}
-      </FormControl>
-
-      {selected && (
-        <Alert
-          severity="warning"
-          sx={{
-            background: 'rgba(201,151,58,0.10)',
-            border: '1px solid rgba(201,151,58,0.35)',
-            color: '#111111',
-            '& .MuiAlert-icon': { color: '#111111' },
-          }}
-        >
-          <Typography sx={{ fontWeight: 600 }}>{selected.instruction_name}</Typography>
-          <Typography variant="body2">{selected.instruction_desc}</Typography>
-        </Alert>
-      )}
-
-      <CameraCapture
-        label="Selfie with Required Pose"
-        facingMode="user"
-        onCapture={(blob) => onCapture('selfie_verification_img', blob)}
-        capturedUrl={previews.selfie_verification_img}
-        hint={selected ? `Pose: ${selected.instruction_desc}` : 'Please select an instruction first.'}
-      />
+const StepSelfie: React.FC<StepSelfieProps> = ({ errors, previews, onCapture }) => (
+  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
+    <Box>
+      <SectionLabel>Selfie Verification</SectionLabel>
+      <Typography variant="body2">Take or upload a clear, recent selfie for identity verification.</Typography>
     </Box>
-  );
-};
+    <Alert severity="info" sx={{ borderRadius: 3 }}>{SELFIE_REMINDER}</Alert>
+    <CameraCapture
+      label="Selfie Photo"
+      facingMode="user"
+      onCapture={(blob) => onCapture('selfie_verification_img', blob)}
+      capturedUrl={previews.selfie_verification_img}
+      hint="Use good lighting and keep your full face visible."
+    />
+    {errors.selfie_verification_img && <Alert severity="error">{errors.selfie_verification_img}</Alert>}
+  </Box>
+);
 
 // ─── Main Component ───────────────────────────────────────────────────────────
 
@@ -453,7 +398,6 @@ const RenterRegistration: React.FC = () => {
   const [previews, setPreviews]                     = useState<PreviewMap>(INIT_PREVIEWS);
   const [billingFile, setBillingFile]               = useState<FileUploadResult | null>(null);
   const [errors, setErrors]                         = useState<FormErrors>({});
-  const [selfieInstructions, setSelfieInstructions] = useState<RbSelfieVerificationInst[]>([]);
   const [submitting, setSubmitting]                 = useState(false);
   const [submitError, setSubmitError]               = useState('');
   const [done, setDone]                             = useState(false);
@@ -466,15 +410,6 @@ const RenterRegistration: React.FC = () => {
   const [primaryGuideOpen, setPrimaryGuideOpen]     = useState(false);
   const [secondaryGuideOpen, setSecondaryGuideOpen] = useState(false);
 
-  useEffect(() => {
-    supabase
-      .from('RB_SELFIE_VERIFICATION_INST')
-      .select('*')
-      .order('created_at', { ascending: true })
-      .then(({ data }) => {
-        if (data) setSelfieInstructions(data as RbSelfieVerificationInst[]);
-      });
-  }, []);
 
 
   const loadTermsContent = useCallback(async () => {
@@ -515,11 +450,6 @@ const RenterRegistration: React.FC = () => {
       setErrors((err) => ({ ...err, [field]: undefined }));
     };
 
-  const onSelfieSelect = (e: SelectChangeEvent) => {
-    setForm((f) => ({ ...f, selfie_verification_id: e.target.value }));
-    setErrors((err) => ({ ...err, selfie_verification_id: undefined }));
-  };
-
   const onCapture = useCallback((field: ImageField, blob: Blob | null) => {
     setBlobs((b) => ({ ...b, [field]: blob }));
     setPreviews((p) => ({ ...p, [field]: blob ? URL.createObjectURL(blob) : null }));
@@ -559,7 +489,6 @@ const RenterRegistration: React.FC = () => {
       if (!billingFile) e.proof_of_billing = 'Proof of billing is required';
     }
     if (activeStep === 5) {
-      if (!form.selfie_verification_id)   e.selfie_verification_id  = 'Please select an instruction';
       if (!blobs.selfie_verification_img) e.selfie_verification_img = 'Selfie photo is required';
     }
     setErrors(e);
@@ -640,7 +569,6 @@ const RenterRegistration: React.FC = () => {
         primary_id_front, primary_id_back,
         secondary_id_front, secondary_id_back,
         proof_of_billing,
-        selfie_verification_id: form.selfie_verification_id,
         selfie_verification_img,
       });
 
@@ -787,8 +715,7 @@ const RenterRegistration: React.FC = () => {
         {activeStep === 4 && <StepBilling billingFile={billingFile} onBillingFile={setBillingFile} />}
         {activeStep === 5 && (
           <StepSelfie
-            selfieInstructions={selfieInstructions} form={form}
-            onSelect={onSelfieSelect} errors={errors}
+            errors={errors}
             previews={previews} onCapture={onCapture}
           />
         )}
