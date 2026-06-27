@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { useLocation } from 'react-router-dom';
 import recapCharacter from '../assets/recap-buddies-char-rotated.png';
+import PublicFooter from './PublicFooter';
 
 
 interface RenterInfo {
@@ -51,6 +52,7 @@ const PageLayout: React.FC<PageLayoutProps> = ({ children, renter }) => {
         )}
         <img src={recapCharacter} className="hero-peek-img" alt="" />
       </div>
+      <PublicFooter />
     </div>
   );
 };
