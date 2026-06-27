@@ -470,10 +470,6 @@ const RenterVerificationPage: React.FC = () => {
           <SectionTitle icon={<FaceIcon sx={{ fontSize: 17 }} />} title="Selfie Verification" />
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'flex-start' }}>
             <ImageCard label="Selfie Photo" src={renter.selfie_verification_img} onZoom={setZoomSrc} />
-            <Box sx={{ flex: '1 1 220px', p: 2, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
-              <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.1em', mb: 0.5, fontWeight: 700 }}>Selfie Photo</Typography>
-              <Typography sx={{ color: MUTED, fontSize: '0.82rem', lineHeight: 1.6 }}>Selfie instruction prompts are no longer required. Use the image preview for verification.</Typography>
-            </Box>
           </Box>
         </Paper>
 

@@ -37,17 +37,21 @@ const PublicFooter: React.FC = () => {
       .finally(() => setLoading(false));
   };
 
-  const hasContact = !!(contact.email || contact.instagram || contact.facebook);
+  const email = contact.email.trim();
+  const instagram = contact.instagram.trim();
+  const facebook = contact.facebook.trim();
+  const hasContact = !!(email || instagram || facebook);
 
   return (
-    <Box component="footer" sx={{ mt: 4, py: 3, px: 2, borderTop: '1px solid rgba(17,17,17,0.10)', background: '#fffaf0' }}>
+    <Box component="footer" sx={{ flexShrink: 0, width: '100%', boxSizing: 'border-box', mt: 0, py: 3, px: 2, borderTop: '1px solid rgba(17,17,17,0.10)', background: '#fffaf0' }}>
       <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5} alignItems="center" justifyContent="center" flexWrap="wrap">
         {(Object.keys(CONTENT_LABELS) as FooterContentKey[]).map((key) => (
           <Button key={key} size="small" onClick={() => openContentDialog(key)} sx={{ color: '#111', borderRadius: 999 }}>{CONTENT_LABELS[key]}</Button>
         ))}
         {hasContact && <Button size="small" onClick={() => setDialog('contact')} sx={{ color: '#111', borderRadius: 999 }}>Contact Us</Button>}
-        {contact.instagram && <IconButton aria-label="Instagram" component="a" href={contact.instagram} target="_blank" rel="noopener noreferrer"><InstagramIcon /></IconButton>}
-        {contact.facebook && <IconButton aria-label="Facebook" component="a" href={contact.facebook} target="_blank" rel="noopener noreferrer"><FacebookIcon /></IconButton>}
+        {email && <Link href={`mailto:${email}`} color="inherit" underline="hover" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, fontSize: '0.875rem' }}><EmailOutlinedIcon fontSize="small" />{email}</Link>}
+        {instagram && <IconButton aria-label="Instagram" component="a" href={instagram} target="_blank" rel="noopener noreferrer" sx={{ color: '#111' }}><InstagramIcon /></IconButton>}
+        {facebook && <IconButton aria-label="Facebook" component="a" href={facebook} target="_blank" rel="noopener noreferrer" sx={{ color: '#111' }}><FacebookIcon /></IconButton>}
       </Stack>
       <Typography sx={{ mt: 1.5, textAlign: 'center', color: '#666', fontSize: '0.82rem' }}>© {new Date().getFullYear()} Recap Buddies</Typography>
 
@@ -56,9 +60,9 @@ const PublicFooter: React.FC = () => {
         <DialogContent dividers>
           {dialog === 'contact' ? (
             <Stack spacing={1.5}>
-              {contact.email && <Link href={`mailto:${contact.email}`} color="inherit" underline="hover"><EmailOutlinedIcon sx={{ mr: 1, verticalAlign: 'middle' }} />{contact.email}</Link>}
-              {contact.instagram && <Link href={contact.instagram} target="_blank" rel="noopener noreferrer" color="inherit"><InstagramIcon sx={{ mr: 1, verticalAlign: 'middle' }} />Instagram</Link>}
-              {contact.facebook && <Link href={contact.facebook} target="_blank" rel="noopener noreferrer" color="inherit"><FacebookIcon sx={{ mr: 1, verticalAlign: 'middle' }} />Facebook</Link>}
+              {email && <Link href={`mailto:${email}`} color="inherit" underline="hover"><EmailOutlinedIcon sx={{ mr: 1, verticalAlign: 'middle' }} />{email}</Link>}
+              {instagram && <Link href={instagram} target="_blank" rel="noopener noreferrer" color="inherit"><InstagramIcon sx={{ mr: 1, verticalAlign: 'middle' }} />Instagram</Link>}
+              {facebook && <Link href={facebook} target="_blank" rel="noopener noreferrer" color="inherit"><FacebookIcon sx={{ mr: 1, verticalAlign: 'middle' }} />Facebook</Link>}
             </Stack>
           ) : loading ? (
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', py: 3 }}><CircularProgress size={18} /> Loading…</Box>
