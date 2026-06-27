@@ -24,7 +24,7 @@ import dayjs from 'dayjs';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import { sendRentalStatusEmail } from '../services/emailService';
-import type { RbRenter, RbRentalForm, RbItem, RbDevice, RbBranch, RbSelfieVerificationInst } from '../service/supabaseClient';
+import type { RbRenter, RbRentalForm, RbItem, RbDevice, RbBranch } from '../service/supabaseClient';
 import type { RentalItemLink } from '../utils/rentalItems';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
@@ -61,7 +61,6 @@ interface FullVerification {
   rentalItems:  RentalItemLink[];
   pickupBranch: RbBranch | null;
   returnBranch: RbBranch | null;
-  selfieInst:   RbSelfieVerificationInst | null;
 }
 
 
@@ -70,12 +69,6 @@ const formatTime = (value?: string | null) => {
   const parsed = dayjs(`2000-01-01 ${value}`);
   return parsed.isValid() ? parsed.format('h:mm A') : '—';
 };
-
-const getSelfieInstructionTitle = (inst: RbSelfieVerificationInst | null) =>
-  inst?.instruction_name ?? null;
-
-const getSelfieInstructionDescription = (inst: RbSelfieVerificationInst | null) =>
-  inst?.instruction_desc ?? null;
 
 const getItemThumbnailUrl = (item?: EnrichedItem | null) => item?.image_url ?? item?.device?.device_img ?? null;
 
@@ -198,23 +191,7 @@ const RenterVerificationPage: React.FC = () => {
         (branches ?? []).forEach((b: RbBranch) => { branchMap[b.id] = b; });
       }
 
-      // 5. Selfie instruction: rental form → renter → selfie verification instruction
-      let selfieInst: RbSelfieVerificationInst | null = null;
-      const selfieInstructionId = renter.selfie_verification_id;
-      console.log('Selfie verification ID:', selfieInstructionId);
-      if (selfieInstructionId) {
-        const { data: si, error: selfieInstructionError } = await supabase
-          .from('RB_SELFIE_VERIFICATION_INST')
-          .select('id, instruction_name, instruction_desc')
-          .eq('id', selfieInstructionId)
-          .maybeSingle();
-        if (selfieInstructionError) {
-          console.error('Failed to load selfie instruction:', selfieInstructionError);
-        } else {
-          selfieInst = si as RbSelfieVerificationInst | null;
-        }
-      }
-      console.log('Fetched selfie instruction:', selfieInst);
+      // Selfie instructions are no longer shown or fetched; existing selfie images remain visible.
 
       setStatus(rental.status);
       setData({
@@ -225,7 +202,6 @@ const RenterVerificationPage: React.FC = () => {
         rentalItems,
         pickupBranch: rental.hub_pick_up_addr ? branchMap[rental.hub_pick_up_addr] ?? null : null,
         returnBranch: rental.hub_return_addr  ? branchMap[rental.hub_return_addr]  ?? null : null,
-        selfieInst,
       });
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Failed to load verification data');
@@ -286,9 +262,7 @@ const RenterVerificationPage: React.FC = () => {
     );
   }
 
-  const { rental, renter, items, pickupBranch, returnBranch, selfieInst } = data;
-  const selfieInstructionTitle = getSelfieInstructionTitle(selfieInst);
-  const selfieInstructionDescription = getSelfieInstructionDescription(selfieInst);
+  const { rental, renter, items, pickupBranch, returnBranch } = data;
   const statusMeta = RENTAL_STATUS_META[status] ?? RENTAL_STATUS_META.submitted;
 
   return (
@@ -496,17 +470,6 @@ const RenterVerificationPage: React.FC = () => {
           <SectionTitle icon={<FaceIcon sx={{ fontSize: 17 }} />} title="Selfie Verification" />
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'flex-start' }}>
             <ImageCard label="Selfie Photo" src={renter.selfie_verification_img} onZoom={setZoomSrc} />
-            <Box sx={{ flex: '1 1 220px', p: 2, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
-              <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.1em', mb: 0.5, fontWeight: 700 }}>
-                Selfie Verification Instruction
-              </Typography>
-              <Typography sx={{ color: selfieInstructionTitle ? ESPRESSO : MUTED, fontWeight: 700, fontSize: '0.9rem', mb: 0.5, fontStyle: selfieInstructionTitle ? 'normal' : 'italic' }}>
-                {selfieInstructionTitle ?? 'Not provided'}
-              </Typography>
-              <Typography sx={{ color: selfieInstructionDescription ? MUTED : MUTED, fontSize: '0.82rem', lineHeight: 1.6, fontStyle: selfieInstructionDescription ? 'normal' : 'italic', whiteSpace: 'pre-wrap' }}>
-                {selfieInstructionDescription ?? 'Not provided'}
-              </Typography>
-            </Box>
           </Box>
         </Paper>
 

@@ -31,6 +31,7 @@ import {
   formatCompactRentalItems, formatCompactRentalItemCodes, formatRentalItemsTooltip,
   calculateRentalItemsTotal, getPrimaryRentalItem, getRentalItemIds, getRentalItems, type RentalItemLink,
 } from '../utils/rentalItems';
+import { DEFAULT_CONTACT_SETTINGS, loadContactSettings, loadFooterContent, saveContactSettings, saveFooterContent, type FooterContactSettings, type FooterContentKey } from '../services/footerContentService';
 
 import DashboardIcon          from '@mui/icons-material/Dashboard';
 import CalendarMonthIcon      from '@mui/icons-material/CalendarMonth';
@@ -63,6 +64,7 @@ import SettingsSuggestIcon    from '@mui/icons-material/SettingsSuggest';
 import NotificationsIcon      from '@mui/icons-material/Notifications';
 import MenuIcon               from '@mui/icons-material/Menu';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import FacebookIcon from '@mui/icons-material/Facebook';
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
@@ -235,12 +237,6 @@ const InfoBox: React.FC<{ label: string; children: React.ReactNode }> = ({ label
 );
 
 
-const getSelfieInstructionTitle = (inst?: RbSelfieVerificationInst | null) =>
-  inst?.instruction_name ?? null;
-
-const getSelfieInstructionDescription = (inst?: RbSelfieVerificationInst | null) =>
-  inst?.instruction_desc ?? null;
-
 // ─── Rental Detail Dialog ─────────────────────────────────────────────────────
 
 interface RentalDetailDialogProps {
@@ -340,8 +336,6 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
   const [pickupTime, setPickupTime] = useState<Dayjs | null>(null);
   const [returnTime, setReturnTime] = useState<Dayjs | null>(null);
   const [isRepeatRenter, setIsRepeatRenter] = useState(false);
-  const [selfieInstruction, setSelfieInstruction] = useState<RbSelfieVerificationInst | null>(null);
-  const [selfieInstructionLoading, setSelfieInstructionLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const navigate = useNavigate();
   
@@ -425,51 +419,6 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
     void loadDialogData();
   }, [open, rental?.id, rental?.renter_id_fk, rental?.cam_name_id_fk, rental?.rent_price]);
 
-  useEffect(() => {
-    if (!open) return;
-
-    let isActive = true;
-
-    const loadSelfieInstruction = async () => {
-      const instructionId = rental?.renter?.selfie_verification_id;
-      console.log('Selfie verification ID:', instructionId);
-
-      if (!instructionId) {
-        setSelfieInstruction(null);
-        setSelfieInstructionLoading(false);
-        console.log('Fetched selfie instruction:', null);
-        return;
-      }
-
-      setSelfieInstructionLoading(true);
-
-      const { data, error } = await supabase
-        .from('RB_SELFIE_VERIFICATION_INST')
-        .select('id, instruction_name, instruction_desc')
-        .eq('id', instructionId)
-        .maybeSingle();
-
-      if (!isActive) return;
-
-      if (error) {
-        console.error('Failed to load selfie instruction:', error);
-        setSelfieInstruction(null);
-        console.log('Fetched selfie instruction:', null);
-      } else {
-        const fetchedInstruction = data as RbSelfieVerificationInst | null;
-        setSelfieInstruction(fetchedInstruction);
-        console.log('Fetched selfie instruction:', fetchedInstruction);
-      }
-
-      setSelfieInstructionLoading(false);
-    };
-
-    void loadSelfieInstruction();
-
-    return () => {
-      isActive = false;
-    };
-  }, [open, rental?.renter?.selfie_verification_id]);
   const updateRentPriceIfAuto = (rows: EditableRentalDeviceRow[]) => {
     const originalPrice = Number(initialRentPrice);
     const isAutoCalculated = initialRentPrice === '' || Number.isNaN(originalPrice) || originalPrice === initialDevicePriceTotal;
@@ -506,8 +455,6 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
   };
 
   if (!rental) return null;
-  const selfieInstructionTitle = getSelfieInstructionTitle(selfieInstruction);
-  const selfieInstructionDescription = getSelfieInstructionDescription(selfieInstruction);
 
   const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META.submitted;
 
@@ -651,16 +598,6 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
               }}
             />
           </Box>
-        </InfoBox>
-
-        {/* Selfie Verification Instruction */}
-        <InfoBox label="Selfie Verification Instruction">
-          <Typography sx={{ color: selfieInstructionLoading || selfieInstructionTitle ? ESPRESSO : MUTED, fontWeight: 700, fontSize: '0.9rem', mb: 0.5, fontStyle: !selfieInstructionLoading && !selfieInstructionTitle ? 'italic' : 'normal' }}>
-            {selfieInstructionLoading ? 'Loading…' : selfieInstructionTitle ?? 'Not provided'}
-          </Typography>
-          <Typography sx={{ color: MUTED, fontSize: '0.82rem', lineHeight: 1.6, whiteSpace: 'pre-wrap', fontStyle: !selfieInstructionLoading && !selfieInstructionDescription ? 'italic' : 'normal' }}>
-            {selfieInstructionLoading ? 'Loading instruction details…' : selfieInstructionDescription ?? 'Not provided'}
-          </Typography>
         </InfoBox>
 
         {/* Dates */}
@@ -2651,9 +2588,12 @@ const AdminDashboard: React.FC = () => {
   const [branches, setBranches] = useState<RbBranch[]>([]);
   const [loading, setLoading]   = useState(true);
   const [authUid, setAuthUid]   = useState('');
-  const [agreementMd, setAgreementMd] = useState('');
-  const [agreementLoading, setAgreementLoading] = useState(false);
-  const [agreementSaving, setAgreementSaving] = useState(false);
+  const [footerContent, setFooterContent] = useState<Record<FooterContentKey, string>>({ terms: '', faqs: '', privacy: '' });
+  const [footerLoading, setFooterLoading] = useState<Record<FooterContentKey, boolean>>({ terms: false, faqs: false, privacy: false });
+  const [footerSaving, setFooterSaving] = useState<Record<FooterContentKey, boolean>>({ terms: false, faqs: false, privacy: false });
+  const [contactSettings, setContactSettings] = useState<FooterContactSettings>(DEFAULT_CONTACT_SETTINGS);
+  const [contactLoading, setContactLoading] = useState(false);
+  const [contactSaving, setContactSaving] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
 
   const fetchAll = useCallback(async () => {
@@ -2702,18 +2642,6 @@ const AdminDashboard: React.FC = () => {
       (rentersRaw      ?? []).forEach((r: RbRenter)      => { rMap[r.id]  = r; });
       (rentBranchesRaw ?? []).forEach((b: RbBranch)      => { bMap[b.id]  = b; });
 
-      const selfieInstructionIds = [
-        ...new Set((rentersRaw ?? [])
-          .map((r: RbRenter) => r.selfie_verification_id)
-          .filter(Boolean)),
-      ] as string[];
-      const { data: selfieInstructionsRaw } = selfieInstructionIds.length
-        ? await supabase.from('RB_SELFIE_VERIFICATION_INST').select('id, instruction_name, instruction_desc').in('id', selfieInstructionIds)
-        : { data: [] };
-      const selfieInstructionMap = new Map<string, RbSelfieVerificationInst>(
-        ((selfieInstructionsRaw ?? []) as RbSelfieVerificationInst[]).map((instruction) => [instruction.id, instruction])
-      );
-
       const rentalItemsByRental = new Map<string, RentalItemLink[]>();
       (rentalItemsRaw ?? []).forEach((link: RentalItemLink) => {
         const enrichedLink = { ...link, item: iMap[link.item_id_fk] };
@@ -2732,7 +2660,7 @@ const AdminDashboard: React.FC = () => {
           renter,
           pickupBranch:      r.hub_pick_up_addr ? bMap[r.hub_pick_up_addr] : undefined,
           returnBranch:      r.hub_return_addr  ? bMap[r.hub_return_addr]  : undefined,
-          selfieInstruction: renter?.selfie_verification_id ? selfieInstructionMap.get(renter.selfie_verification_id) ?? null : null,
+          selfieInstruction: null,
         };
       }));
     } else {
@@ -2743,63 +2671,60 @@ const AdminDashboard: React.FC = () => {
   }, [navigate]);
 
   useEffect(() => { void Promise.resolve().then(fetchAll); }, [fetchAll]);
-  const loadAgreement = useCallback(async () => {
-    setAgreementLoading(true);
-    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement.md');
-    if (error || !data) {
-      setSnackbar({ open: true, msg: `Failed to load agreement: ${error?.message ?? 'Unknown error'}`, severity: 'error' });
-      setAgreementLoading(false);
-      return;
+  const loadFooterSection = useCallback(async (key: FooterContentKey) => {
+    setFooterLoading((current) => ({ ...current, [key]: true }));
+    try {
+      const content = await loadFooterContent(key);
+      setFooterContent((current) => ({ ...current, [key]: content }));
+    } catch (err) {
+      setSnackbar({ open: true, msg: `Failed to load ${key}: ${err instanceof Error ? err.message : 'Unknown error'}`, severity: 'error' });
+    } finally {
+      setFooterLoading((current) => ({ ...current, [key]: false }));
     }
-    setAgreementMd(await data.text());
-    setAgreementLoading(false);
   }, []);
-  useEffect(() => {
-    if (tab === 4 && !agreementMd && !agreementLoading) void Promise.resolve().then(loadAgreement);
-  }, [tab, agreementMd, agreementLoading, loadAgreement]);
 
-  const markOverdueRentalsCompleted = useCallback(async () => {
-    const today = dayjs().startOf('day');
-    const overdueRentals = rentals.filter((r) => {
-      const endDate = dayjs(r.rent_date_end).startOf('day');
-      return (
-        endDate.isBefore(today) &&
-        !['completed', 'canceled', 'declined', 'for-penalty'].includes(r.status)
-      );
-    });
-
-    if (overdueRentals.length === 0) return;
-
-    const updates = overdueRentals.map((r) =>
-      supabase
-        .from('RB_RENTAL_FORM')
-        .update({
-          status: 'completed',
-          actual_return_date: today.format('YYYY-MM-DD'),
-        })
-        .eq('id', r.id)
-    );
-
-    await Promise.all(updates);
-
-    const itemUpdates = overdueRentals.flatMap((r) =>
-      getRentalItemIds(r).map((itemId) =>
-        supabase
-          .from('RB_ITEM')
-          .update({ status: 'Available' })
-          .eq('id', itemId)
-      )
-    );
-
-    if (itemUpdates.length > 0) await Promise.all(itemUpdates);
-    await fetchAll();
-  }, [fetchAll, rentals]);
-
-  useEffect(() => {
-    if (!loading && rentals.length > 0) {
-      void Promise.resolve().then(markOverdueRentalsCompleted);
+  const loadFooterContact = useCallback(async () => {
+    setContactLoading(true);
+    try {
+      setContactSettings(await loadContactSettings());
+    } catch {
+      setContactSettings(DEFAULT_CONTACT_SETTINGS);
+    } finally {
+      setContactLoading(false);
     }
-  }, [loading, rentals, markOverdueRentalsCompleted]);
+  }, []);
+
+  useEffect(() => {
+    if (tab !== 4) return;
+    (['terms', 'faqs', 'privacy'] as FooterContentKey[]).forEach((key) => {
+      if (!footerContent[key] && !footerLoading[key]) void loadFooterSection(key);
+    });
+    void loadFooterContact();
+  }, [tab, footerContent, footerLoading, loadFooterContact, loadFooterSection]);
+
+  const saveFooterSection = async (key: FooterContentKey) => {
+    setFooterSaving((current) => ({ ...current, [key]: true }));
+    try {
+      await saveFooterContent(key, footerContent[key]);
+      setSnackbar({ open: true, msg: 'Footer content updated successfully.', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, msg: `Save failed: ${err instanceof Error ? err.message : 'Unknown error'}`, severity: 'error' });
+    } finally {
+      setFooterSaving((current) => ({ ...current, [key]: false }));
+    }
+  };
+
+  const saveFooterContact = async () => {
+    setContactSaving(true);
+    try {
+      await saveContactSettings(contactSettings);
+      setSnackbar({ open: true, msg: 'Contact/social settings updated successfully.', severity: 'success' });
+    } catch (err) {
+      setSnackbar({ open: true, msg: `Save failed: ${err instanceof Error ? err.message : 'Unknown error'}`, severity: 'error' });
+    } finally {
+      setContactSaving(false);
+    }
+  };
 
   const handleSaveStatus = useCallback(async (
     id: string,
@@ -2947,21 +2872,35 @@ const AdminDashboard: React.FC = () => {
           {tab === 2 && <MonitoringTab rentals={rentals} items={items} branches={branches} onSaved={fetchAll} />}
           {tab === 3 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
           {tab === 4 && (
-            <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
-              <Typography sx={{ mb: 2, fontWeight: 700 }}>Terms & Conditions</Typography>
-              <TextField multiline minRows={14} fullWidth value={agreementMd} onChange={(e) => setAgreementMd(e.target.value)} placeholder="Write markdown content here..." />
-              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-                <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading}>Reload</Button>
-                <Button variant="contained" disabled={agreementSaving || !agreementMd.trim()} onClick={async () => {
-                  setAgreementSaving(true);
-                  const blob = new Blob([agreementMd], { type: 'text/markdown;charset=utf-8' });
-                  const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
-                  setAgreementSaving(false);
-                  if (error) setSnackbar({ open: true, msg: `Save failed: ${error.message}`, severity: 'error' });
-                  else setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
-                }}>Save Changes</Button>
-              </Box>
-            </Paper>
+            <Box sx={{ display: 'grid', gap: 2.5 }}>
+              {([
+                ['terms', 'Terms and Agreement'],
+                ['faqs', 'FAQs'],
+                ['privacy', 'Privacy Policy'],
+              ] as [FooterContentKey, string][]).map(([key, label]) => (
+                <Paper key={key} sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
+                  <Typography sx={{ mb: 1, fontWeight: 800 }}>{label}</Typography>
+                  <Typography sx={{ mb: 2, color: MUTED, fontSize: '0.86rem' }}>Edit the rich text/HTML or markdown shown on public renter footer dialogs.</Typography>
+                  <TextField multiline minRows={10} fullWidth value={footerContent[key]} onChange={(e) => setFooterContent((current) => ({ ...current, [key]: e.target.value }))} placeholder={`Write ${label.toLowerCase()} content here...`} />
+                  <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                    <Button variant="outlined" onClick={() => void loadFooterSection(key)} disabled={footerLoading[key]}>Reload</Button>
+                    <Button variant="contained" disabled={footerSaving[key]} onClick={() => void saveFooterSection(key)} startIcon={<SaveIcon />}>Save {label}</Button>
+                  </Box>
+                </Paper>
+              ))}
+              <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
+                <Typography sx={{ mb: 2, fontWeight: 800 }}>Contact Us / Socials</Typography>
+                <Box sx={{ display: 'grid', gap: 2 }}>
+                  <TextField label="Contact Email" value={contactSettings.email} onChange={(e) => setContactSettings((current) => ({ ...current, email: e.target.value }))} fullWidth />
+                  <TextField label="Instagram Link" value={contactSettings.instagram} onChange={(e) => setContactSettings((current) => ({ ...current, instagram: e.target.value }))} fullWidth InputProps={{ startAdornment: <InstagramIcon sx={{ mr: 1, color: MUTED }} /> }} />
+                  <TextField label="Facebook Link" value={contactSettings.facebook} onChange={(e) => setContactSettings((current) => ({ ...current, facebook: e.target.value }))} fullWidth InputProps={{ startAdornment: <FacebookIcon sx={{ mr: 1, color: MUTED }} /> }} />
+                </Box>
+                <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
+                  <Button variant="outlined" onClick={() => void loadFooterContact()} disabled={contactLoading}>Reload</Button>
+                  <Button variant="contained" disabled={contactSaving} onClick={() => void saveFooterContact()} startIcon={<SaveIcon />}>Save Contact Settings</Button>
+                </Box>
+              </Paper>
+            </Box>
           )}
         </Box>
       </Box>
