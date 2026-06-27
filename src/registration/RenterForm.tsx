@@ -59,7 +59,7 @@ interface RentalForm {
   return_addr:      string;
 }
 
-type RentalFormErrors = Partial<Record<keyof RentalForm | 'selected_device_ids' | 'proof_of_purpose' | 'selfie_verification_img' | 'selfie_verification_id', string>>;
+type RentalFormErrors = Partial<Record<keyof RentalForm | 'selected_device_ids' | 'proof_of_purpose' | 'selfie_verification_img', string>>;
 
 // ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -627,7 +627,7 @@ const RenterForm: React.FC = () => {
 
     loadRepeatVerification();
     return () => { cancelled = true; };
-  }, [renter?.id, renter?.selfie_verification_id]);
+  }, [renter?.id]);
 
   useEffect(() => () => {
     if (selfiePreview) URL.revokeObjectURL(selfiePreview);

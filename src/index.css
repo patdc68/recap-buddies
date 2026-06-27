@@ -31,7 +31,16 @@ body {
 
 .page-root {
   display: flex;
+  flex-direction: column;
   min-height: 100vh; /* changed from height */
+  overflow-x: hidden;
+}
+
+.page-main {
+  display: flex;
+  flex: 1 0 auto;
+  width: 100%;
+  min-height: 100vh;
 }
 
 
@@ -105,6 +114,11 @@ body {
 
 /* 🔥 MOBILE */
 @media (max-width: 768px) {
+  .page-main {
+    display: block;
+    min-height: auto;
+  }
+
   .left-content {
     padding: 24px;
   }
