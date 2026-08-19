@@ -7,11 +7,13 @@
     "dev": "vite",
     "build": "tsc -b && vite build",
     "lint": "eslint .",
+    "test:calendar": "node --experimental-strip-types --test tests/rentalCalendarEvents.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
+    "@fullcalendar/react": "^7.0.2",
     "@hookform/resolvers": "^5.2.2",
     "@mui/icons-material": "^7.3.9",
     "@mui/material": "^7.3.9",
@@ -24,6 +26,7 @@
     "react-hook-form": "^7.71.2",
     "react-router-dom": "^7.13.1",
     "recharts": "^3.8.1",
+    "temporal-polyfill": "^1.0.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {

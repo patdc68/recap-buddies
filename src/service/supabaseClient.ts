@@ -21,7 +21,7 @@ export interface RbUser {
   branch_id: string | null;
   user_fname: string;
   user_lname: string;
-  auth_user_id: string;
+  auth_user_id: string | null;
   created_at: string;
 }
 
@@ -86,7 +86,7 @@ export interface RbRenter {
   emergency_contact_person: string | null;
   emergency_contact_relationship: string | null;
   email: string;
-  auth_user_id: string;
+  auth_user_id: string | null;
   primary_id_front: string | null;
   primary_id_back: string | null;
   secondary_id_front: string | null;
@@ -110,6 +110,8 @@ export interface RbSelfieVerificationInst {
 export type RentalStatus =
   | 'submitted'
   | 'in-review'
+  | 'confirmed'
+  // Historical V1 values remain readable for preserved records.
   | 'for-delivery'
   | 'delivered'
   | 'renting'
@@ -154,6 +156,11 @@ export interface RbRentalForm {
   messenger_link: string | null;
   rent_price: number | null;
   status: RentalStatus;
+  renter_type: 'new' | 'returnee' | null;
+  returnee_matched_existing: boolean | null;
+  legacy_returnee: boolean | null;
+  notification_email: string | null;
+  returnee_selfie_img: string | null;
   start_reminder_sent?: boolean | null;
   return_reminder_sent?: boolean | null;
   created_at: string;

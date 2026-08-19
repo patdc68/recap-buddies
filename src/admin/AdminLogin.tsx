@@ -37,7 +37,8 @@ const AdminLogin: React.FC = () => {
         return;
       }
 
-      navigate('/dashboard', { replace: true });
+      await supabase.auth.signOut();
+      setCheckingSession(false);
     };
 
     void redirectIfAuthenticated();

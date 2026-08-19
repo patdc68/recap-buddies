@@ -1,0 +1,32 @@
+.recap-fullcalendar {
+  color: #111111;
+  font-family: "Sora", sans-serif;
+}
+
+.recap-fullcalendar [role="columnheader"] {
+  background: rgba(17, 17, 17, 0.025);
+  color: #555555;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.recap-fullcalendar [role="gridcell"] {
+  transition: background-color 120ms ease;
+}
+
+.recap-fullcalendar [role="gridcell"]:hover {
+  background-color: rgba(201, 151, 58, 0.035);
+}
+
+.recap-fullcalendar [role="dialog"] {
+  border-radius: 8px;
+  box-shadow: 0 12px 32px rgba(17, 17, 17, 0.18);
+  overflow: hidden;
+}
+
+@media (max-width: 600px) {
+  .recap-fullcalendar {
+    min-width: 720px;
+  }
+}

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Box, Typography, Paper, Chip, Button, CircularProgress, Avatar,
   Divider, IconButton, Dialog, DialogTitle, DialogContent,
@@ -11,6 +11,7 @@ import { useTheme } from '@mui/material/styles';
 import { DataGrid, GridToolbar, type GridColDef, type GridRenderCellParams } from '@mui/x-data-grid';
 import { LocalizationProvider, TimePicker } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import type { EventInput } from '@fullcalendar/react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
   ResponsiveContainer, Cell,
@@ -22,7 +23,7 @@ import isSameOrAfter  from 'dayjs/plugin/isSameOrAfter';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import { sendRentalStatusEmail } from '../services/emailService';
-import { sendDueReminderEmailsIfNeeded } from '../services/rentalReminderService';
+import { V2_NEXT_STATUSES, V2_RENTAL_STATUS_META, V2_RENTAL_STATUSES, isV2RentalStatus } from '../constants/rentalStatus';
 import type {
   RbUser, RbBranch, RbDevice, RbItem, RbRenter,
   RbRentalForm, RbSelfieVerificationInst, ItemStatus, ItemCondition, RentalStatus,
@@ -31,6 +32,8 @@ import {
   formatCompactRentalItems, formatCompactRentalItemCodes, formatRentalItemsTooltip,
   calculateRentalItemsTotal, getPrimaryRentalItem, getRentalItemIds, getRentalItems, type RentalItemLink,
 } from '../utils/rentalItems';
+import { buildRentalCalendarEvent, prepareRentalCalendarEntries } from '../utils/rentalCalendarEvents';
+import RentalCalendar, { type CalendarVisibleRange } from './RentalCalendar';
 
 import DashboardIcon          from '@mui/icons-material/Dashboard';
 import CalendarMonthIcon      from '@mui/icons-material/CalendarMonth';
@@ -39,8 +42,6 @@ import LogoutIcon             from '@mui/icons-material/Logout';
 import CameraAltIcon          from '@mui/icons-material/CameraAlt';
 import AddIcon                from '@mui/icons-material/Add';
 import EditIcon               from '@mui/icons-material/Edit';
-import ChevronLeftIcon        from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon       from '@mui/icons-material/ChevronRight';
 import LocalShippingIcon      from '@mui/icons-material/LocalShipping';
 import StorefrontIcon         from '@mui/icons-material/Storefront';
 import CalendarTodayIcon      from '@mui/icons-material/CalendarToday';
@@ -123,37 +124,44 @@ const MOBILE_DATA_GRID_PAGINATION_SX = {
 // ─── Status tables ────────────────────────────────────────────────────────────
 
 const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  submitted:   { label: 'Submitted',  color: '#B8860B', bg: 'rgba(255,212,59,0.10)',  border: 'rgba(255,212,59,0.30)'  },
-  'in-review': { label: 'In Review',  color: '#1565C0', bg: 'rgba(100,149,237,0.10)', border: 'rgba(100,149,237,0.30)' },
+  ...V2_RENTAL_STATUS_META,
   'for-delivery': { label: 'For Delivery', color: '#1565C0', bg: 'rgba(100,149,237,0.12)', border: 'rgba(100,149,237,0.35)' },
   delivered:      { label: 'Delivered',    color: '#1A237E', bg: 'rgba(100,149,237,0.08)', border: 'rgba(100,149,237,0.25)' },
-  renting:     { label: 'Renting',    color: '#7A4F00', bg: 'rgba(201,151,58,0.12)',  border: 'rgba(201,151,58,0.40)'  },
   'for-return':   { label: 'For Return',   color: '#E65100', bg: 'rgba(255,165,0,0.12)', border: 'rgba(255,165,0,0.35)' },
   'for-refund':   { label: 'For Refund',   color: '#6A1B9A', bg: 'rgba(156,39,176,0.10)', border: 'rgba(156,39,176,0.30)' },
   'for-penalty':  { label: 'For Penalty',  color: '#B71C1C', bg: 'rgba(211,47,47,0.10)', border: 'rgba(211,47,47,0.30)' },
   extended:       { label: 'Extended',     color: '#7c3aed', bg: '#f3e8ff', border: '#d8b4fe' },
-  completed:   { label: 'Completed',  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)', border: 'rgba(105,219,124,0.30)' },
   canceled:    { label: 'Canceled',   color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
-  declined:    { label: 'Declined',   color: '#B71C1C', bg: 'rgba(211,47,47,0.08)',   border: 'rgba(211,47,47,0.25)'   },
 };
 
 const RENTAL_TO_ITEM_STATUS: Partial<Record<string, ItemStatus>> = {
   submitted: 'In Review',
   'in-review': 'In Review',
-  'for-delivery': 'For Delivery',
-  delivered: 'Delivered',
+  confirmed: 'In Review',
   renting: 'Renting',
-  'for-return': 'For Return',
-  'for-refund': 'For Refund',
-  'for-penalty': 'For Penalty',
-  extended: 'Renting',
   completed: 'Available',
+  declined: 'Available',
 };
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const HIDDEN_DASHBOARD_STATUSES = ['declined', 'canceled'];
-const ACTIVE_RENTAL_STATUSES: RentalStatus[] = ['in-review', 'for-delivery', 'renting', 'delivered', 'for-return', 'extended'];
+const ACTIVE_RENTAL_STATUSES: RentalStatus[] = ['confirmed', 'renting'];
+
+const getVerificationBucketPath = (value: string | null | undefined) => {
+  if (!value) return null;
+  const marker = '/verification-images/';
+  const markerIndex = value.indexOf(marker);
+  if (markerIndex >= 0) return decodeURIComponent(value.slice(markerIndex + marker.length).split('?')[0]);
+  if (value.startsWith('verification-images/')) return value.slice('verification-images/'.length);
+  return value.startsWith('http://') || value.startsWith('https://') ? null : value;
+};
+
+const signDeviceImages = async (devices: RbDevice[]) => Promise.all(devices.map(async (device) => {
+  const path = getVerificationBucketPath(device.device_img);
+  if (!path) return device;
+  const { data, error } = await supabase.storage.from('verification-images').createSignedUrl(path, 60 * 60);
+  return { ...device, device_img: error ? null : data.signedUrl };
+}));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -187,13 +195,25 @@ interface RenterTypeAnalytics {
 
 const pesoFormatter = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 });
 
+const getRentalRenterType = (rental: EnrichedRental, rentals: EnrichedRental[]): 'new' | 'repeat' => {
+  if (rental.renter_type === 'returnee') return 'repeat';
+  if (rental.renter_type === 'new') return 'new';
+  const createdAt = dayjs(rental.created_at);
+  const hasPriorCompletedRental = rentals.some((candidate) => (
+    candidate.id !== rental.id
+    && candidate.renter?.id === rental.renter?.id
+    && candidate.status === 'completed'
+    && dayjs(candidate.created_at).isBefore(createdAt)
+  ));
+  return hasPriorCompletedRental ? 'repeat' : 'new';
+};
+
 const buildRenterAnalytics = (rentals: EnrichedRental[], branchLookup: Record<string, string>) => {
   const grouped: Record<'new' | 'repeat', Record<string, { units: number; revenue: number }>> = { new: {}, repeat: {} };
 
   rentals.forEach((r) => {
     if (!r.renter?.id) return;
-    const isRepeatedRenter = rentals.some((rental) => rental.renter?.id === r.renter?.id && rental.status === 'completed' && rental.id !== r.id);
-    const renterType: 'new' | 'repeat' = isRepeatedRenter ? 'repeat' : 'new';
+    const renterType = getRentalRenterType(r, rentals);
     const branchName = branchLookup[getPrimaryRentalItem(r)?.branch_id_fk ?? ''] ?? 'Unassigned';
     const units = 1;
     const revenue = Number(r.rent_price ?? 0) || 0;
@@ -248,6 +268,7 @@ interface RentalDetailDialogProps {
   open: boolean;
   onClose: () => void;
   onSave: (id: string, updates: RentalUpdatePayload) => Promise<void>;
+  allowVerificationLink?: boolean;
 }
 
 interface RentalUpdateDeviceRow {
@@ -325,7 +346,7 @@ const syncRentalItems = async (rentalId: string, previousLinks: RentalItemLink[]
   }
 };
 
-const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, onClose, onSave }) => {
+const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, onClose, onSave, allowVerificationLink = true }) => {
   const [status, setStatus] = useState<RentalStatus>(rental?.status ?? 'submitted');
   const [remarks, setRemarks] = useState('');
   const [messengerLink, setMessengerLink] = useState('');
@@ -412,18 +433,24 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
         return;
       }
 
+      if (rental.renter_type) {
+        setIsRepeatRenter(rental.renter_type === 'returnee');
+        return;
+      }
+
       const { count } = await supabase
         .from('RB_RENTAL_FORM')
         .select('id', { head: true, count: 'exact' })
         .eq('renter_id_fk', rental.renter_id_fk)
         .eq('status', 'completed')
+        .lt('created_at', rental.created_at)
         .neq('id', rental.id);
 
       setIsRepeatRenter((count ?? 0) > 0);
     };
 
     void loadDialogData();
-  }, [open, rental?.id, rental?.renter_id_fk, rental?.cam_name_id_fk, rental?.rent_price]);
+  }, [open, rental?.id, rental?.renter_id_fk, rental?.renter_type, rental?.created_at, rental?.cam_name_id_fk, rental?.rent_price]);
 
   useEffect(() => {
     if (!open) return;
@@ -432,12 +459,10 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
 
     const loadSelfieInstruction = async () => {
       const instructionId = rental?.renter?.selfie_verification_id;
-      console.log('Selfie verification ID:', instructionId);
 
       if (!instructionId) {
         setSelfieInstruction(null);
         setSelfieInstructionLoading(false);
-        console.log('Fetched selfie instruction:', null);
         return;
       }
 
@@ -454,11 +479,9 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
       if (error) {
         console.error('Failed to load selfie instruction:', error);
         setSelfieInstruction(null);
-        console.log('Fetched selfie instruction:', null);
       } else {
         const fetchedInstruction = data as RbSelfieVerificationInst | null;
         setSelfieInstruction(fetchedInstruction);
-        console.log('Fetched selfie instruction:', fetchedInstruction);
       }
 
       setSelfieInstructionLoading(false);
@@ -510,6 +533,9 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
   const selfieInstructionDescription = getSelfieInstructionDescription(selfieInstruction);
 
   const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META.submitted;
+  const editableStatusValues = rental.renter_type && isV2RentalStatus(rental.status)
+    ? [rental.status, ...V2_NEXT_STATUSES[rental.status]]
+    : [rental.status];
 
   const isDateRangeInvalid = !!startDate && !!endDate && dayjs(endDate).isBefore(dayjs(startDate), 'day');
   const selectedDeviceIds = deviceRows.map((row) => row.itemId).filter(Boolean);
@@ -550,13 +576,13 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
     }
   };
 
-  const isPending = rental.status === 'submitted' || rental.status === 'in-review';
+  const hasVerificationRecord = rental.renter_type != null || isV2RentalStatus(rental.status);
 
   return (
     <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
       PaperProps={{ sx: { background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 3, boxShadow: '0 8px 40px rgba(201,151,58,0.12)' } }}>
       <DialogTitle sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
-        Rental Details
+        Edit Rental Monitoring Details
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Chip label={meta.label} size="small" sx={{ background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.7rem' }} />
           <IconButton onClick={onClose} size="small" sx={{ color: MUTED }}><CloseIcon fontSize="small" /></IconButton>
@@ -795,17 +821,20 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
         <FormControl fullWidth size="small">
           <InputLabel sx={{ color: MUTED }}>Update Status</InputLabel>
           <Select value={status} onChange={(e: SelectChangeEvent) => setStatus(e.target.value as RentalStatus)} label="Update Status">
-            {Object.entries(RENTAL_STATUS_META).map(([val, m]) => (
+            {editableStatusValues.map((val) => {
+              const m = RENTAL_STATUS_META[val] ?? { label: val, color: MUTED, bg: '#f5f5f5', border: BORDER };
+              return (
               <MenuItem key={val} value={val}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: m.color }} />
                   {m.label}
                 </Box>
               </MenuItem>
-            ))}
+              );
+            })}
           </Select>
         </FormControl>
-        {isPending && (
+        {allowVerificationLink && hasVerificationRecord && (
           <Button
             variant="outlined" fullWidth size="small"
             startIcon={<VerifiedUserIcon />}
@@ -836,17 +865,15 @@ interface RentalListDialogProps {
   open: boolean;
   onClose: () => void;
   onSave: (id: string, updates: RentalUpdatePayload) => Promise<void>;
+  verificationMode?: boolean;
 }
 
-const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, open, onClose, onSave }) => {
+const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, open, onClose, onSave, verificationMode = false }) => {
   const [detail, setDetail] = useState<EnrichedRental | null>(null);
   const navigate = useNavigate();
 
-  // Pending rentals go straight to the full verification page
-  const isPending = (r: EnrichedRental) => r.status === 'submitted' || r.status === 'in-review';
-
   const handleRowClick = (r: EnrichedRental) => {
-    if (isPending(r)) {
+    if (verificationMode) {
       onClose();
       navigate(`/admin/verify/${r.id}`);
     } else {
@@ -927,7 +954,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
       flex: 0.8,
       renderCell: ({ row }: GridRenderCellParams<EnrichedRental>) => {
         const meta = RENTAL_STATUS_META[row.status] ?? RENTAL_STATUS_META.submitted;
-        const pending = isPending(row);
+        const pending = verificationMode;
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.75, py: 1 }}>
             <Chip
@@ -946,7 +973,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
       },
     },
   ];
-  }, []);
+  }, [verificationMode]);
 
   return (
     <>
@@ -1033,7 +1060,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
           )}
         </DialogContent>
       </Dialog>
-      <RentalDetailDialog rental={detail} open={!!detail} onClose={() => setDetail(null)} onSave={onSave} />
+      <RentalDetailDialog rental={detail} open={!!detail} onClose={() => setDetail(null)} onSave={onSave} allowVerificationLink={false} />
     </>
   );
 };
@@ -1051,7 +1078,7 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
   );
   const today = dayjs();
   const navigate = useNavigate();
-  const [listDialog, setListDialog]         = useState<{ title: string; items: EnrichedRental[] } | null>(null);
+  const [listDialog, setListDialog] = useState<{ title: string; items: EnrichedRental[]; verificationMode?: boolean } | null>(null);
 
   const upcomingDates = [...new Set(
     dashboardRentals
@@ -1087,10 +1114,16 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
   const topDevices = Object.values(devMap).sort((a, b) => b.count - a.count).slice(0, 6);
 
   const statCards = [
-    { label: 'Total Rentals',    color: AMBER,       items: dashboardRentals },
-    { label: 'This Month',       color: AMBER_LIGHT, items: thisMonth },
-    { label: 'Active / Renting', color: '#2E7D32',   items: dashboardRentals.filter((r) => ACTIVE_RENTAL_STATUSES.includes(r.status)) },
-    { label: 'Pending Review',   color: '#1565C0',   items: dashboardRentals.filter((r) => r.status === 'submitted' || r.status === 'in-review') },
+    { label: 'Total Rentals', color: AMBER, items: dashboardRentals, count: dashboardRentals.length, verificationMode: false },
+    { label: 'This Month', color: AMBER_LIGHT, items: thisMonth, count: thisMonth.length, verificationMode: false },
+    { label: 'Active / Renting', color: '#2E7D32', items: dashboardRentals.filter((r) => ACTIVE_RENTAL_STATUSES.includes(r.status)), count: dashboardRentals.filter((r) => ACTIVE_RENTAL_STATUSES.includes(r.status)).length, verificationMode: false },
+    {
+      label: 'Pending Review',
+      color: '#1565C0',
+      items: rentals.filter((r) => Boolean(r.renter_id_fk)),
+      count: rentals.filter((r) => r.status === 'submitted' || r.status === 'in-review').length,
+      verificationMode: true,
+    },
   ];
 
 
@@ -1102,7 +1135,10 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
         {statCards.map((s) => (
           <Paper
             key={s.label} elevation={0}
-            onClick={() => setListDialog({ title: s.label, items: s.items })}
+            role="button"
+            tabIndex={0}
+            onClick={() => setListDialog({ title: s.label, items: s.items, verificationMode: s.verificationMode })}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setListDialog({ title: s.label, items: s.items, verificationMode: s.verificationMode }); }}
             sx={{
               flex: '1 1 130px', p: 2.5, borderRadius: 3, textAlign: 'center',
               background: CARD_BG, border: `1px solid ${BORDER}`,
@@ -1111,7 +1147,7 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
             }}
           >
             <Typography sx={{ fontSize: '2rem', fontWeight: 700, color: s.color, fontFamily: '"Sora", sans-serif', lineHeight: 1, mb: 0.5 }}>
-              {s.items.length}
+              {s.count}
             </Typography>
             <Typography sx={{ fontSize: '0.72rem', color: MUTED, fontFamily: '"Sora", sans-serif' }}>{s.label}</Typography>
             <Typography sx={{ fontSize: '0.62rem', color: AMBER, fontFamily: '"Sora", sans-serif', mt: 0.5 }}>
@@ -1303,6 +1339,7 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
         <RentalListDialog
           title={listDialog.title} rentals={listDialog.items}
           open={!!listDialog} onClose={() => setListDialog(null)} onSave={onSave}
+          verificationMode={listDialog.verificationMode}
         />
       )}
     </Box>
@@ -1350,6 +1387,12 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
     setEditForm(null);
   };
 
+  const monitoringStatusValues = editingRental && isV2RentalStatus(editingRental.status) && editingRental.renter_type
+    ? [editingRental.status, ...V2_NEXT_STATUSES[editingRental.status]]
+    : editingRental
+      ? [editingRental.status]
+      : [];
+
   const saveMonitoringEdit = async () => {
     if (!editingRental || !editForm) return;
     if (!editForm.cam_name_id_fk || !editForm.rent_date_start || !editForm.rent_date_end) {
@@ -1371,12 +1414,13 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
 
     setSaving(true);
     try {
+      let emailFailed = false;
       const parsedRentPrice = editForm.rent_price.trim() === '' ? null : Number(editForm.rent_price);
       const payload = {
         rent_date_start: editForm.rent_date_start,
-        pickup_time: editForm.pickup_time?.format('hh:mm A') ?? null,
+        pickup_time: editForm.pickup_time?.format('HH:mm:ss') ?? null,
         rent_date_end: editForm.rent_date_end,
-        return_time: editForm.return_time?.format('hh:mm A') ?? null,
+        return_time: editForm.return_time?.format('HH:mm:ss') ?? null,
         cam_name_id_fk: editForm.cam_name_id_fk,
         branch_id_fk: editForm.branch_id_fk || null,
         hub_pick_up_addr: editForm.rentalType === 'pickup' ? editForm.branch_id_fk : null,
@@ -1394,17 +1438,19 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
         await Promise.all(itemIdsToUpdate.map((itemId) => supabase.from('RB_ITEM').update({ status: itemStatus }).eq('id', itemId)));
       }
 
-      try {
-        await sendDueReminderEmailsIfNeeded({
-          rental: { ...editingRental, ...payload },
-          renter: editingRental.renter,
-        });
-      } catch (reminderError) {
-        console.error('Due reminder email check failed:', reminderError);
+      if (editForm.status !== editingRental.status) {
+        try {
+          await sendRentalStatusEmail({ status: editForm.status, rental: editingRental });
+        } catch (emailError) {
+          console.error('Failed to send monitoring status email:', emailError);
+          emailFailed = true;
+        }
       }
 
       await onSaved();
-      setSnackbar({ open: true, msg: 'Rental monitoring details updated.', severity: 'success' });
+      setSnackbar(emailFailed
+        ? { open: true, msg: 'Rental updated, but the status email could not be sent.', severity: 'warning' }
+        : { open: true, msg: 'Rental monitoring details updated.', severity: 'success' });
       setEditingRental(null);
       setEditForm(null);
     } catch (e) {
@@ -1418,9 +1464,7 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
   const monitoringRows = rentals.map((r, index) => {
     const rentPrice = Number(r.rent_price ?? 0);
     const renterName = r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—';
-    const isRepeatedRenter = rentals.some(
-      (rental) => rental.renter?.id === r.renter?.id && rental.status === 'completed' && rental.id !== r.id,
-    );
+    const renterType = r.renter?.id ? getRentalRenterType(r, rentals) : null;
 
     return {
       id: r.id,
@@ -1431,7 +1475,7 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
       rd: r.rent_date_end,
       name: renterName,
       unit: formatCompactRentalItems(r),
-      renter: r.renter?.id ? (isRepeatedRenter ? 'Repeat' : 'New') : '—',
+      renter: renterType ? (renterType === 'repeat' ? 'Repeat' : 'New') : '—',
       type: r.delivery_addr == null ? 'Pick-up' : 'Deliver',
       hub: r.pickupBranch?.location_name ?? r.delivery_addr ?? '—',
       groupChat: Boolean(r.messenger_link),
@@ -1529,7 +1573,7 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
             <FormControl fullWidth>
               <InputLabel>Status</InputLabel>
               <Select value={editForm.status} label="Status" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, status: e.target.value as RentalStatus }))}>
-                {Object.entries(RENTAL_STATUS_META).map(([value, meta]) => <MenuItem key={value} value={value}>{meta.label}</MenuItem>)}
+                {monitoringStatusValues.map((value) => <MenuItem key={value} value={value}>{RENTAL_STATUS_META[value]?.label ?? value}</MenuItem>)}
               </Select>
             </FormControl>
           </DialogContent>
@@ -1552,238 +1596,80 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; onSave: (id: string, updates: RentalUpdatePayload) => Promise<void> }> = ({ rentals, items, onSave }) => {
-  const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
   const [selectedCamera, setSelectedCamera] = useState('all');
   const [selectedRental, setSelectedRental] = useState<EnrichedRental | null>(null);
-  const [listDialog, setListDialog] = useState<{ date: Dayjs; rentals: EnrichedRental[] } | null>(null);
+  const [visibleRange, setVisibleRange] = useState<CalendarVisibleRange | null>(null);
 
-  const calStart = currentMonth.startOf('month').startOf('week');
-  const calEnd   = currentMonth.endOf('month').endOf('week');
+  const preparedCalendarRentals = useMemo(() => prepareRentalCalendarEntries(rentals, {
+    selectedCamera,
+    visibleRange,
+    getItemIds: getRentalItemIds,
+  }), [rentals, selectedCamera, visibleRange]);
 
-  const days: Dayjs[] = [];
-  let cur = calStart;
-  while (cur.isSameOrBefore(calEnd, 'day')) { days.push(cur); cur = cur.add(1, 'day'); }
+  const calendarEvents: EventInput[] = useMemo(() => preparedCalendarRentals.map((entry) => {
+    const { rental } = entry;
+    const primaryItem = getPrimaryRentalItem(rental);
+    const cameraName = primaryItem?.device?.cam_name ?? primaryItem?.code_name ?? 'Camera';
+    const firstName = rental.renter?.renter_fname?.trim() || 'Renter';
+    const lastInitial = rental.renter?.renter_lname?.trim().charAt(0);
+    const renterName = lastInitial ? `${firstName} ${lastInitial}.` : firstName;
+    const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META.submitted;
 
-  const weeks: Dayjs[][] = [];
-  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+    return buildRentalCalendarEvent(entry, {
+      title: `${cameraName} — ${renterName}`,
+      color: meta.bg,
+      contrastColor: meta.color,
+      extendedProps: {
+        renterId: rental.renter_id_fk,
+        status: rental.status,
+        renterName,
+        cameraName,
+        unitCode: primaryItem?.code_name ?? null,
+        branchId: rental.branch_id_fk,
+      },
+    });
+  }), [preparedCalendarRentals]);
 
-  const visibleCalendarRentals = rentals.filter(
-    (rental) => !HIDDEN_DASHBOARD_STATUSES.includes(
-      String(rental.status ?? '').toLowerCase()
-    )
-  );
-  const filtered = selectedCamera === 'all' ? visibleCalendarRentals : visibleCalendarRentals.filter((r) => r.cam_name_id_fk === selectedCamera);
+  const handleVisibleRangeChange = useCallback((nextRange: CalendarVisibleRange) => {
+    setVisibleRange((current) => (
+      current?.start === nextRange.start && current.endExclusive === nextRange.endExclusive
+        ? current
+        : nextRange
+    ));
+  }, []);
 
   const openRentalById = (rentalId: string) => {
-    const clickedRental = visibleCalendarRentals.find((r) => r.id === rentalId);
-    if (clickedRental) setSelectedRental(clickedRental);
+    const rental = rentals.find((candidate) => candidate.id === rentalId);
+    if (rental) setSelectedRental(rental);
   };
 
   return (
     <Box>
-      {/* Controls */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <IconButton onClick={() => setCurrentMonth((m) => m.subtract(1, 'month'))} size="small" sx={{ color: AMBER, border: `1px solid ${BORDER}`, '&:hover': { background: 'rgba(201,151,58,0.08)' } }}>
-            <ChevronLeftIcon />
-          </IconButton>
-          <Typography sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', fontWeight: 700, fontSize: '1.2rem', minWidth: 180, textAlign: 'center' }}>
-            {currentMonth.format('MMMM YYYY')}
-          </Typography>
-          <IconButton onClick={() => setCurrentMonth((m) => m.add(1, 'month'))} size="small" sx={{ color: AMBER, border: `1px solid ${BORDER}`, '&:hover': { background: 'rgba(201,151,58,0.08)' } }}>
-            <ChevronRightIcon />
-          </IconButton>
-        </Box>
-
-        <FormControl size="small" sx={{ minWidth: 260 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+        <FormControl size="small" sx={{ width: { xs: '100%', sm: 300 } }}>
           <InputLabel sx={{ color: MUTED, fontSize: '0.82rem' }}>Filter by camera</InputLabel>
-          <Select value={selectedCamera} onChange={(e: SelectChangeEvent) => setSelectedCamera(e.target.value)} label="Filter by camera">
+          <Select value={selectedCamera} onChange={(event: SelectChangeEvent) => setSelectedCamera(event.target.value)} label="Filter by camera">
             <MenuItem value="all">All cameras</MenuItem>
-            {items.map((it) => (
-              <MenuItem key={it.id} value={it.id}>
-                <Typography sx={{ fontSize: '0.82rem' }}>{it.device?.cam_name ?? '—'} · {it.code_name}</Typography>
+            {items.map((item) => (
+              <MenuItem key={item.id} value={item.id}>
+                <Typography sx={{ fontSize: '0.82rem' }}>{item.device?.cam_name ?? '—'} · {item.code_name}</Typography>
               </MenuItem>
             ))}
           </Select>
         </FormControl>
       </Box>
 
-      {/* Day headers */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', mb: 0.5 }}>
-        {DAYS.map((d) => (
-          <Box key={d} sx={{ textAlign: 'center', py: 0.75 }}>
-            <Typography sx={{ color: MUTED, fontFamily: '"Sora", sans-serif', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{d}</Typography>
-          </Box>
-        ))}
-      </Box>
+      <RentalCalendar
+        events={calendarEvents}
+        onRentalClick={openRentalById}
+        onVisibleRangeChange={handleVisibleRangeChange}
+      />
 
-      {/* Weekly rows with spanning bars */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        {weeks.map((week, wi) => {
-          const weekStart = week[0];
-          const weekEnd   = week[6];
-          const weekRentals = filtered.filter((r) =>
-            dayjs(r.rent_date_start).isSameOrBefore(weekEnd, 'day') &&
-            dayjs(r.rent_date_end).isSameOrAfter(weekStart, 'day')
-          );
-          const sortedWeekRentals = [...weekRentals].sort((a, b) =>
-            dayjs(a.rent_date_start).valueOf() - dayjs(b.rent_date_start).valueOf()
-          );
-
-          const slotMap: Record<string, number> = {};
-          const slotEndCols: number[] = [];
-          sortedWeekRentals.forEach((r) => {
-            const rStart = dayjs(r.rent_date_start);
-            const rEnd = dayjs(r.rent_date_end);
-            const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
-            const colEnd = rEnd.isAfter(weekEnd, 'day') ? 6 : rEnd.day();
-
-            let assignedSlot = slotEndCols.findIndex((endCol) => colStart > endCol);
-            if (assignedSlot === -1) {
-              assignedSlot = slotEndCols.length;
-              slotEndCols.push(colEnd);
-            } else {
-              slotEndCols[assignedSlot] = colEnd;
-            }
-            slotMap[r.id] = assignedSlot;
-          });
-
-          const MAX_VISIBLE_ROWS = 3;
-          const hiddenByStartDay: Record<string, number> = {};
-          sortedWeekRentals.forEach((r) => {
-            const slot = slotMap[r.id] ?? 0;
-            if (slot < MAX_VISIBLE_ROWS) return;
-            const rentalStart = dayjs(r.rent_date_start);
-            if (!rentalStart.isSameOrAfter(weekStart, 'day') || !rentalStart.isSameOrBefore(weekEnd, 'day')) return;
-            const startKey = rentalStart.format('YYYY-MM-DD');
-            hiddenByStartDay[startKey] = (hiddenByStartDay[startKey] ?? 0) + 1;
-          });
-
-          const moreIndicators = week
-            .map((day) => {
-              const hiddenCount = hiddenByStartDay[day.format('YYYY-MM-DD')] ?? 0;
-              return hiddenCount > 0 ? { day, hiddenCount } : null;
-            })
-            .filter((entry): entry is { day: Dayjs; hiddenCount: number } => !!entry);
-
-          return (
-            <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', position: 'relative', mb: '2px' }}>
-              {/* Day cells */}
-              {week.map((day) => {
-                const isCurrentMonth = day.month() === currentMonth.month();
-                const isToday        = day.isSame(dayjs(), 'day');
-                return (
-                  <Box key={day.format('YYYY-MM-DD')} sx={{
-                    minHeight: 112,
-                    borderRadius: 1.5,
-                    border: isToday ? `2px solid ${AMBER}` : `1px solid ${BORDER}`,
-                    background: isCurrentMonth ? CARD_BG : 'rgba(201,151,58,0.015)',
-                    pt: 0.75, px: 0.75, pb: '44px',
-                  }}>
-                    <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Sora", sans-serif', fontWeight: isToday ? 800 : 500, color: isToday ? AMBER : isCurrentMonth ? ESPRESSO : MUTED, lineHeight: 1 }}>
-                      {day.format('D')}
-                    </Typography>
-                  </Box>
-                );
-              })}
-
-              {/* Spanning rental bars */}
-              {sortedWeekRentals.filter((r) => (slotMap[r.id] ?? 0) < MAX_VISIBLE_ROWS).map((r) => {
-                const rStart   = dayjs(r.rent_date_start);
-                const rEnd     = dayjs(r.rent_date_end);
-                const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
-                const colEnd   = rEnd.isAfter(weekEnd, 'day')      ? 6 : rEnd.day();
-                const isStart  = rStart.isSameOrAfter(weekStart, 'day') && rStart.isSameOrBefore(weekEnd, 'day');
-                const isEnd    = rEnd.isSameOrAfter(weekStart, 'day')   && rEnd.isSameOrBefore(weekEnd, 'day');
-                const slot     = slotMap[r.id] ?? 0;
-                const meta     = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META.submitted;
-                const firstName = r.renter?.renter_fname ?? getPrimaryRentalItem(r)?.code_name ?? '?';
-
-                return (
-                  <Box
-                    key={r.id}
-                    sx={{
-                      position: 'absolute',
-                      top: `${36 + slot * 19}px`,
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(7, 1fr)',
-                      left: 0,
-                      right: 0,
-                      px: '2px',
-                      height: 16,
-                      zIndex: 5,
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    <Box
-                      onClick={() => openRentalById(r.id)}
-                      sx={{
-                        gridColumn: `${colStart + 1} / ${colEnd + 2}`,
-                        background: meta.bg,
-                        border: `1px solid ${meta.border}`,
-                        borderRadius: isStart && isEnd ? '5px' : isStart ? '5px 0 0 5px' : isEnd ? '0 5px 5px 0' : '0',
-                        display: 'flex',
-                        alignItems: 'center',
-                        px: 0.75,
-                        overflow: 'hidden',
-                        minWidth: 0,
-                        cursor: 'pointer',
-                        pointerEvents: 'auto',
-                        transition: 'filter 0.12s',
-                        '&:hover': { filter: 'brightness(0.9)' },
-                      }}
-                    >
-                      {isStart && (
-                        <Typography sx={{ fontSize: '0.6rem', color: meta.color, fontFamily: '"Sora", sans-serif', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {firstName}
-                        </Typography>
-                      )}
-                    </Box>
-                  </Box>
-                );
-              })}
-
-              {moreIndicators.map(({ day, hiddenCount }) => (
-                <Button
-                  key={`more-${day.format('YYYY-MM-DD')}`}
-                  size="small"
-                  onClick={() => {
-                    const dayRentals = filtered.filter((r) => dayjs(r.rent_date_start).isSame(day, 'day'));
-                    setListDialog({ date: day, rentals: dayRentals });
-                  }}
-                  sx={{
-                    position: 'absolute',
-                    top: '92px',
-                    left: `calc(${(day.day() / 7) * 100}% + 6px)`,
-                    minWidth: 0,
-                    px: 0.8,
-                    py: 0.1,
-                    lineHeight: 1.2,
-                    fontSize: '0.65rem',
-                    fontFamily: '"Sora", sans-serif',
-                    textTransform: 'none',
-                    color: AMBER_DARK,
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: 1.5,
-                    background: 'rgba(201,151,58,0.10)',
-                    zIndex: 8,
-                    '&:hover': { background: 'rgba(201,151,58,0.18)' },
-                  }}
-                >
-                  +{hiddenCount} more
-                </Button>
-              ))}
-            </Box>
-          );
-        })}
-      </Box>
-
-      {/* Legend — statuses relevant to calendar scheduling */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2.5 }}>
-        {(['in-review', 'for-delivery', 'delivered', 'renting', 'for-return', 'extended', 'for-refund', 'for-penalty', 'completed'] as const).map((key) => {
-          const meta = RENTAL_STATUS_META[key];
+        {V2_RENTAL_STATUSES.map((status) => {
+          const meta = RENTAL_STATUS_META[status];
           return (
-            <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <Box key={status} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
               <Box sx={{ width: 24, height: 10, borderRadius: 1, background: meta.bg, border: `1px solid ${meta.border}` }} />
               <Typography sx={{ color: MUTED, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif' }}>{meta.label}</Typography>
             </Box>
@@ -1791,55 +1677,19 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
         })}
       </Box>
 
-      {listDialog && (
-        <Dialog
-          open={!!listDialog}
-          onClose={() => setListDialog(null)}
-          maxWidth="sm"
-          fullWidth
-          PaperProps={{ sx: { background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 3 } }}
-        >
-          <DialogTitle sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            Bookings — {listDialog.date.format('MMM D, YYYY')}
-            <IconButton onClick={() => setListDialog(null)} size="small" sx={{ color: MUTED }}>
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </DialogTitle>
-          <DialogContent sx={{ pt: 1 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {listDialog.rentals.map((r) => (
-                <Box
-                  key={r.id}
-                  onClick={() => {
-                    openRentalById(r.id);
-                    setListDialog(null);
-                  }}
-                  sx={{ p: 1.4, borderRadius: 2, border: `1px solid ${BORDER}`, background: 'rgba(201,151,58,0.04)', cursor: 'pointer', '&:hover': { background: 'rgba(201,151,58,0.09)' } }}
-                >
-                  <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.86rem' }}>{formatCompactRentalItems(r)}</Typography>
-                  <Typography sx={{ color: INK, fontSize: '0.8rem' }}>{r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—'}</Typography>
-                  <Typography sx={{ color: MUTED, fontSize: '0.76rem' }}>{r.renter?.mobile_no ?? 'No contact number'}</Typography>
-                </Box>
-              ))}
-            </Box>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Rental detail — opens verification page if pending */}
       {selectedRental && (
         <RentalDetailDialog
           rental={selectedRental}
-          open={!!selectedRental}
+          open
           onClose={() => setSelectedRental(null)}
           onSave={onSave}
+          allowVerificationLink={false}
         />
       )}
     </Box>
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════════
 // TAB 2 — INVENTORY
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1873,7 +1723,7 @@ const AddDeviceDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: (
         const path = `devices/${Date.now()}_${imgFile.name}`;
         const { data, error: upErr } = await supabase.storage.from('verification-images').upload(path, imgFile, { upsert: true });
         if (upErr) throw new Error(upErr.message);
-        device_img = supabase.storage.from('verification-images').getPublicUrl(data.path).data.publicUrl;
+        device_img = data.path;
       }
       const { error: insErr } = await supabase.from('RB_DEVICES').insert({ cam_name: camName, device_img });
       if (insErr) throw new Error(insErr.message);
@@ -2099,8 +1949,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
         const path = `devices/${Date.now()}_${imgFile.name}`;
         const { data, error } = await supabase.storage.from('verification-images').upload(path, imgFile, { upsert: true });
         if (!error) {
-          const url = supabase.storage.from('verification-images').getPublicUrl(data.path).data.publicUrl;
-          await supabase.from('RB_DEVICES').update({ device_img: url }).eq('id', item.device_id_fk);
+          await supabase.from('RB_DEVICES').update({ device_img: data.path }).eq('id', item.device_id_fk);
         }
       }
       await supabase.from('RB_ITEM').update({
@@ -2672,12 +2521,18 @@ const AdminDashboard: React.FC = () => {
       supabase.from('RB_RENTAL_FORM').select('*').order('created_at', { ascending: false }),
     ]);
 
-    setDevices(devsRaw ?? []);
+    const signedDevices = await signDeviceImages((devsRaw ?? []) as RbDevice[]);
+    const signedDeviceMap = new Map(signedDevices.map((device) => [device.id, device]));
+    const hydrateItemDevice = (item: EnrichedItem): EnrichedItem => ({
+      ...item,
+      device: item.device?.id ? signedDeviceMap.get(item.device.id) ?? item.device : item.device,
+    });
+    setDevices(signedDevices);
     setBranches(branchesRaw ?? []);
-    setItems((itemsRaw ?? []) as EnrichedItem[]);
+    setItems(((itemsRaw ?? []) as EnrichedItem[]).map(hydrateItemDevice));
 
     const devMap: Record<string, RbDevice> = {};
-    (devsRaw ?? []).forEach((d: RbDevice) => { devMap[d.id] = d; });
+    signedDevices.forEach((d) => { devMap[d.id] = d; });
 
     if (rentalsRaw && rentalsRaw.length > 0) {
       const rf = rentalsRaw as RbRentalForm[];
@@ -2698,7 +2553,7 @@ const AdminDashboard: React.FC = () => {
       const iMap: Record<string, EnrichedItem> = {};
       const rMap: Record<string, RbRenter>     = {};
       const bMap: Record<string, RbBranch>     = {};
-      (rentItemsRaw    ?? []).forEach((it: EnrichedItem) => { iMap[it.id] = it; });
+      (rentItemsRaw    ?? []).forEach((it: EnrichedItem) => { iMap[it.id] = hydrateItemDevice(it); });
       (rentersRaw      ?? []).forEach((r: RbRenter)      => { rMap[r.id]  = r; });
       (rentBranchesRaw ?? []).forEach((b: RbBranch)      => { bMap[b.id]  = b; });
 
@@ -2758,49 +2613,6 @@ const AdminDashboard: React.FC = () => {
     if (tab === 4 && !agreementMd && !agreementLoading) void Promise.resolve().then(loadAgreement);
   }, [tab, agreementMd, agreementLoading, loadAgreement]);
 
-  const markOverdueRentalsCompleted = useCallback(async () => {
-    const today = dayjs().startOf('day');
-    const overdueRentals = rentals.filter((r) => {
-      const endDate = dayjs(r.rent_date_end).startOf('day');
-      return (
-        endDate.isBefore(today) &&
-        !['completed', 'canceled', 'declined', 'for-penalty'].includes(r.status)
-      );
-    });
-
-    if (overdueRentals.length === 0) return;
-
-    const updates = overdueRentals.map((r) =>
-      supabase
-        .from('RB_RENTAL_FORM')
-        .update({
-          status: 'completed',
-          actual_return_date: today.format('YYYY-MM-DD'),
-        })
-        .eq('id', r.id)
-    );
-
-    await Promise.all(updates);
-
-    const itemUpdates = overdueRentals.flatMap((r) =>
-      getRentalItemIds(r).map((itemId) =>
-        supabase
-          .from('RB_ITEM')
-          .update({ status: 'Available' })
-          .eq('id', itemId)
-      )
-    );
-
-    if (itemUpdates.length > 0) await Promise.all(itemUpdates);
-    await fetchAll();
-  }, [fetchAll, rentals]);
-
-  useEffect(() => {
-    if (!loading && rentals.length > 0) {
-      void Promise.resolve().then(markOverdueRentalsCompleted);
-    }
-  }, [loading, rentals, markOverdueRentalsCompleted]);
-
   const handleSaveStatus = useCallback(async (
     id: string,
     updates: RentalUpdatePayload
@@ -2833,7 +2645,6 @@ const AdminDashboard: React.FC = () => {
       return_time: updates.return_time || null,
     };
     if (updates.status === 'completed') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
-    if (updates.status === 'for-penalty') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
 
     const { error: updateError } = await supabase.from('RB_RENTAL_FORM').update(payload).eq('id', id);
     if (updateError) {
@@ -2855,7 +2666,7 @@ const AdminDashboard: React.FC = () => {
       await Promise.all(nextItemIds.map((itemId) => supabase.from('RB_ITEM').update({ status: itemStatus }).eq('id', itemId)));
     }
 
-    if (targetRental) {
+    if (targetRental && updates.status !== targetRental.status) {
       const updatedRental = {
         ...targetRental,
         ...payload,
@@ -2877,14 +2688,6 @@ const AdminDashboard: React.FC = () => {
         });
       }
 
-      try {
-        await sendDueReminderEmailsIfNeeded({
-          rental: updatedRental,
-          renter: targetRental.renter,
-        });
-      } catch (reminderError) {
-        console.error('Due reminder email check failed:', reminderError);
-      }
     }
 
     await fetchAll();

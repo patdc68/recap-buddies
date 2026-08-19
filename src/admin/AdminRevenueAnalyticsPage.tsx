@@ -26,6 +26,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<RbBranch[]>([]);
   const [rentals, setRentals] = useState<EnrichedRental[]>([]);
+  const [rentalHistory, setRentalHistory] = useState<RbRentalForm[]>([]);
 
   const selectedYear = Number(params.get('year')) || dayjs().year();
   const selectedMonth = Math.min(Math.max(Number(params.get('month')) || dayjs().month() + 1, 1), 12);
@@ -58,6 +59,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
       .map((r) => ({ ...r, item: r.cam_name_id_fk ? itemMap[r.cam_name_id_fk] : undefined }));
 
     setBranches((branchesRaw as RbBranch[]) ?? []);
+    setRentalHistory(allRentals);
     setRentals(monthRentals);
     setLoading(false);
   }, [navigate, selectedMonth, selectedYear]);
@@ -72,7 +74,15 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
 
     rentals.forEach((r) => {
       if (!r.renter_id_fk) return;
-      const isRepeatedRenter = rentals.some((rental) => rental.renter_id_fk === r.renter_id_fk && rental.status === 'completed' && rental.id !== r.id);
+      const isRepeatedRenter = r.renter_type === 'returnee' || (
+        r.renter_type == null
+        && rentalHistory.some((rental) => (
+          rental.renter_id_fk === r.renter_id_fk
+          && rental.status === 'completed'
+          && rental.id !== r.id
+          && dayjs(rental.created_at).isBefore(dayjs(r.created_at))
+        ))
+      );
       const type: 'new' | 'repeat' = isRepeatedRenter ? 'repeat' : 'new';
       const branch = branchLookup[r.item?.branch_id_fk ?? ''] ?? 'Unassigned';
       const revenue = Number(r.rent_price ?? 0) || 0;
@@ -89,7 +99,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
     const newRenter = toRows(grouped.new);
     const repeatRenter = toRows(grouped.repeat);
     return { newRenter, repeatRenter, overallUnits: newRenter.totalUnits + repeatRenter.totalUnits, overallRevenue: newRenter.totalRevenue + repeatRenter.totalRevenue };
-  }, [branches, rentals]);
+  }, [branches, rentalHistory, rentals]);
 
   if (loading) {
     return (

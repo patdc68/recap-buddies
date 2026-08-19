@@ -4,7 +4,16 @@
 
 This repository is **Recap Buddies**, a camera-rental web application.
 
-Treat this file as the primary Codex instruction set for this repository. Before making changes, inspect the current codebase and use the repository and connected development Supabase project as the source of truth when implementation details have evolved.
+Treat this file as the primary Codex instruction set for this repository.
+
+Before changing anything, inspect the current repository and, when relevant, use the connected MCP servers as live development sources of truth.
+
+The currently configured MCP servers are:
+
+- `supabase`
+- `resend`
+
+Do not assume MCP is unavailable without checking the active MCP inventory first.
 
 ## Engineering Role
 
@@ -20,7 +29,9 @@ Prioritize:
 6. Consistency with existing code
 7. Performance where it materially matters
 
-Prefer small, complete, validated changes over broad rewrites.
+Prefer the smallest complete solution that satisfies the request.
+
+Do not turn focused tasks into broad rewrites.
 
 ## Current Technology Stack
 
@@ -36,69 +47,45 @@ The project currently uses:
 - Recharts
 - Supabase
   - PostgreSQL
-  - Auth
+  - Authentication
   - Storage
   - Edge Functions
 - Vercel
 - Resend for transactional email
+- Codex MCP integrations for Supabase and Resend
 
-Do not replace these core technologies or introduce overlapping alternatives unless clearly required.
+Do not replace these core technologies or add overlapping alternatives unless the task clearly requires it.
 
-## Before Making Changes
+Always inspect `package.json`, project configuration, and nearby implementation before choosing a new dependency or pattern.
 
-For non-trivial work:
+## Codex Working Process
 
-1. Inspect relevant repository files.
-2. Inspect the applicable database/schema state through `supabase_recap` MCP when connected.
-3. Trace the complete affected workflow.
-4. Identify affected:
-   - components;
-   - hooks;
-   - types;
-   - forms;
-   - validation;
-   - queries;
-   - migrations;
-   - RLS/security policies;
-   - Storage;
-   - Edge Functions;
-   - analytics;
-   - notifications.
-5. Search for existing project patterns before creating new ones.
-6. Implement the smallest complete solution.
-7. Review the diff and any generated migration.
-8. Run relevant validation.
-9. Report only checks actually performed.
+For every non-trivial task:
 
-Do not ask the user for information that the repository or safely connected MCP tools can answer.
+1. Read the relevant repository files.
+2. Inspect the existing implementation before editing it.
+3. Identify affected components, hooks, types, forms, validation, Supabase queries, migrations, RLS policies, Edge Functions, email logic, analytics, and tests.
+4. Use MCP when live service state is relevant.
+5. Prefer the smallest correct change.
+6. Review the diff.
+7. Run relevant validation.
+8. Report only checks and MCP actions actually performed.
+
+Do not ask the user for information that the repository or connected MCP tools can safely answer.
 
 ## Scope Discipline
 
-- Keep changes focused on the requested task.
-- Preserve unrelated behavior.
+- Keep edits focused on the requested task.
+- Preserve unrelated working behavior.
 - Do not perform unrelated cleanup.
-- Do not mass-format files.
+- Do not mass-format unrelated files.
 - Do not silently change business rules.
-- Do not remove working behavior not mentioned by the task.
-- Mention unrelated issues separately.
+- Do not remove working features that were not requested.
+- If an unrelated issue is found, mention it separately.
 
-## Core Domain
+## Project Domain
 
-Recap Buddies manages:
-
-- renter registration and verification;
-- Admin/Staff access;
-- branches;
-- camera/device models;
-- rentable inventory;
-- rentals;
-- rental statuses;
-- scheduling/calendar behavior;
-- operational monitoring;
-- pricing;
-- analytics;
-- email notifications;
-- editable public/footer content.
+Recap Buddies manages renter registration and verification, Admin/Staff access, branches, camera/device models, physical camera inventory, rentals, rental status workflow, scheduling/calendar behavior, operational monitoring, pricing, analytics, email notifications, and editable public/footer content.
 
 ## Database Conventions
 
@@ -114,103 +101,44 @@ Known tables include:
 - `RB_RENTAL_FORM`
 - `SELFIE_VERIFICATION_INST`
 
-Before relying on a column or relationship:
+The connected development Supabase project is the preferred live source of truth for the current schema.
 
-1. inspect repository query/type definitions;
-2. inspect the development database using `supabase_recap`;
-3. verify migrations;
-4. never fabricate missing fields.
+Never fabricate a column, relationship, policy, trigger, or function.
+
+Before relying on a database field:
+
+1. inspect the repository;
+2. inspect Supabase through MCP when relevant;
+3. inspect migrations;
+4. reconcile any mismatch before coding against it.
 
 ## Known Core Fields
 
 ### `RB_USER`
 
-Known fields:
-
-- `id`
-- `role`
-- `branch_id`
-- `user_fname`
-- `user_lname`
-- `auth_user_id`
-- `created_at`
+Known fields include `id`, `role`, `branch_id`, `user_fname`, `user_lname`, `auth_user_id`, and `created_at`.
 
 ### `RB_BRANCHES`
 
-Known fields:
-
-- `id`
-- `location_name`
-- `location_addr`
-- `created_at`
+Known fields include `id`, `location_name`, `location_addr`, and `created_at`.
 
 ### `RB_DEVICES`
 
-Known fields:
-
-- `id`
-- `cam_name`
-- `device_img`
-- `created_at`
+Known fields include `id`, `cam_name`, `device_img`, and `created_at`.
 
 ### `RB_ITEM`
 
-Known fields:
-
-- `id`
-- `cam_name`
-- `serial_no`
-- `code_name`
-- `branch_id`
-- `avail_qty`
-- `total_qty`
-- `condition`
-- `gps`
-- `image_url`
-- `rent_price`
-- `created_at`
+Known fields include `id`, `cam_name`, `serial_no`, `code_name`, `branch_id`, `avail_qty`, `total_qty`, `condition`, `gps`, `image_url`, `rent_price`, and `created_at`.
 
 ### `RB_RENTER`
 
-Known fields:
-
-- `id`
-- `renter_fname`
-- `renter_lname`
-- `mobile_no`
-- `emergency_contact_no`
-- `email`
-- `auth_user_id`
-- `primary_id_front`
-- `primary_id_back`
-- `secondary_id_front`
-- `secondary_id_back`
-- `proof_of_billing`
-- `selfie_verification_id`
-- `selfie_verification_img`
-- `created_at`
+Known fields include `id`, `renter_fname`, `renter_lname`, `mobile_no`, `emergency_contact_no`, `email`, `auth_user_id`, `primary_id_front`, `primary_id_back`, `secondary_id_front`, `secondary_id_back`, `proof_of_billing`, `selfie_verification_id`, `selfie_verification_img`, and `created_at`.
 
 ### `RB_RENTAL_FORM`
 
-Known fields:
+Known fields include `id`, `renter_id`, `branch_id`, `status`, `rent_date_start`, `rent_date_end`, `pickup_time`, `return_time`, `actual_return_date`, `total_price`, `rent_price`, `remarks`, `messenger_link`, `delivery_addr`, and `created_at`.
 
-- `id`
-- `renter_id`
-- `branch_id`
-- `status`
-- `rent_date_start`
-- `rent_date_end`
-- `pickup_time`
-- `return_time`
-- `actual_return_date`
-- `total_price`
-- `rent_price`
-- `remarks`
-- `messenger_link`
-- `delivery_addr`
-- `created_at`
-
-The connected development schema takes precedence if these details have changed.
+If MCP or migration history shows a different current schema, follow the actual connected development schema and update repository contracts accordingly.
 
 ## Rental Statuses
 
@@ -228,97 +156,57 @@ Known statuses include:
 - Declined
 - Completed
 
-Use the existing source of truth.
+Use the current source of truth in the repository.
 
-Do not maintain duplicate status lists.
+Do not maintain duplicate status arrays or enums that can drift apart.
 
-When adding/changing a status, inspect:
-
-- forms;
-- dropdowns;
-- filters;
-- renter dashboard;
-- Admin/Staff views;
-- monitoring;
-- calendar;
-- inventory availability;
-- analytics;
-- notifications;
-- status-dependent actions.
+When adding or changing a status, inspect forms, dropdowns, filters, renter dashboard, Admin/Staff views, monitoring, calendar, inventory availability, analytics, email notifications, and status-dependent actions.
 
 ## Roles and Authorization
 
-Known roles:
-
-- Admin
-- Staff
+Known application roles include Admin and Staff.
 
 Preserve permission boundaries.
 
-Do not accidentally grant Staff Admin-only operations.
+Do not accidentally give Staff Admin-only operations.
 
 Hidden UI is not authorization.
 
-Preserve backend/database authorization where applicable.
+Where applicable, preserve authorization at frontend route level, server/Edge Function level, and database/RLS level.
 
 ## Renter Verification
 
-Known renter setup can include:
+Renter setup may include primary ID, secondary ID, proof of billing, and selfie verification.
 
-- primary ID;
-- secondary ID;
-- proof of billing;
-- selfie verification.
+The selfie requirement should remain practical. Known guidance may include a clear face, good lighting, no mask, no shades, and no cap or obstruction.
 
-Selfie guidance should remain practical:
-
-- clear face;
-- good lighting;
-- no mask;
-- no shades;
-- no cap/face obstruction.
-
-Do not add unnecessary verification friction.
+Do not add unnecessary verification friction unless explicitly requested.
 
 ## Repeat Renter Logic
 
 Repeat-renter behavior is based on prior completed rentals.
 
-Keep a single source of truth across:
+Keep one source of truth across monitoring, calendar details, analytics, renter labels, and reports.
 
-- calendar details;
-- monitoring;
-- analytics;
-- renter labels.
-
-Do not implement competing calculations.
+Do not implement separate competing repeat-renter calculations.
 
 ## Inventory
 
-`RB_ITEM` represents actual rentable inventory.
+`RB_ITEM` represents physical rentable inventory.
 
-Known concepts:
+Known concepts include branch, camera/device type, `code_name`, serial number, condition, GPS, image, rental price, and availability.
 
-- branch;
-- camera/device;
-- `code_name`;
-- serial number;
-- condition;
-- GPS;
-- image;
-- rental price;
-- availability.
+When modifying assignment logic:
 
-When changing assignment:
-
-- preserve active-rental protection;
-- avoid unavailable items;
+- preserve active-rental protections;
+- do not assign unavailable items;
 - preserve branch relationships;
-- keep quantity/availability logic consistent.
+- keep quantity/availability calculations consistent;
+- avoid duplicate availability logic.
 
-`RB_DEVICES` may be used for renter-facing model selection to avoid duplicate physical units.
+`RB_DEVICES` may be used for model-level renter selection to avoid displaying duplicate physical units.
 
-Verify before implementation.
+Verify the current intended usage before changing selection logic.
 
 ## Calendar and Date Safety
 
@@ -326,283 +214,276 @@ Date behavior is high-risk.
 
 Known expectations:
 
-- rentals may span multiple days;
-- start/end dates must display exactly as stored/selected;
-- clicking an event opens the matching rental;
-- overlapping rentals remain readable;
+- rentals can span multiple days;
+- start/end dates must display exactly as selected/stored;
+- clicking an event must open the correct rental;
+- overlapping rentals must remain readable;
 - overflow may use `+X more`.
 
 Avoid off-by-one-day regressions.
 
-For date-only values:
+For date-only database values:
 
 - treat them as calendar dates;
 - avoid UTC conversion unless intentionally required;
 - be cautious with `toISOString()`;
 - use existing Day.js conventions.
 
-When modifying rental dates, verify:
-
-- same-day rental;
-- multi-day rental;
-- month boundary;
-- displayed start;
-- displayed end;
-- edit dialog values;
-- event click mapping.
+When modifying rental dates, verify same-day rentals, multi-day rentals, month boundaries, displayed start/end dates, edit-dialog values, and calendar event-to-rental mapping.
 
 ## Time Fields
 
 `pickup_time` and `return_time` may be SQL time strings.
 
-Do not assume they contain a date or timezone.
+Do not assume they contain a date, timezone, or browser-parseable timestamp.
 
-Do not blindly parse raw SQL `TIME` values with browser date constructors.
+Do not blindly pass raw SQL `TIME` values to browser date constructors.
 
-Reuse existing time helpers.
+Reuse existing time parsing/formatting helpers when available.
 
 ## Monitoring
 
-Known monitoring concepts can include:
+The operational monitoring view may include PD, PT, RD, RT, renter full name, camera/unit, New/Repeat renter, Pick-up/Deliver type, branch/hub, messenger/group-chat link, rental fee, status, and actual unit / `code_name`.
 
-- PD = start date;
-- PT = pickup time;
-- RD = end date;
-- RT = return time;
-- renter name;
-- camera/unit;
-- New/Repeat;
-- Pick-up/Deliver;
-- branch/hub;
-- messenger/group-chat link;
-- rental fee;
-- status;
-- actual unit / `code_name`.
-
-Preserve DataGrid/table sorting/filtering/link/image behavior.
+Preserve existing DataGrid/table behavior including filtering, sorting, links, image interactions, and responsive behavior.
 
 ## Pricing
 
-Treat pricing as business-critical.
+Treat rental pricing as business-critical.
 
-Known fields may include:
+Known fields can include `rent_price` and `total_price`.
 
-- `rent_price`;
-- `total_price`.
-
-Determine whether each means:
-
-- daily price;
-- stored final price;
-- calculated total.
+Before changing calculations, determine whether each represents a daily rate, stored final total, or calculated total.
 
 Avoid double multiplication.
 
-Trace price use through forms, monitoring, analytics, email, and reporting.
+Trace pricing through rental creation, rental editing, monitoring, analytics, email, and reporting.
+
+Do not change pricing semantics during unrelated UI work.
 
 ## Analytics
 
-Known analytics may include:
+Known analytics may include total rentals per branch, revenue per branch, most-rented items/cameras, overall revenue, New vs Repeat renters, monthly analytics, and YTD analytics.
 
-- rentals per branch;
-- revenue per branch;
-- most-rented items;
-- overall revenue;
-- New vs Repeat renters;
-- monthly;
-- YTD.
+Use consistent calculation and filter logic.
 
-Use consistent calculation/filter rules.
+When changing analytics verify branch filters, date filters, inclusion/exclusion rules, canceled/declined treatment, no double counting, no-data states, current-period totals, and YTD totals.
 
-Verify:
-
-- branch filtering;
-- date filtering;
-- inclusion/exclusion rules;
-- no double-counting;
-- no-data state;
-- current-period and YTD totals.
-
-Do not silently redefine canceled/declined treatment.
+Charts, cards, and tables representing the same metric should derive from the same logic where possible.
 
 ## Forms
 
-Use React Hook Form + Zod patterns already present.
+Use established React Hook Form + Zod patterns.
 
-For field changes review:
+When adding or changing a field, update as applicable:
 
-- schema;
+- Zod schema;
 - TypeScript type;
-- default;
-- UI;
+- default value;
+- UI control;
 - edit population;
 - validation;
-- insert/update payload;
-- reporting/analytics impact.
+- insert payload;
+- update payload;
+- display/reporting;
+- analytics.
 
 Prevent duplicate async submissions.
 
+Preserve entered values after validation errors where practical.
+
 ## TypeScript
 
-- Avoid `any` as a shortcut.
-- Reuse shared types.
-- Handle nullable Supabase values.
-- Update query-result types when select shapes change.
-- Avoid unsafe assertions.
-- Do not use `@ts-ignore` just to silence errors.
+Keep TypeScript type-safe.
 
-After schema changes, regenerate/check Supabase TypeScript types when appropriate.
+- Avoid `any` as an error-suppression shortcut.
+- Reuse shared types.
+- Handle nullable Supabase values explicitly.
+- Update query-result/enriched types when selects change.
+- Avoid unsafe assertions.
+- Do not use `@ts-ignore` merely to silence errors.
+- Regenerate/check Supabase TypeScript types after relevant schema changes.
+
+Fix the underlying contract.
 
 ## Material UI and UX
 
 MUI is the primary component library.
 
-- Reuse theme/components.
-- Preserve responsive behavior.
-- Keep tables/dialogs/inputs/buttons consistent.
-- Reuse existing image-preview patterns.
+- Reuse existing theme/components.
+- Follow current `sx`/styling conventions.
+- Preserve responsiveness.
+- Keep tables, dialogs, inputs, typography, and buttons consistent.
+- Reuse existing image-preview behavior where available.
 - Do not add another UI framework.
 
-Preserve the established Recap Buddies visual language.
+Preserve the established Recap Buddies black/grey/white visual direction and configured project fonts where already implemented.
 
-## Supabase — Codex Is Allowed to Configure It
+Do not redesign unrelated screens during functional work.
 
-Codex is allowed to configure the **connected development/test Supabase project** when the requested task requires backend changes.
+## MCP Configuration
 
-Expected MCP server:
+This project currently has two working MCP servers:
 
-- `supabase_recap`
+- `supabase`
+- `resend`
 
-Codex may use Supabase MCP to:
+Codex should check `/mcp` or the active MCP inventory before concluding that either service is unavailable.
 
-- inspect tables/schema;
-- inspect migrations;
-- create and apply migrations;
-- execute necessary SQL;
-- create/alter tables, columns, constraints, indexes, views, functions, triggers, and policies when required;
-- configure Row Level Security through migrations/SQL;
-- inspect security/performance advisors;
-- inspect project logs;
-- generate TypeScript types;
-- inspect Edge Functions;
-- deploy/update Edge Functions;
-- inspect Storage buckets/config;
-- update Storage configuration when required;
-- search official Supabase documentation.
+A startup warning alone is not sufficient evidence that an MCP server failed.
 
-### Supabase Configuration Workflow
+If the MCP inventory exposes tools for a server, treat that server as available.
 
-When a task needs a Supabase change:
+## Supabase MCP
 
-1. Inspect current schema/config first.
-2. Determine the smallest required change.
-3. Prefer a migration for durable database/schema/RLS changes.
-4. Keep the migration represented in repository source control when the project uses migration files.
-5. Review the migration for destructive behavior.
-6. Apply it to the connected development/test project when necessary.
-7. Regenerate/check application types.
-8. Update frontend/backend code.
-9. Run relevant validation.
-10. Check security/performance advisors when the change affects schema, RLS, or queries.
-11. Report exactly what was configured.
+Expected server name:
 
-### Database Change Rules
+```text
+supabase
+```
 
-Prefer `apply_migration` for:
+The current MCP toolset includes capabilities such as:
 
-- tables;
-- columns;
-- constraints;
-- indexes;
-- functions;
-- triggers;
-- views;
-- RLS policies;
-- other durable DDL/config changes.
+- `apply_migration`
+- `create_branch`
+- `delete_branch`
+- `deploy_edge_function`
+- `execute_sql`
+- `generate_typescript_types`
+- `get_advisors`
+- `get_edge_function`
+- `get_project_url`
+- `get_publishable_keys`
+- `list_branches`
+- `list_edge_functions`
+- `list_extensions`
+- `list_migrations`
+- `list_tables`
+- `merge_branch`
+- `query_logs`
+- `rebase_branch`
+- `reset_branch`
+- `search_docs`
 
-Use direct SQL thoughtfully for inspection or changes that are genuinely appropriate outside a migration.
+Use the actual active MCP tool inventory as the source of truth because available tools can change.
 
-Do not make ad-hoc live schema changes without also preserving the intended schema change in repository migrations when migrations are part of this project.
+## Supabase MCP Is Allowed to Configure Development
 
-### RLS and Policies
+Codex is allowed to configure the connected **development/test Supabase project** when the requested task requires backend changes.
 
-Codex may create/update RLS policies when required.
+Codex may use Supabase MCP to inspect the live development schema, inspect tables and migrations, create and apply migrations, execute required SQL, create/alter tables and columns, create indexes, add constraints, create views, create database functions, create triggers, configure RLS policies through SQL/migrations, inspect logs, inspect security/performance advisors, generate TypeScript types, inspect Edge Functions, deploy Edge Functions, manage development branches when genuinely useful, and search official Supabase documentation.
+
+Do not stop after frontend implementation when the requested feature clearly requires a backend change.
+
+## Supabase Change Workflow
+
+When a task requires Supabase changes:
+
+1. Inspect the current repository implementation.
+2. Inspect the connected Supabase schema using MCP.
+3. Inspect migrations.
+4. Identify the minimum required change.
+5. Create a proper migration for durable schema/RLS changes.
+6. Review the migration for destructive behavior.
+7. Apply the migration to the connected development/test project when required.
+8. Generate/check TypeScript types.
+9. Update application code.
+10. Run relevant build/lint/tests.
+11. Check advisors/logs when useful.
+12. Report exactly what changed.
+
+Prefer durable migrations over undocumented live-only changes.
+
+## Database Write Rules
+
+Use migrations for durable changes such as tables, columns, indexes, foreign keys, constraints, RLS policies, views, database functions, and triggers.
+
+`execute_sql` may be used when appropriate, but do not use ad-hoc SQL as a substitute for a migration when the change should be reproducible.
+
+Do not apply destructive SQL without explicit user instruction.
+
+Never casually drop business tables, truncate customer/rental data, reset the database, destroy renter records, or remove unrelated columns.
+
+## RLS Rules
+
+Codex may configure RLS when required.
 
 Before changing RLS:
 
-- inspect current policies;
-- understand Admin/Staff/Renter access paths;
-- avoid broad `USING (true)` / unrestricted write policies unless explicitly justified;
-- preserve least privilege;
-- ensure authenticated users cannot access another renter's private records/documents.
+1. inspect current policies;
+2. understand renter/Admin/Staff access paths;
+3. preserve least privilege;
+4. avoid unrestricted access as a shortcut.
 
-Do not disable RLS as a shortcut.
+Do not disable RLS merely to make a query succeed.
 
-### Edge Functions
+Do not create broad unrestricted policies unless explicitly required and justified.
 
-Codex may inspect and deploy Edge Functions when required.
+Private renter verification data must not become broadly accessible.
+
+## Supabase Branching
+
+Supabase MCP currently exposes branch operations.
+
+Branching may be used for risky or larger database work when it materially reduces risk.
+
+Before using `create_branch`, `delete_branch`, `merge_branch`, `rebase_branch`, or `reset_branch`, understand the task and avoid destructive branch actions.
+
+Do not create/delete/reset branches unnecessarily.
+
+## Edge Functions
+
+Codex may inspect and deploy Supabase Edge Functions when the task requires it.
 
 For Edge Functions:
 
 - keep secrets server-side;
-- validate input;
-- preserve CORS;
-- return safe errors;
-- avoid leaking provider/internal details;
-- update repository source and deployed function consistently.
+- validate inputs;
+- preserve CORS behavior;
+- return meaningful HTTP statuses;
+- expose safe error payloads;
+- do not leak Resend credentials or internal errors;
+- keep repository source aligned with deployed code.
 
-### Storage
+When debugging an Edge Function, inspect both source code and Supabase logs.
 
-Codex may inspect/update Storage configuration if the MCP Storage feature is enabled.
+## Supabase Auth Limitations
 
-When changing Storage:
+Codex may configure database-side Auth behavior through triggers, functions, tables, RLS, application Auth code, and available MCP tools.
 
-- inspect current buckets and usage;
-- preserve existing paths;
-- avoid accidental deletion;
-- apply least-privilege access;
-- coordinate Storage policies with renter/admin access;
-- do not expose private verification documents publicly.
+Not every Supabase Dashboard Auth setting is guaranteed to be exposed through MCP.
 
-### Auth Configuration
+If a required provider/dashboard setting is unavailable through the current MCP tools:
 
-For Supabase Auth-related work:
+- clearly say what remains;
+- do not pretend it was configured;
+- do not invent an unsupported MCP action.
 
-- inspect current application Auth flow;
-- use available Supabase tools and repository configuration;
-- configure database-side Auth relationships/triggers/policies through migrations when appropriate;
-- do not invent provider settings;
-- do not disable authentication for convenience.
+## Supabase Security
 
-If a required Auth dashboard setting is not exposed by the available MCP tools, clearly identify that limitation instead of pretending it was configured.
+Never expose `service_role` in frontend code, commit secrets, hard-code database credentials, expose privileged keys, disable security controls as a shortcut, rotate keys unless explicitly requested, alter unrelated projects, or make account/billing changes.
 
-### Supabase MCP Safety
+Use MCP against the intended development/test project.
 
-This permission is for a **development/test project**, not normal production data.
+Production changes should follow the project's controlled release process.
 
-Never:
+## Resend MCP
 
-- drop/truncate business tables casually;
-- destroy existing user data;
-- reset the database;
-- disable RLS to make a task pass;
-- delete buckets/files unrelated to the task;
-- rotate keys;
-- create/pause/delete unrelated projects;
-- make account/billing changes;
-- connect normal Codex development to real production customer data.
+Expected server name:
 
-The project-scoped MCP configuration intentionally excludes account-management access.
+```text
+resend
+```
 
-MCP write operations should remain approval-gated.
+The active Resend MCP currently exposes tools for email sending, email status, email cancellation/update, API logs, domains, domain verification, templates, broadcasts, automations, contacts, contact imports, segments, suppressions, topics, webhooks, received email, OAuth grants, and API keys.
 
-## Resend
+Use the actual current MCP inventory as the source of truth.
 
-Resend is used for transactional email, typically through server-side/Supabase Edge Functions.
+## Resend Usage
 
-Keep provider credentials server-side.
+Resend is used for transactional email.
 
-Known events may include:
+Known rental email events may include:
 
 - rental submitted;
 - in review;
@@ -610,127 +491,163 @@ Known events may include:
 - start reminder;
 - return reminder.
 
-Avoid duplicate sends.
+Provider secrets must remain server-side.
 
-Preserve templates/footer behavior unless requested.
+Do not move Resend API credentials into React/browser code.
 
-## Resend MCP
+Avoid duplicate email sends.
 
-Expected MCP server:
+Preserve the existing auto-generated email footer and template behavior unless requested.
 
-- `resend_recap`
+## Resend MCP Safety
 
-Use it for:
+Prefer inspection before mutation.
 
-- delivery/API logs;
-- sent-email status;
-- templates;
-- domains;
-- webhooks;
-- received email when relevant.
+Appropriate inspection tasks include recent email logs, delivery failures, sent email metadata, verified domains, templates, webhooks, and provider-side errors.
 
-Prefer inspection first.
+Do not use a real customer email as a connectivity test.
 
-Do not send real customer emails only to test connectivity.
+Do not perform account-impacting actions unless required by the task.
 
-Do not make broad account-impacting changes without an explicit task.
+Avoid unnecessary use of tools that create/remove API keys, remove domains, revoke OAuth grants, send broadcasts, remove templates, remove webhooks, alter large contact lists, or send batch emails.
+
+If a write action is required, perform only the minimum necessary action.
 
 ## Email Debugging Workflow
 
-For email failures, trace:
+When an email fails, trace the full path:
 
-1. frontend trigger;
-2. Supabase invocation;
-3. Edge Function source;
-4. Edge Function logs;
-5. Resend request/log;
-6. delivery result.
+1. React/frontend trigger.
+2. Supabase invocation.
+3. Edge Function code.
+4. Edge Function logs through Supabase MCP.
+5. Resend API/log entry through Resend MCP.
+6. Delivery result.
+7. Template/domain state if relevant.
 
-Use Supabase and Resend MCP together when available.
+Do not guess whether the failure is in Supabase or Resend when both MCP sources can be inspected.
+
+## MCP Write Approval Philosophy
+
+Both Supabase and Resend MCP expose powerful write-capable tools.
+
+Codex should inspect first, make the minimum required change, avoid destructive operations, respect configured approval behavior, never work around MCP approval restrictions, and clearly summarize mutations performed.
+
+A request to implement a feature is permission to make the necessary development changes, not permission to perform unrelated destructive actions.
 
 ## Error Handling
 
-Use existing Snackbar/notification patterns.
+Use existing Snackbar/notification patterns where available.
 
-Provide useful feedback without exposing raw SQL, Supabase internals, stack traces, or provider secrets.
+Provide useful feedback for failed fetches, saves, uploads, invalid forms, Edge Function failures, and email failures.
 
-Remove temporary debug logs.
+Do not expose raw SQL, stack traces, internal Supabase details, provider secrets, or API keys.
+
+Remove temporary debug logs before finishing.
 
 ## Dependencies
 
-Before adding dependencies:
+Before adding a dependency:
 
-1. inspect current packages;
-2. prefer existing libraries;
-3. avoid overlap;
-4. avoid unrelated upgrades;
-5. keep current package manager.
+1. inspect existing packages;
+2. check whether an installed library already solves the problem;
+3. prefer existing project libraries;
+4. avoid overlapping dependencies;
+5. avoid unrelated upgrades.
+
+Do not switch package managers.
+
+Do not update the lockfile unless dependency changes actually require it.
 
 ## Validation
 
-Use `package.json` as the command source of truth.
+Treat `package.json` as the source of truth for commands.
 
-For normal frontend changes, run relevant available commands such as:
+For normal frontend changes, run relevant available scripts such as:
 
 ```bash
 npm run build
 npm run lint
 ```
 
-Run type-check/tests if defined.
+Run type-check/test scripts if defined.
 
-After Supabase changes, also verify as applicable:
+After Supabase changes, verify as applicable:
 
 - migration applied successfully;
-- generated types are aligned;
-- relevant queries work;
+- schema is correct;
+- generated TypeScript types are aligned;
+- affected queries work;
 - RLS behavior is correct;
-- advisors do not show a newly introduced issue;
-- Edge Function deployed when required.
+- Edge Function is deployed when required;
+- logs show expected behavior;
+- advisors do not show a newly introduced issue.
 
-Never claim success for checks not run.
+After email changes, verify as applicable:
+
+- Edge Function invocation;
+- Resend API/log result;
+- delivery status;
+- no duplicate-send behavior.
+
+Never claim validation passed unless it actually ran.
 
 ## Git Safety
 
+Protect existing user work.
+
 Do not:
 
-- discard unrelated changes;
+- discard unrelated local changes;
 - run `git reset --hard`;
 - delete untracked work;
 - rewrite history;
 - commit unless requested;
 - push unless requested;
 - force-push unless explicitly requested;
-- merge/tag/release unless requested.
+- merge unless requested;
+- create releases/tags unless requested.
 
-Never commit secrets or real `.env` values.
+Never commit secrets, API keys, real `.env` values, or service-role credentials.
 
-Review diffs and migrations before finishing.
+Review the relevant diff and migrations before finishing.
 
 ## Definition of Done
 
 A task is complete when, as applicable:
 
-1. Requested behavior works.
-2. Relevant Supabase configuration is also implemented, not merely described.
-3. Durable Supabase changes are represented safely in migrations/source where appropriate.
-4. Existing business behavior remains intact.
-5. Role/RLS restrictions remain correct.
-6. Dates/times remain safe.
-7. Types and schema are aligned.
-8. Pricing/analytics semantics remain correct.
-9. Relevant MCP checks and build/lint/tests were run.
-10. No security/data-integrity regression was introduced.
-11. No unrelated changes were added.
+1. The requested behavior works.
+2. Existing relevant behavior remains intact.
+3. Required Supabase changes are actually implemented, not merely described.
+4. Durable database/RLS changes are represented in migrations when appropriate.
+5. Supabase types/contracts are aligned.
+6. Edge Functions are deployed when required.
+7. Email behavior is verified through code/logs when relevant.
+8. Role and RLS restrictions remain correct.
+9. Dates/times remain safe.
+10. Pricing/analytics semantics remain correct.
+11. Relevant build/lint/tests were run.
+12. No security/data-integrity regression was introduced.
+13. No unrelated changes were included.
+14. The final response accurately describes code changes and MCP actions.
 
-## Final Response
+## Final Response Format
 
 ### Changed
 - Application changes.
-- Supabase/database/Edge Function/Storage/RLS configuration actually changed.
+- Supabase schema/migration/RLS/Edge Function changes actually made.
+- Resend/template/email-related changes actually made.
 
 ### Validation
-- Commands and MCP checks actually run.
+- Commands actually run.
+- MCP inspections/actions actually performed.
+- Results.
 
 ### Notes
-- Migration, RLS, Storage, Auth, date/time, email, analytics, or deployment implications.
+- Migrations.
+- RLS implications.
+- Edge Function deployment.
+- Email delivery findings.
+- Date/time considerations.
+- Analytics/business-rule implications.
+- Any remaining manual dashboard-only configuration.
