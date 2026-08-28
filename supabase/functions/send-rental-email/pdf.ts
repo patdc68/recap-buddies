@@ -126,17 +126,23 @@ const deviceName = (item: PdfItemRecord) => {
 };
 
 const parseInline = (value: string): InlineSegment[] => {
+  const normalized = value
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\+\+(.+?)\+\+/g, "$1")
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, "$1")
+    .replace(/_([^_]+)_/g, "$1")
+    .replace(/`([^`]+)`/g, "$1");
   const segments: InlineSegment[] = [];
   const pattern = /\*\*(.+?)\*\*/g;
   let cursor = 0;
-  for (const match of value.matchAll(pattern)) {
+  for (const match of normalized.matchAll(pattern)) {
     const index = match.index ?? 0;
-    if (index > cursor) segments.push({ text: value.slice(cursor, index), bold: false });
+    if (index > cursor) segments.push({ text: normalized.slice(cursor, index), bold: false });
     segments.push({ text: match[1], bold: true });
     cursor = index + match[0].length;
   }
-  if (cursor < value.length) segments.push({ text: value.slice(cursor), bold: false });
-  return segments.length ? segments : [{ text: value, bold: false }];
+  if (cursor < normalized.length) segments.push({ text: normalized.slice(cursor), bold: false });
+  return segments.length ? segments : [{ text: normalized, bold: false }];
 };
 
 class PdfComposer {
@@ -263,6 +269,12 @@ const renderAgreement = (composer: PdfComposer, markdown: string) => {
       continue;
     }
 
+    if (/^(?:\*{3,}|-{3,}|_{3,})$/.test(line)) {
+      composer.space(4);
+      composer.rule(rgb(0.82, 0.82, 0.78));
+      continue;
+    }
+
     const heading = line.match(/^(#{1,6})\s+(.+)$/);
     if (heading) {
       composer.space(heading[1].length === 1 ? 8 : 5);
@@ -282,6 +294,12 @@ const renderAgreement = (composer: PdfComposer, markdown: string) => {
     const bullet = line.match(/^[-*+\u2022\u25cf]\s*(.+)$/);
     if (bullet) {
       composer.drawInline(parseInline(bullet[1]), { bullet: true, size: 9.5, lineHeight: 13.5 });
+      continue;
+    }
+
+    const quote = line.match(/^>\s*(.+)$/);
+    if (quote) {
+      composer.drawInline(parseInline(quote[1]), { size: 9.5, lineHeight: 13.5, color: rgb(0.35, 0.35, 0.35) });
       continue;
     }
 

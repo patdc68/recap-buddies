@@ -12,7 +12,7 @@ const theme = createTheme({
       contrastText: '#ffffff',
     },
     background: {
-      default: '#ffffff',
+      default: '#f6f6f3',
       paper: '#ffffff',
     },
     text: {
@@ -33,7 +33,7 @@ const theme = createTheme({
     body2: { fontFamily: 'GlacialIndifference, Arial, sans-serif', fontWeight: 400 },
     button: { fontFamily: 'GlacialIndifference, Arial, sans-serif', fontWeight: 700, textTransform: 'none' },
   },
-  shape: { borderRadius: 16 },
+  shape: { borderRadius: 14 },
   components: {
     MuiCssBaseline: {
       styleOverrides: {
@@ -44,7 +44,7 @@ const theme = createTheme({
           backgroundColor: '#ffffff',
         },
         body: {
-          backgroundColor: '#ffffff',
+          backgroundColor: '#f6f6f3',
           color: '#111111',
           margin: 0,
           fontFamily: 'GlacialIndifference, Arial, sans-serif',
@@ -55,16 +55,16 @@ const theme = createTheme({
       styleOverrides: {
         root: {
           backgroundImage: 'none',
-          borderRadius: 16,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+          borderRadius: 14,
         },
       },
     },
     MuiCard: {
       styleOverrides: {
         root: {
-          borderRadius: 16,
-          boxShadow: '0 4px 20px rgba(0,0,0,0.05)',
+          borderRadius: 18,
+          border: '1px solid rgba(16,16,16,0.10)',
+          boxShadow: '0 12px 34px rgba(16,16,16,0.055)',
           transition: 'all 0.2s ease',
           '&:hover': {
             transform: 'translateY(-1px)',
@@ -74,9 +74,15 @@ const theme = createTheme({
       },
     },
     MuiButton: {
+      defaultProps: {
+        disableElevation: true,
+      },
       styleOverrides: {
         root: {
-          borderRadius: 12,
+          borderRadius: 10,
+          minHeight: 40,
+          paddingLeft: 16,
+          paddingRight: 16,
           transition: 'background-color 0.2s ease, transform 0.15s ease',
           '&:hover': {
             transform: 'translateY(-1px)',
@@ -121,6 +127,60 @@ const theme = createTheme({
           '& .MuiInputLabel-root.Mui-focused': {
             color: '#111111',
           },
+        },
+      },
+    },
+    MuiOutlinedInput: {
+      styleOverrides: {
+        root: {
+          borderRadius: 10,
+          backgroundColor: '#ffffff',
+        },
+      },
+    },
+    MuiDialog: {
+      styleOverrides: {
+        paper: {
+          border: '1px solid rgba(16,16,16,0.11)',
+          borderRadius: 20,
+          boxShadow: '0 28px 80px rgba(16,16,16,0.18)',
+        },
+      },
+    },
+    MuiDialogTitle: {
+      styleOverrides: {
+        root: {
+          padding: '22px 24px 16px',
+          fontSize: '1.2rem',
+          fontWeight: 700,
+        },
+      },
+    },
+    MuiDialogActions: {
+      styleOverrides: {
+        root: {
+          padding: '16px 24px 22px',
+          borderTop: '1px solid rgba(16,16,16,0.08)',
+        },
+      },
+    },
+    MuiIconButton: {
+      styleOverrides: {
+        root: {
+          '&:focus-visible': {
+            outline: '3px solid rgba(255,194,28,0.42)',
+            outlineOffset: 2,
+          },
+        },
+      },
+    },
+    MuiAccordion: {
+      styleOverrides: {
+        root: {
+          borderRadius: '18px !important',
+          boxShadow: '0 8px 26px rgba(16,16,16,0.045)',
+          overflow: 'hidden',
+          '&:before': { display: 'none' },
         },
       },
     },

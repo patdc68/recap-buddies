@@ -27,6 +27,7 @@ import { sendRentalStatusEmail } from '../services/emailService';
 import type { RbRenter, RbRentalForm, RbItem, RbDevice, RbBranch, RbSelfieVerificationInst } from '../service/supabaseClient';
 import type { RentalItemLink } from '../utils/rentalItems';
 import { V2_NEXT_STATUSES, V2_RENTAL_STATUS_META, isV2RentalStatus, type V2RentalStatus } from '../constants/rentalStatus';
+import { ADMIN_COLORS } from './adminDesignTokens';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const AMBER      = '#111111';
@@ -135,13 +136,13 @@ const ImageCard: React.FC<{ label: string; src: string | null; onZoom: (src: str
   <Box sx={{ flex: '1 1 180px' }}>
     <Typography sx={{ color: AMBER_DARK, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase', mb: 0.75, fontWeight: 700 }}>{label}</Typography>
     {src
-      ? <Box sx={{ position: 'relative', borderRadius: 2, overflow: 'hidden', border: `1px solid ${BORDER}`, cursor: 'pointer' }} onClick={() => onZoom(src)}>
-          <img src={src} alt={label} style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }} />
+      ? <Box role="button" tabIndex={0} aria-label={`Preview ${label}`} sx={{ position: 'relative', borderRadius: 3, overflow: 'hidden', border: `1px solid ${BORDER}`, cursor: 'pointer', bgcolor: '#f3f3f0', '&:focus-visible': { outline: '3px solid rgba(255,194,28,.45)', outlineOffset: 2 } }} onClick={() => onZoom(src)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onZoom(src); }}>
+          <img src={src} alt={label} style={{ width: '100%', height: 190, objectFit: 'contain', display: 'block' }} />
           <Box sx={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'all 0.15s', '&:hover': { background: 'rgba(0,0,0,0.3)', opacity: 1 } }}>
             <ZoomInIcon sx={{ color: '#fff', fontSize: 28 }} />
           </Box>
         </Box>
-      : <Box sx={{ height: 140, borderRadius: 2, border: `1.5px dashed ${BORDER}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.5, background: 'rgba(201,151,58,0.02)' }}>
+      : <Box sx={{ height: 190, borderRadius: 3, border: `1.5px dashed ${BORDER}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.5, background: '#fafaf8' }}>
           <CancelIcon sx={{ fontSize: 22, color: 'rgba(201,151,58,0.25)' }} />
           <Typography sx={{ color: MUTED, fontSize: '0.72rem', fontFamily: '"Sora", sans-serif' }}>Not uploaded</Typography>
         </Box>}
@@ -345,13 +346,13 @@ const RenterVerificationPage: React.FC = () => {
     : [currentStatus];
 
   return (
-    <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
+    <Box sx={{ minHeight: '100vh', background: ADMIN_COLORS.canvas }}>
 
       {/* ── Sticky header ── */}
       <Box sx={{
         position: 'sticky', top: 0, zIndex: 100,
-        background: 'rgba(255,251,244,0.96)', backdropFilter: 'blur(14px)',
-        borderBottom: `1px solid ${BORDER}`, boxShadow: '0 1px 8px rgba(201,151,58,0.07)',
+        background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(14px)',
+        borderBottom: `1px solid ${BORDER}`, boxShadow: '0 8px 28px rgba(16,16,16,0.045)',
         px: { xs: 2, md: 4 }, py: 1.5,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2,
       }}>
@@ -406,7 +407,7 @@ const RenterVerificationPage: React.FC = () => {
       </Box>
 
       {/* ── Page body ── */}
-      <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1200, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1280, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
 
         {/* ══ Row 1: Personal Info + Rental Info ══ */}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>

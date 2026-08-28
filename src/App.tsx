@@ -14,6 +14,7 @@ import AdminDashboard          from './admin/AdminDashBoard';
 import RenterVerificationPage  from './admin/RenterVerificationPage';
 import AdminRevenueAnalyticsPage from './admin/AdminRevenueAnalyticsPage';
 import AdminProtectedRoute     from './components/AdminProtectedRoute';
+import LandingPage             from './pages/LandingPage';
 
 const App: React.FC = () => (
   <ThemeProvider theme={theme}>
@@ -21,6 +22,7 @@ const App: React.FC = () => (
     <BrowserRouter>
       <Routes>
         {/* ── Public / renter ── */}
+        <Route path="/"                   element={<LandingPage />} />
         <Route path="/renter"             element={<RenterRegistration />} />
         <Route path="/returnee"           element={<Returnee />} />
         <Route path="/renterForm"         element={<RenterForm />} />
@@ -40,7 +42,7 @@ const App: React.FC = () => (
         <Route path="/admin/verify/:rentalId" element={<AdminProtectedRoute><RenterVerificationPage /></AdminProtectedRoute>} />
 
         {/* ── Catch-all ── */}
-        <Route path="*" element={<Navigate to="/renter" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   </ThemeProvider>

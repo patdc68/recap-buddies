@@ -35,6 +35,8 @@ import FileUpload, { type FileUploadResult } from '../components/FileUpload';
 import { supabase } from '../service/supabaseClient';
 import { createNewRenterFlow } from '../services/publicBookingService';
 
+const AgreementMarkdownViewer = React.lazy(() => import('../components/AgreementMarkdownViewer'));
+
 interface RenterDetails {
   renter_fname: string;
   renter_lname: string;
@@ -268,7 +270,11 @@ const RenterRegistration: React.FC = () => {
       <Dialog open={termsOpen} onClose={() => !submitting && setTermsOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Official Rental Contract Agreement</DialogTitle>
         <DialogContent dividers>
-          {termsLoading ? <Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress /></Box> : <Typography sx={{ whiteSpace: 'pre-wrap', lineHeight: 1.7 }}>{termsContent}</Typography>}
+          {termsLoading ? <Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress /></Box> : (
+            <React.Suspense fallback={<Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress size={28} /></Box>}>
+              <AgreementMarkdownViewer markdown={termsContent} />
+            </React.Suspense>
+          )}
           <FormControlLabel sx={{ mt: 2 }} control={<Checkbox checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} />} label="I have read and agree to the rental contract." />
         </DialogContent>
         <DialogActions>

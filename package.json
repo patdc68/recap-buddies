@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "eslint .",
     "test:calendar": "node --experimental-strip-types --test tests/rentalCalendarEvents.test.ts",
+    "test:terms": "node --experimental-strip-types --test tests/termsMarkdown.test.ts",
     "preview": "vite preview"
   },
   "dependencies": {
@@ -20,6 +21,9 @@
     "@mui/x-data-grid": "^8.28.5",
     "@mui/x-date-pickers": "^8.27.2",
     "@supabase/supabase-js": "^2.99.3",
+    "@tiptap/markdown": "^3.30.2",
+    "@tiptap/react": "^3.30.2",
+    "@tiptap/starter-kit": "^3.30.2",
     "dayjs": "^1.11.20",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
