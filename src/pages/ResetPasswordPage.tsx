@@ -90,7 +90,7 @@ const ResetPasswordPage: React.FC = () => {
         const hashType = hashParams.get('type');
         const hasRecoveryCode = Boolean(code);
         const hasRecoveryTokenHash = Boolean(
-          tokenHash && (queryTypes.includes('recovery') || queryTypes.includes('admin') || queryTypes.includes('renter'))
+          tokenHash && (queryTypes.includes('recovery') || queryTypes.includes('admin'))
         );
         const hasRecoveryHashTokens = Boolean(accessToken && refreshToken && hashType === 'recovery');
         const hasRecoveryCredentials = hasRecoveryCode || hasRecoveryTokenHash || hasRecoveryHashTokens;

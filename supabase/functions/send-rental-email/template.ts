@@ -5,7 +5,7 @@ export interface RentalEmailTemplateInput {
   bodyHtml: string;
 }
 
-const LOGO_URL = 'https://kjgtkagxzvklxgrvvmcz.supabase.co/storage/v1/object/public/sample-images/recap-black-text.svg';
+const LOGO_URL = 'https://uhbyjqimjfkamblbvvhl.supabase.co/storage/v1/object/public/sample-images/recap-black-text.svg';
 
 const baseStyles = {
   page: 'margin:0;padding:0;background-color:#f5f7fb;font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;color:#111827;',

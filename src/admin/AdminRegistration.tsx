@@ -11,6 +11,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import type { RbBranch, UserRole } from '../service/supabaseClient';
 import PageLayout from '../components/PageLayout';
+import { loadPublicCatalog } from '../services/publicBookingService';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -46,8 +47,9 @@ const AdminRegistration: React.FC = () => {
   const [done, setDone]         = useState(false);
 
   useEffect(() => {
-    supabase.from('RB_BRANCHES').select('*').order('location_name')
-      .then(({ data }) => { if (data) setBranches(data as RbBranch[]); });
+    loadPublicCatalog()
+      .then(({ branches: catalogBranches }) => setBranches(catalogBranches as RbBranch[]))
+      .catch(() => setBranches([]));
   }, []);
 
   const onText = (field: keyof AdminRegForm) => (e: ChangeEvent<HTMLInputElement>) => {
