@@ -43,7 +43,7 @@ interface FileUploadProps {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-const ACCEPTED = 'image/jpeg,image/png,image/webp,image/heic,application/pdf';
+const ACCEPTED = 'image/jpeg,image/png,application/pdf';
 
 function blobToResult(blob: Blob, fileName: string): FileUploadResult {
   const fileType: 'image' | 'pdf' = blob.type === 'application/pdf' ? 'pdf' : 'image';
@@ -132,13 +132,13 @@ const FileUpload: React.FC<FileUploadProps> = ({
     if (!files || files.length === 0) return;
     const file = files[0];
     // Validate type
-    if (!['image/jpeg','image/png','image/webp','image/heic','application/pdf'].includes(file.type)) {
-      setCameraError('Only images (JPG, PNG, WEBP) and PDF files are accepted.');
+    if (!['image/jpeg','image/png','application/pdf'].includes(file.type)) {
+      setCameraError('Only JPG, PNG, and PDF files are accepted.');
       return;
     }
-    // 20MB limit
-    if (file.size > 20 * 1024 * 1024) {
-      setCameraError('File is too large. Maximum size is 20MB.');
+    // Match the public booking Edge Function limit.
+    if (file.size > 4 * 1024 * 1024) {
+      setCameraError('File is too large. Maximum size is 4MB.');
       return;
     }
     setCameraError('');

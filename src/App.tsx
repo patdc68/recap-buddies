@@ -5,17 +5,16 @@ import CssBaseline from '@mui/material/CssBaseline';
 import theme from './theme/Theme';
 import RenterRegistration      from './registration/RenterRegistration';
 import RenterForm              from './registration/RenterForm';
-import LoginPage               from './registration/LoginPage';
+import Returnee                from './registration/Returnee';
 import ForgotPasswordPage      from './pages/ForgotPasswordPage';
 import ResetPasswordPage       from './pages/ResetPasswordPage';
-import Dashboard               from './registration/Dashboard';
 import AdminLogin              from './admin/AdminLogin';
 import AdminRegistration       from './admin/AdminRegistration';
 import AdminDashboard          from './admin/AdminDashBoard';
 import RenterVerificationPage  from './admin/RenterVerificationPage';
 import AdminRevenueAnalyticsPage from './admin/AdminRevenueAnalyticsPage';
-import ProtectedRoute          from './components/ProtectedRoute';
 import AdminProtectedRoute     from './components/AdminProtectedRoute';
+import LandingPage             from './pages/LandingPage';
 
 const App: React.FC = () => (
   <ThemeProvider theme={theme}>
@@ -23,14 +22,17 @@ const App: React.FC = () => (
     <BrowserRouter>
       <Routes>
         {/* ── Public / renter ── */}
-        <Route path="/login"              element={<LoginPage />} />
+        <Route path="/"                   element={<LandingPage />} />
+        <Route path="/renter"             element={<RenterRegistration />} />
+        <Route path="/returnee"           element={<Returnee />} />
+        <Route path="/renterForm"         element={<RenterForm />} />
+        <Route path="/login"              element={<Navigate to="/renter" replace />} />
         <Route path="/forgot-password"    element={<ForgotPasswordPage />} />
         <Route path="/reset-password"     element={<ResetPasswordPage />} />
-        <Route path="/renterRegistration" element={<RenterRegistration />} />
+        <Route path="/renterRegistration" element={<Navigate to="/renter" replace />} />
 
         {/* ── Protected renter ── */}
-        <Route path="/dashboard"  element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-        <Route path="/renterForm" element={<ProtectedRoute><RenterForm /></ProtectedRoute>} />
+        <Route path="/dashboard" element={<Navigate to="/renter" replace />} />
 
         {/* ── Admin / staff ── */}
         <Route path="/admin/login"     element={<AdminLogin />} />
@@ -40,7 +42,7 @@ const App: React.FC = () => (
         <Route path="/admin/verify/:rentalId" element={<AdminProtectedRoute><RenterVerificationPage /></AdminProtectedRoute>} />
 
         {/* ── Catch-all ── */}
-        <Route path="*" element={<Navigate to="/login" replace />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
   </ThemeProvider>

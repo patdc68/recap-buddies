@@ -1,51 +1,43 @@
-import React, { useState, useEffect, useCallback, type ChangeEvent } from 'react';
+import React, { useMemo, useState, type ChangeEvent } from 'react';
 import {
-  Box,
-  Typography,
-  TextField,
-  Button,
   Alert,
-  CircularProgress,
-  Select,
-  MenuItem,
-  FormControl,
-  InputLabel,
-  Paper,
-  Divider,
+  Box,
+  Button,
+  Checkbox,
   Chip,
+  CircularProgress,
+  Dialog,
+  DialogActions,
+  DialogContent,
+  DialogTitle,
+  Divider,
+  FormControlLabel,
   LinearProgress,
-  FormHelperText,
-  Stepper,
+  Paper,
   Step,
   StepLabel,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  IconButton,
-  Tooltip,
-  FormControlLabel,
-  Checkbox,
-  type SelectChangeEvent,
+  Stepper,
+  TextField,
+  Typography,
 } from '@mui/material';
-import CheckCircleIcon from '@mui/icons-material/CheckCircle';
-import PersonIcon from '@mui/icons-material/Person';
-import BadgeIcon from '@mui/icons-material/Badge';
-import FaceIcon from '@mui/icons-material/Face';
-import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
+import ArrowForwardIcon from '@mui/icons-material/ArrowForward';
+import BadgeIcon from '@mui/icons-material/Badge';
+import CheckCircleIcon from '@mui/icons-material/CheckCircle';
+import FaceIcon from '@mui/icons-material/Face';
 import HowToRegIcon from '@mui/icons-material/HowToReg';
-import InfoOutlinedIcon from '@mui/icons-material/InfoOutlined';
+import PersonIcon from '@mui/icons-material/Person';
+import ReplayIcon from '@mui/icons-material/Replay';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../service/supabaseClient';
-import type { RbSelfieVerificationInst } from '../service/supabaseClient';
 import PageLayout from '../components/PageLayout';
 import CameraCapture from '../components/CameraCapture';
 import FileUpload, { type FileUploadResult } from '../components/FileUpload';
+import { supabase } from '../service/supabaseClient';
+import { createNewRenterFlow } from '../services/publicBookingService';
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+const AgreementMarkdownViewer = React.lazy(() => import('../components/AgreementMarkdownViewer'));
 
-interface RegistrationForm {
+interface RenterDetails {
   renter_fname: string;
   renter_lname: string;
   mobile_no: string;
@@ -53,882 +45,245 @@ interface RegistrationForm {
   emergency_contact_person: string;
   emergency_contact_relationship: string;
   email: string;
-  password: string;
-  confirmPassword: string;
-  selfie_verification_id: string;
 }
 
-type ImageField =
-  | 'primary_id_front'
-  | 'primary_id_back'
-  | 'secondary_id_front'
-  | 'secondary_id_back'
-  | 'proof_of_billing'
-  | 'selfie_verification_img';
+type CaptureField = 'primary_id_front' | 'primary_id_back' | 'secondary_id_front' | 'secondary_id_back' | 'selfie_verification_img';
+type Captures = Record<CaptureField, Blob | null>;
+type Previews = Record<CaptureField, string | null>;
 
-type BlobMap    = Record<ImageField, Blob | null>;
-type PreviewMap = Record<ImageField, string | null>;
-type FormErrors = Partial<Record<keyof RegistrationForm | ImageField, string>>;
-
-// ─── Constants ────────────────────────────────────────────────────────────────
-
-const BUCKET = 'verification-images';
-
-const STEPS = [
-  { label: 'Personal Info',       icon: <PersonIcon /> },
-  { label: 'Account Setup',       icon: <PersonIcon /> },
-  { label: 'Primary ID',          icon: <BadgeIcon /> },
-  { label: 'Secondary ID',        icon: <BadgeIcon /> },
-  { label: 'Proof of Billing',    icon: <BadgeIcon /> },
-  { label: 'Selfie Verification', icon: <FaceIcon /> },
-];
-
-const INIT_FORM: RegistrationForm = {
-  renter_fname: '', renter_lname: '', mobile_no: '',
-  emergency_contact_no: '', emergency_contact_person: '', emergency_contact_relationship: '', email: '', password: '',
-  confirmPassword: '', selfie_verification_id: '',
+const EMPTY_DETAILS: RenterDetails = {
+  renter_fname: '',
+  renter_lname: '',
+  mobile_no: '',
+  emergency_contact_no: '',
+  emergency_contact_person: '',
+  emergency_contact_relationship: '',
+  email: '',
 };
 
-const INIT_BLOBS: BlobMap = {
-  primary_id_front: null, primary_id_back: null,
-  secondary_id_front: null, secondary_id_back: null,
-  proof_of_billing: null, selfie_verification_img: null,
+const EMPTY_CAPTURES: Captures = {
+  primary_id_front: null,
+  primary_id_back: null,
+  secondary_id_front: null,
+  secondary_id_back: null,
+  selfie_verification_img: null,
 };
 
-const INIT_PREVIEWS: PreviewMap = {
-  primary_id_front: null, primary_id_back: null,
-  secondary_id_front: null, secondary_id_back: null,
-  proof_of_billing: null, selfie_verification_img: null,
+const EMPTY_PREVIEWS: Previews = {
+  primary_id_front: null,
+  primary_id_back: null,
+  secondary_id_front: null,
+  secondary_id_back: null,
+  selfie_verification_img: null,
 };
 
-const PRIMARY_ID_LIST = [
-  'ACR/ICR',
-  'Driver’s License',
-  'GSIS e-Card',
-  'Integrated Bar of the Philippines',
-  'MARINA ID',
-  'NCDA ID',
-  'Passport',
-  'Postal ID (PVC)',
-  'School ID',
-  'Senior Citizen Card',
-  'SSS Card',
-  'UMID',
-  'Voter’s ID',
-  'PhilSys ID',
-];
+const STEPS = ['Personal Information', 'Primary ID', 'Secondary ID', 'Proof of Billing', 'Selfie Verification'];
 
-const SECONDARY_ID_LIST = [
-  'Barangay Certification',
-  'City Health Card',
-  'Company ID',
-  'DSWD Certification',
-  'GOCC ID (AFP, HDMF, etc.)',
-  'NBI Clearance',
-  'OFW ID',
-  'OWWA ID',
-  'Pag-IBIG Loyalty Card',
-  'PhilHealth Card',
-  'Police Clearance',
-  'Postal ID (Paper)',
-  'PRC ID',
-  'Seaman’s Book',
-  'TIN',
-];
-
-const PRIMARY_FRONT_SAMPLE = supabase.storage.from('sample-images').getPublicUrl('primary-id/primary-front.png').data.publicUrl;
-const PRIMARY_BACK_SAMPLE = supabase.storage.from('sample-images').getPublicUrl('primary-id/primary-back.png').data.publicUrl;
-const SECONDARY_SAMPLE = supabase.storage.from('sample-images').getPublicUrl('secondary-id/secondary.jpg').data.publicUrl;
-
-// ─── Layout primitives (replaces Grid entirely) ───────────────────────────────
-
-/**
- * Row: horizontal flex container that wraps on small screens.
- * gap prop maps to MUI spacing (× 8px).
- */
-const Row: React.FC<{ children: React.ReactNode; gap?: number }> = ({ children, gap = 2.5 }) => (
-  <Box sx={{ display: 'flex', flexWrap: 'wrap', gap }}>
-    {children}
-  </Box>
-);
-
-/**
- * Col: flex child.
- *  - half=false (default) → full width
- *  - half=true            → 50% on sm+, 100% on xs
- */
-const Col: React.FC<{ children: React.ReactNode; half?: boolean }> = ({ children, half = false }) => (
-  <Box
-    sx={{
-      flex: '1 1 auto',
-      width: half ? { xs: '100%', sm: 'calc(50% - 10px)' } : '100%',
-      maxWidth: half ? { xs: '100%', sm: 'calc(50% - 10px)' } : '100%',
-      minWidth: 0,
-    }}
-  >
-    {children}
-  </Box>
-);
-
-const SectionLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-  <Typography variant="caption" sx={{ color: '#111111', letterSpacing: '0.1em', mb: 1.5, display: 'block' }}>
-    {children}
-  </Typography>
-);
-
-// ─── Step 1: Personal Info ────────────────────────────────────────────────────
-
-interface StepPersonalInfoProps {
-  form: RegistrationForm;
-  onText: (field: keyof RegistrationForm) => (e: ChangeEvent<HTMLInputElement>) => void;
-  errors: FormErrors;
-}
-
-const StepPersonalInfo: React.FC<StepPersonalInfoProps> = ({ form, onText, errors }) => (
-  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-    <SectionLabel>Tell us your name</SectionLabel>
-    <Row>
-      <Col half>
-        <TextField
-          label="First Name" fullWidth required
-          value={form.renter_fname} onChange={onText('renter_fname')}
-          error={!!errors.renter_fname} helperText={errors.renter_fname}
-        />
-      </Col>
-      <Col half>
-        <TextField
-          label="Last Name" fullWidth required
-          value={form.renter_lname} onChange={onText('renter_lname')}
-          error={!!errors.renter_lname} helperText={errors.renter_lname}
-        />
-      </Col>
-      <Col half>
-        <TextField
-          label="Mobile Number" fullWidth required placeholder="09XXXXXXXXX"
-          value={form.mobile_no} onChange={onText('mobile_no')}
-          error={!!errors.mobile_no} helperText={errors.mobile_no}
-        />
-      </Col>
-      <Col half>
-        <TextField
-          label="Emergency Contact Number" fullWidth required placeholder="09XXXXXXXXX"
-          value={form.emergency_contact_no} onChange={onText('emergency_contact_no')}
-          error={!!errors.emergency_contact_no} helperText={errors.emergency_contact_no}
-        />
-      </Col>
-      <Col half>
-        <TextField
-          label="Emergency Contact Person" fullWidth required placeholder="Juan Dela Cruz"
-          value={form.emergency_contact_person} onChange={onText('emergency_contact_person')}
-          error={!!errors.emergency_contact_person} helperText={errors.emergency_contact_person}
-        />
-      </Col>
-      <Col half>
-        <TextField
-          label="Emergency Contact Relationship" fullWidth required placeholder="Father / Mother / Partner / Sibling / Friend"
-          value={form.emergency_contact_relationship} onChange={onText('emergency_contact_relationship')}
-          error={!!errors.emergency_contact_relationship} helperText={errors.emergency_contact_relationship}
-        />
-      </Col>
-    </Row>
-  </Box>
-);
-
-// ─── Step 2: Account Setup ────────────────────────────────────────────────────
-
-const StepAccountSetup: React.FC<StepPersonalInfoProps> = ({ form, onText, errors }) => (
-  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-    <SectionLabel>Create your account credentials</SectionLabel>
-    <TextField
-      label="Email Address" type="email" fullWidth required
-      value={form.email} onChange={onText('email')}
-      error={!!errors.email} helperText={errors.email}
-    />
-    <Row>
-      <Col half>
-        <TextField
-          label="Password" type="password" fullWidth required
-          value={form.password} onChange={onText('password')}
-          error={!!errors.password}
-          helperText={errors.password ?? 'Minimum 8 characters'}
-        />
-      </Col>
-      <Col half>
-        <TextField
-          label="Confirm Password" type="password" fullWidth required
-          value={form.confirmPassword} onChange={onText('confirmPassword')}
-          error={!!errors.confirmPassword} helperText={errors.confirmPassword}
-        />
-      </Col>
-    </Row>
-  </Box>
-);
-
-// ─── Steps 3–5: ID / Billing photos ──────────────────────────────────────────
-
-interface IDStepProps {
-  previews: PreviewMap;
-  onCapture: (field: ImageField, blob: Blob | null) => void;
-  onOpenGuide: () => void;
-}
-
-const StepPrimaryID: React.FC<IDStepProps> = ({ previews, onCapture, onOpenGuide }) => (
-  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-    <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <SectionLabel>Primary Government-Issued ID</SectionLabel>
-        <Tooltip title="View accepted IDs and sample images">
-          <IconButton size="small" onClick={onOpenGuide} sx={{ mb: 1.2, color: '#111111' }}>
-            <InfoOutlinedIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Box>
-      <Typography variant="body2">
-        Valid government ID (passport, driver's licence, PhilSys, etc.).
-        Photos must be taken live — no uploads allowed.
-      </Typography>
-    </Box>
-    <Row>
-      <Col half>
-        <CameraCapture
-          label="Front of Primary ID" facingMode="environment"
-          onCapture={(blob) => onCapture('primary_id_front', blob)}
-          capturedUrl={previews.primary_id_front}
-          hint="Place the ID flat; ensure all text is visible and in focus."
-        />
-      </Col>
-      <Col half>
-        <CameraCapture
-          label="Back of Primary ID" facingMode="environment"
-          onCapture={(blob) => onCapture('primary_id_back', blob)}
-          capturedUrl={previews.primary_id_back}
-          hint="Capture the back side clearly."
-        />
-      </Col>
-    </Row>
-  </Box>
-);
-
-const StepSecondaryID: React.FC<IDStepProps> = ({ previews, onCapture, onOpenGuide }) => (
-  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-    <Box>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
-        <SectionLabel>Secondary ID</SectionLabel>
-        <Tooltip title="View accepted IDs and sample images">
-          <IconButton size="small" onClick={onOpenGuide} sx={{ mb: 1.2, color: '#111111' }}>
-            <InfoOutlinedIcon fontSize="small" />
-          </IconButton>
-        </Tooltip>
-      </Box>
-      <Typography variant="body2">SSS, TIN card, company ID, etc. — live capture only.</Typography>
-    </Box>
-    <Row>
-      <Col half>
-        <CameraCapture
-          label="Front of Secondary ID" facingMode="environment"
-          onCapture={(blob) => onCapture('secondary_id_front', blob)}
-          capturedUrl={previews.secondary_id_front}
-        />
-      </Col>
-      <Col half>
-        <CameraCapture
-          label="Back of Secondary ID" facingMode="environment"
-          onCapture={(blob) => onCapture('secondary_id_back', blob)}
-          capturedUrl={previews.secondary_id_back}
-        />
-      </Col>
-    </Row>
-  </Box>
-);
-
-interface StepBillingProps {
-  billingFile: FileUploadResult | null;
-  onBillingFile: (result: FileUploadResult | null) => void;
-}
-
-const StepBilling: React.FC<StepBillingProps> = ({ billingFile, onBillingFile }) => (
-  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-    <Box>
-      <SectionLabel>Proof of Billing</SectionLabel>
-      <Typography variant="body2">
-        Recent utility bill or bank statement (within 3 months) showing your name and address.
-        You may upload an image or PDF, or take a live photo.
-      </Typography>
-    </Box>
-    <FileUpload
-      label="Proof of Billing Document"
-      onFile={onBillingFile}
-      result={billingFile}
-      hint="Ensure your name, address, and billing date are clearly visible."
-      defaultTab="upload"
-      facingMode="environment"
-    />
-  </Box>
-);
-
-// ─── Step 6: Selfie Verification ─────────────────────────────────────────────
-
-interface StepSelfieProps {
-  selfieInstructions: RbSelfieVerificationInst[];
-  form: RegistrationForm;
-  onSelect: (e: SelectChangeEvent) => void;
-  errors: FormErrors;
-  previews: PreviewMap;
-  onCapture: (field: ImageField, blob: Blob | null) => void;
-}
-
-const StepSelfie: React.FC<StepSelfieProps> = ({
-  selfieInstructions, form, onSelect, errors, previews, onCapture,
-}) => {
-  const selected = selfieInstructions.find((i) => i.id === form.selfie_verification_id);
-  return (
-    <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-      <Box>
-        <SectionLabel>Selfie Verification</SectionLabel>
-        <Typography variant="body2">
-          Choose a verification instruction and take a live selfie following the given pose.
-        </Typography>
-      </Box>
-
-      <FormControl fullWidth error={!!errors.selfie_verification_id}>
-        <InputLabel>Select Verification Instruction</InputLabel>
-        <Select
-          value={form.selfie_verification_id}
-          onChange={onSelect}
-          label="Select Verification Instruction"
-        >
-          {selfieInstructions.map((inst) => (
-            <MenuItem key={inst.id} value={inst.id}>
-              <Box>
-                <Typography sx={{ fontWeight: 600, color: '#111111', fontFamily: '"Sora", sans-serif', fontSize: '0.9rem' }}>
-                  {inst.instruction_name}
-                </Typography>
-                <Typography variant="body2" sx={{ fontSize: '0.78rem' }}>
-                  {inst.instruction_desc}
-                </Typography>
-              </Box>
-            </MenuItem>
-          ))}
-        </Select>
-        {errors.selfie_verification_id && (
-          <FormHelperText>{errors.selfie_verification_id}</FormHelperText>
-        )}
-      </FormControl>
-
-      {selected && (
-        <Alert
-          severity="warning"
-          sx={{
-            background: 'rgba(201,151,58,0.10)',
-            border: '1px solid rgba(201,151,58,0.35)',
-            color: '#111111',
-            '& .MuiAlert-icon': { color: '#111111' },
-          }}
-        >
-          <Typography sx={{ fontWeight: 600 }}>{selected.instruction_name}</Typography>
-          <Typography variant="body2">{selected.instruction_desc}</Typography>
-        </Alert>
-      )}
-
-      <CameraCapture
-        label="Selfie with Required Pose"
-        facingMode="user"
-        onCapture={(blob) => onCapture('selfie_verification_img', blob)}
-        capturedUrl={previews.selfie_verification_img}
-        hint={selected ? `Pose: ${selected.instruction_desc}` : 'Please select an instruction first.'}
-      />
-    </Box>
-  );
+const isValidPhone = (value: string) => {
+  let digits = value.replace(/\D/g, '');
+  if (digits.length === 12 && digits.startsWith('63')) digits = digits.slice(2);
+  if (digits.length === 11 && digits.startsWith('0')) digits = digits.slice(1);
+  return /^9\d{9}$/.test(digits);
 };
 
-// ─── Main Component ───────────────────────────────────────────────────────────
+const CapturePair: React.FC<{
+  title: string;
+  description: string;
+  frontField: CaptureField;
+  backField: CaptureField;
+  previews: Previews;
+  onCapture: (field: CaptureField, blob: Blob | null) => void;
+}> = ({ title, description, frontField, backField, previews, onCapture }) => (
+  <Box>
+    <Typography variant="h6" sx={{ mb: 0.5 }}>{title}</Typography>
+    <Typography sx={{ color: '#666', mb: 2 }}>{description}</Typography>
+    <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2 }}>
+      <CameraCapture label="Front" facingMode="environment" onCapture={(blob) => onCapture(frontField, blob)} capturedUrl={previews[frontField]} hint="Keep all text visible and in focus." />
+      <CameraCapture label="Back" facingMode="environment" onCapture={(blob) => onCapture(backField, blob)} capturedUrl={previews[backField]} hint="Capture the full back side clearly." />
+    </Box>
+  </Box>
+);
 
 const RenterRegistration: React.FC = () => {
   const navigate = useNavigate();
+  const [activeStep, setActiveStep] = useState(0);
+  const [details, setDetails] = useState<RenterDetails>(EMPTY_DETAILS);
+  const [captures, setCaptures] = useState<Captures>(EMPTY_CAPTURES);
+  const [previews, setPreviews] = useState<Previews>(EMPTY_PREVIEWS);
+  const [billingFile, setBillingFile] = useState<FileUploadResult | null>(null);
+  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState('');
+  const [termsOpen, setTermsOpen] = useState(false);
+  const [termsContent, setTermsContent] = useState('');
+  const [termsLoading, setTermsLoading] = useState(false);
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [done, setDone] = useState(false);
 
-  // All hooks at the top — never after a conditional return (Rules of Hooks)
-  const [activeStep, setActiveStep]                 = useState(0);
-  const [form, setForm]                             = useState<RegistrationForm>(INIT_FORM);
-  const [blobs, setBlobs]                           = useState<BlobMap>(INIT_BLOBS);
-  const [previews, setPreviews]                     = useState<PreviewMap>(INIT_PREVIEWS);
-  const [billingFile, setBillingFile]               = useState<FileUploadResult | null>(null);
-  const [errors, setErrors]                         = useState<FormErrors>({});
-  const [selfieInstructions, setSelfieInstructions] = useState<RbSelfieVerificationInst[]>([]);
-  const [submitting, setSubmitting]                 = useState(false);
-  const [submitError, setSubmitError]               = useState('');
-  const [done, setDone]                             = useState(false);
-  const [countdown, setCountdown]                   = useState(3);
-  const [termsOpen, setTermsOpen]                   = useState(false);
-  const [acceptedTerms, setAcceptedTerms]           = useState(false);
-  const [termsContent, setTermsContent]             = useState('');
-  const [termsLoading, setTermsLoading]             = useState(false);
-  const [termsError, setTermsError]                 = useState('');
-  const [primaryGuideOpen, setPrimaryGuideOpen]     = useState(false);
-  const [secondaryGuideOpen, setSecondaryGuideOpen] = useState(false);
-
-  useEffect(() => {
-    supabase
-      .from('RB_SELFIE_VERIFICATION_INST')
-      .select('*')
-      .order('created_at', { ascending: true })
-      .then(({ data }) => {
-        if (data) setSelfieInstructions(data as RbSelfieVerificationInst[]);
-      });
-  }, []);
-
-
-  const loadTermsContent = useCallback(async () => {
-    setTermsLoading(true);
-    setTermsError('');
-    try {
-      const { data, error } = await supabase.storage
-        .from('terms_and_condition')
-        .download('agreement.md');
-      if (error) throw error;
-      setTermsContent(await data.text());
-    } catch (err) {
-      setTermsError(err instanceof Error ? err.message : 'Failed to load terms and conditions.');
-      setTermsContent('');
-    } finally {
-      setTermsLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    if (termsOpen && !termsContent && !termsLoading) void loadTermsContent();
-  }, [termsOpen, termsContent, termsLoading, loadTermsContent]);
-
-  // Countdown redirect — declared before any conditional return
-  useEffect(() => {
-    if (!done) return;
-    if (countdown <= 0) { navigate('/renterForm'); return; }
-    const t = setTimeout(() => setCountdown((c) => c - 1), 1000);
-    return () => clearTimeout(t);
-  }, [done, countdown, navigate]);
-
-  // ── Handlers ──────────────────────────────────────────────────────────────────
-
-  const onText =
-    (field: keyof RegistrationForm) =>
-    (e: ChangeEvent<HTMLInputElement>) => {
-      setForm((f) => ({ ...f, [field]: e.target.value }));
-      setErrors((err) => ({ ...err, [field]: undefined }));
-    };
-
-  const onSelfieSelect = (e: SelectChangeEvent) => {
-    setForm((f) => ({ ...f, selfie_verification_id: e.target.value }));
-    setErrors((err) => ({ ...err, selfie_verification_id: undefined }));
+  const setField = (field: keyof RenterDetails) => (event: ChangeEvent<HTMLInputElement>) => {
+    setDetails((current) => ({ ...current, [field]: event.target.value }));
+    setErrors((current) => ({ ...current, [field]: '' }));
   };
 
-  const onCapture = useCallback((field: ImageField, blob: Blob | null) => {
-    setBlobs((b) => ({ ...b, [field]: blob }));
-    setPreviews((p) => ({ ...p, [field]: blob ? URL.createObjectURL(blob) : null }));
-  }, []);
+  const onCapture = (field: CaptureField, blob: Blob | null) => {
+    setCaptures((current) => ({ ...current, [field]: blob }));
+    setPreviews((current) => {
+      if (current[field]) URL.revokeObjectURL(current[field]!);
+      return { ...current, [field]: blob ? URL.createObjectURL(blob) : null };
+    });
+    setErrors((current) => ({ ...current, [field]: '' }));
+  };
 
-  // ── Validation ────────────────────────────────────────────────────────────────
-
-  const validate = (): boolean => {
-    const e: FormErrors = {};
+  const validateStep = () => {
+    const nextErrors: Record<string, string> = {};
     if (activeStep === 0) {
-      if (!form.renter_fname.trim())         e.renter_fname         = 'First name is required';
-      if (!form.renter_lname.trim())         e.renter_lname         = 'Last name is required';
-      if (!form.mobile_no.trim())            e.mobile_no            = 'Mobile number is required';
-      else if (!/^09\d{9}$/.test(form.mobile_no)) e.mobile_no      = 'Enter a valid PH number (09XXXXXXXXX)';
-      if (!form.emergency_contact_no.trim()) e.emergency_contact_no = 'Emergency contact is required';
-      else if (!/^09\d{9}$/.test(form.emergency_contact_no)) e.emergency_contact_no = 'Enter a valid PH number';
-      if (!form.emergency_contact_person.trim()) e.emergency_contact_person = 'Emergency contact person is required';
-      if (!form.emergency_contact_relationship.trim()) e.emergency_contact_relationship = 'Emergency contact relationship is required';
+      if (!details.renter_fname.trim()) nextErrors.renter_fname = 'First name is required.';
+      if (!details.renter_lname.trim()) nextErrors.renter_lname = 'Last name is required.';
+      if (!isValidPhone(details.mobile_no)) nextErrors.mobile_no = 'Enter a valid Philippine contact number.';
+      if (!isValidPhone(details.emergency_contact_no)) nextErrors.emergency_contact_no = 'Enter a valid emergency contact number.';
+      if (!details.emergency_contact_person.trim()) nextErrors.emergency_contact_person = 'Emergency contact person is required.';
+      if (!details.emergency_contact_relationship.trim()) nextErrors.emergency_contact_relationship = 'Relationship is required.';
+      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(details.email.trim())) nextErrors.email = 'Enter a valid email address.';
     }
     if (activeStep === 1) {
-      if (!form.email.trim())            e.email           = 'Email is required';
-      else if (!/\S+@\S+\.\S+/.test(form.email)) e.email   = 'Enter a valid email address';
-      if (!form.password)                e.password        = 'Password is required';
-      else if (form.password.length < 8) e.password        = 'Password must be at least 8 characters';
-      if (!form.confirmPassword)         e.confirmPassword = 'Please confirm your password';
-      else if (form.password !== form.confirmPassword) e.confirmPassword = 'Passwords do not match';
+      if (!captures.primary_id_front) nextErrors.primary_id_front = 'Primary ID front is required.';
+      if (!captures.primary_id_back) nextErrors.primary_id_back = 'Primary ID back is required.';
     }
     if (activeStep === 2) {
-      if (!blobs.primary_id_front) e.primary_id_front = 'Front photo of primary ID is required';
-      if (!blobs.primary_id_back)  e.primary_id_back  = 'Back photo of primary ID is required';
+      if (!captures.secondary_id_front) nextErrors.secondary_id_front = 'Secondary ID front is required.';
+      if (!captures.secondary_id_back) nextErrors.secondary_id_back = 'Secondary ID back is required.';
     }
-    if (activeStep === 3) {
-      if (!blobs.secondary_id_front) e.secondary_id_front = 'Front photo of secondary ID is required';
-      if (!blobs.secondary_id_back)  e.secondary_id_back  = 'Back photo of secondary ID is required';
-    }
-    if (activeStep === 4) {
-      if (!billingFile) e.proof_of_billing = 'Proof of billing is required';
-    }
-    if (activeStep === 5) {
-      if (!form.selfie_verification_id)   e.selfie_verification_id  = 'Please select an instruction';
-      if (!blobs.selfie_verification_img) e.selfie_verification_img = 'Selfie photo is required';
-    }
-    setErrors(e);
-    return Object.keys(e).length === 0;
+    if (activeStep === 3 && !billingFile) nextErrors.proof_of_billing = 'Proof of billing is required.';
+    if (activeStep === 4 && !captures.selfie_verification_img) nextErrors.selfie_verification_img = 'Selfie verification is required.';
+    setErrors(nextErrors);
+    return Object.keys(nextErrors).length === 0;
   };
 
-  const handleNext = () => { if (validate()) setActiveStep((s) => s + 1); };
-  const handleBack = () => setActiveStep((s) => s - 1);
+  const stepError = useMemo(() => Object.values(errors).find(Boolean), [errors]);
 
-  // ── Submit ────────────────────────────────────────────────────────────────────
+  const loadTerms = async () => {
+    setTermsLoading(true);
+    const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement.md');
+    setTermsContent(error || !data ? 'The agreement could not be loaded. Please try again.' : await data.text());
+    setTermsLoading(false);
+  };
 
-  const handleSubmit = async () => {
-    if (!validate()) return;
+  const openReview = () => {
+    if (!validateStep()) return;
+    setAcceptedTerms(false);
+    setTermsOpen(true);
+    if (!termsContent) void loadTerms();
+  };
+
+  const submit = async () => {
+    if (!acceptedTerms || !billingFile || !captures.primary_id_front || !captures.primary_id_back || !captures.secondary_id_front || !captures.secondary_id_back || !captures.selfie_verification_img) return;
     setSubmitting(true);
     setSubmitError('');
-
-    const uploadedPaths: string[] = [];
-
     try {
-      setSubmitError('Step 1/3: Creating account…');
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.password,
-      });
-      if (authError) throw new Error(`Auth error: ${authError.message}`);
-      const auth_user_id = authData.user?.id;
-      if (!auth_user_id) throw new Error(
-        'No user ID returned. Make sure "Enable email confirmations" is OFF in Supabase → Authentication → Settings.'
-      );
-
-      setSubmitError('Step 2/3: Uploading verification images…');
-      const ts = Date.now();
-      const safeEmail = form.email.replace(/[@.]/g, '_');
-
-      const upload = async (blob: Blob | null, name: string): Promise<string | null> => {
-        if (!blob) return null;
-        const path = `${safeEmail}/${ts}_${name}.jpg`;
-        const { data, error } = await supabase.storage
-          .from(BUCKET)
-          .upload(path, blob, { contentType: 'image/jpeg', upsert: true });
-        if (error) throw new Error(`Upload failed for "${name}": ${error.message}`);
-        uploadedPaths.push(data.path);
-        return supabase.storage.from(BUCKET).getPublicUrl(data.path).data.publicUrl;
-      };
-
-      const [
-        primary_id_front, primary_id_back,
-        secondary_id_front, secondary_id_back,
-        proof_of_billing, selfie_verification_img,
-      ] = await Promise.all([
-        upload(blobs.primary_id_front,       'primary_front'),
-        upload(blobs.primary_id_back,        'primary_back'),
-        upload(blobs.secondary_id_front,     'secondary_front'),
-        upload(blobs.secondary_id_back,      'secondary_back'),
-        billingFile ? (async () => {
-          const ext = billingFile.fileType === 'pdf' ? 'pdf' : 'jpg';
-          const billingPath = `${safeEmail}/${ts}_billing.${ext}`;
-          const { data: billingData, error: billingError } = await supabase.storage
-            .from(BUCKET)
-            .upload(billingPath, billingFile.blob, { contentType: billingFile.mimeType, upsert: true });
-          if (billingError) throw new Error(`Upload failed for "billing": ${billingError.message}`);
-          uploadedPaths.push(billingData.path);
-          return supabase.storage.from(BUCKET).getPublicUrl(billingData.path).data.publicUrl;
-        })() : Promise.resolve(null),
-        upload(blobs.selfie_verification_img,'selfie'),
-      ]);
-
-      setSubmitError('Step 3/3: Saving your information…');
-      const { error: insertError } = await supabase.from('RB_RENTER').insert({
-        renter_fname: form.renter_fname,
-        renter_lname: form.renter_lname,
-        mobile_no: form.mobile_no,
-        emergency_contact_no: form.emergency_contact_no,
-        emergency_contact_person: form.emergency_contact_person.trim(),
-        emergency_contact_relationship: form.emergency_contact_relationship.trim(),
-        email: form.email,
-        auth_user_id,
-        primary_id_front, primary_id_back,
-        secondary_id_front, secondary_id_back,
-        proof_of_billing,
-        selfie_verification_id: form.selfie_verification_id,
-        selfie_verification_img,
-      });
-
-      if (insertError) throw new Error(
-        `DB insert failed (${insertError.code}): ${insertError.message}` +
-        (insertError.details ? ` | ${insertError.details}` : '') +
-        (insertError.hint    ? ` | Hint: ${insertError.hint}` : '')
-      );
-
-      setSubmitError('');
+      const payload = new FormData();
+      Object.entries(details).forEach(([key, value]) => payload.set(key, value.trim()));
+      payload.set('primary_id_front', captures.primary_id_front, 'primary-id-front.jpg');
+      payload.set('primary_id_back', captures.primary_id_back, 'primary-id-back.jpg');
+      payload.set('secondary_id_front', captures.secondary_id_front, 'secondary-id-front.jpg');
+      payload.set('secondary_id_back', captures.secondary_id_back, 'secondary-id-back.jpg');
+      payload.set('proof_of_billing', billingFile.blob, billingFile.fileName);
+      payload.set('selfie_verification_img', captures.selfie_verification_img, 'selfie-verification.jpg');
+      await createNewRenterFlow(payload);
+      setTermsOpen(false);
       setDone(true);
-
-    } catch (err: unknown) {
-      if (uploadedPaths.length > 0) {
-        await supabase.storage.from(BUCKET).remove(uploadedPaths).catch(() => null);
-      }
-      setSubmitError(err instanceof Error ? err.message : 'An unexpected error occurred.');
+    } catch (error) {
+      setTermsOpen(false);
+      setSubmitError(error instanceof Error ? error.message : 'Unable to save your renter application.');
     } finally {
       setSubmitting(false);
     }
   };
 
-  const handleReviewAndSubmit = () => {
-    if (!validate()) return;
-    setAcceptedTerms(false);
-    setTermsOpen(true);
-  };
-
-  const termsContainsHtml = /<([a-z][\w:-]*)(?:\s[^>]*)?>[\s\S]*?<\/\1>|<(br|hr|img|input|meta|link)(?:\s[^>]*)?\/?>/i.test(termsContent);
-
-  const handleConfirmSubmit = async () => {
-    if (!acceptedTerms) return;
-    setTermsOpen(false);
-    await handleSubmit();
-  };
-
-  // ── Derived ───────────────────────────────────────────────────────────────────
-
-  const progress = (activeStep / STEPS.length) * 100;
-  const imageError =
-    errors.primary_id_front   ?? errors.primary_id_back    ??
-    errors.secondary_id_front ?? errors.secondary_id_back  ??
-    (billingFile ? undefined : errors.proof_of_billing) ?? errors.selfie_verification_img;
-
-  // ── Success screen ────────────────────────────────────────────────────────────
-
   if (done) {
     return (
       <PageLayout>
-        <Box sx={{ textAlign: 'center', py: 8 }}>
-          <CheckCircleIcon sx={{ fontSize: 72, color: '#69DB7C', mb: 2 }} />
-          <Typography variant="h3" sx={{ color: '#111111', mb: 1 }}>Registration Complete!</Typography>
-          <Typography variant="body1" sx={{ color: '#666666', mb: 2 }}>Your account has been created successfully.</Typography>
-          <Typography variant="body1" sx={{ color: '#111111', mb: 3, fontWeight: 600 }}>
-            Redirecting to rental form in {countdown}…
-          </Typography>
-          <CircularProgress sx={{ color: '#111111' }} size={32} />
-          <Box sx={{ mt: 3 }}>
-            <Button variant="outlined" onClick={() => navigate('/renterForm')}>Go Now</Button>
-          </Box>
+        <Box sx={{ maxWidth: 620, mx: 'auto', py: 8, textAlign: 'center' }}>
+          <CheckCircleIcon sx={{ fontSize: 72, color: '#2E7D32', mb: 2 }} />
+          <Typography variant="h3" sx={{ mb: 1 }}>Verification details saved</Typography>
+          <Typography sx={{ color: '#666', mb: 3 }}>No account was created. Continue to complete your booking request.</Typography>
+          <Button variant="contained" size="large" endIcon={<ArrowForwardIcon />} onClick={() => navigate('/renterForm')}>Continue to Rental Form</Button>
         </Box>
       </PageLayout>
     );
   }
 
-  // ── Main render ───────────────────────────────────────────────────────────────
-
   return (
     <PageLayout>
-      {/* Heading */}
       <Box sx={{ mb: 4 }}>
-        <Chip
-          icon={<HowToRegIcon sx={{ fontSize: '0.9rem !important' }} />}
-          label="RENTER REGISTRATION"
-          size="small"
-          sx={{
-            background: 'rgba(201,151,58,0.15)', color: '#111111',
-            border: '1px solid rgba(201,151,58,0.25)',
-            fontFamily: '"Sora", sans-serif', letterSpacing: '0.08em', mb: 1.5,
-          }}
-        />
-        <Typography variant="h3" sx={{ color: '#111111', lineHeight: 1.2, mb: 0.5 }}>
-          Create Your Renter Account
-        </Typography>
-        <Typography variant="body1" sx={{ color: '#666666' }}>
-          Complete all steps to verify your identity and access our rental service.
-        </Typography>
+        <Chip icon={<HowToRegIcon />} label="NEW RENTER" size="small" sx={{ mb: 1.5, fontWeight: 700, letterSpacing: '0.08em' }} />
+        <Typography variant="h3" sx={{ mb: 0.75 }}>Start your renter application</Typography>
+        <Typography sx={{ color: '#666' }}>Complete your verification once, then submit your camera booking. No renter login or password is required.</Typography>
+        <Button startIcon={<ReplayIcon />} onClick={() => navigate('/returnee')} sx={{ mt: 1, textTransform: 'none' }}>Already rented with us? Use the returnee flow</Button>
       </Box>
 
-      {/* Progress bar */}
-      <Box sx={{ mb: 3 }}>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
-          <Typography sx={{ color: '#666666', fontSize: '0.8rem' }}>Step {activeStep + 1} of {STEPS.length}</Typography>
-          <Typography sx={{ color: '#111111', fontSize: '0.8rem' }}>{Math.round(progress)}% complete</Typography>
-        </Box>
-        <LinearProgress
-          variant="determinate" value={progress}
-          sx={{
-            height: 4, borderRadius: 2, background: 'rgba(201,151,58,0.10)',
-            '& .MuiLinearProgress-bar': { background: 'linear-gradient(90deg, #111111, #111111)', borderRadius: 2 },
-          }}
-        />
-      </Box>
-
-      {/* Stepper (desktop) */}
-      <Stepper
-        activeStep={activeStep} alternativeLabel
-        sx={{ mb: 4, display: { xs: 'none', md: 'flex' }, '& .MuiStepConnector-line': { borderColor: 'rgba(201,151,58,0.15)' } }}
-      >
-        {STEPS.map((s, i) => (
-          <Step key={s.label} completed={i < activeStep}>
-            <StepLabel>{s.label}</StepLabel>
-          </Step>
-        ))}
+      <LinearProgress variant="determinate" value={((activeStep + 1) / STEPS.length) * 100} sx={{ mb: 2, height: 5, borderRadius: 3 }} />
+      <Stepper activeStep={activeStep} alternativeLabel sx={{ mb: 4, display: { xs: 'none', md: 'flex' } }}>
+        {STEPS.map((label) => <Step key={label}><StepLabel>{label}</StepLabel></Step>)}
       </Stepper>
 
-      {/* Content card */}
-      <Paper
-        elevation={0}
-        sx={{ p: { xs: 2.5, sm: 4 }, background: '#FFFFFF', border: '1px solid rgba(201,151,58,0.15)', borderRadius: 3, mb: 2 }}
-      >
-        {/* Step header */}
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, mb: 3 }}>
-          <Box sx={{
-            width: 40, height: 40, borderRadius: '10px',
-            background: 'linear-gradient(135deg, rgba(201,151,58,0.15), rgba(201,151,58,0.05))',
-            border: '1px solid rgba(201,151,58,0.25)',
-            display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#111111',
-          }}>
-            {STEPS[activeStep].icon}
-          </Box>
-          <Box>
-            <Typography sx={{ color: '#666666', fontSize: '0.78rem' }}>Step {activeStep + 1}</Typography>
-            <Typography variant="h6" sx={{ color: '#111111', lineHeight: 1 }}>{STEPS[activeStep].label}</Typography>
-          </Box>
+      <Paper elevation={0} sx={{ p: { xs: 2.5, md: 4 }, border: '1px solid rgba(17,17,17,0.12)', borderRadius: 3 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+          {activeStep === 0 ? <PersonIcon /> : activeStep === 4 ? <FaceIcon /> : <BadgeIcon />}
+          <Typography variant="h6">{STEPS[activeStep]}</Typography>
         </Box>
+        <Divider sx={{ mb: 3 }} />
 
-        <Divider sx={{ borderColor: 'rgba(201,151,58,0.15)', mb: 3 }} />
-
-        {activeStep === 0 && <StepPersonalInfo form={form} onText={onText} errors={errors} />}
-        {activeStep === 1 && <StepAccountSetup form={form} onText={onText} errors={errors} />}
-        {activeStep === 2 && <StepPrimaryID   previews={previews} onCapture={onCapture} onOpenGuide={() => setPrimaryGuideOpen(true)} />}
-        {activeStep === 3 && <StepSecondaryID previews={previews} onCapture={onCapture} onOpenGuide={() => setSecondaryGuideOpen(true)} />}
-        {activeStep === 4 && <StepBilling billingFile={billingFile} onBillingFile={setBillingFile} />}
-        {activeStep === 5 && (
-          <StepSelfie
-            selfieInstructions={selfieInstructions} form={form}
-            onSelect={onSelfieSelect} errors={errors}
-            previews={previews} onCapture={onCapture}
-          />
+        {activeStep === 0 && (
+          <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+            <TextField label="First Name" required value={details.renter_fname} onChange={setField('renter_fname')} error={Boolean(errors.renter_fname)} helperText={errors.renter_fname} />
+            <TextField label="Last Name" required value={details.renter_lname} onChange={setField('renter_lname')} error={Boolean(errors.renter_lname)} helperText={errors.renter_lname} />
+            <TextField label="Email Address" type="email" required value={details.email} onChange={setField('email')} error={Boolean(errors.email)} helperText={errors.email ?? 'Used for booking updates; no account will be created.'} />
+            <TextField label="Contact Number" required value={details.mobile_no} onChange={setField('mobile_no')} error={Boolean(errors.mobile_no)} helperText={errors.mobile_no} placeholder="0917 123 4567" />
+            <TextField label="Emergency Contact Number" required value={details.emergency_contact_no} onChange={setField('emergency_contact_no')} error={Boolean(errors.emergency_contact_no)} helperText={errors.emergency_contact_no} />
+            <TextField label="Emergency Contact Person" required value={details.emergency_contact_person} onChange={setField('emergency_contact_person')} error={Boolean(errors.emergency_contact_person)} helperText={errors.emergency_contact_person} />
+            <TextField label="Emergency Contact Relationship" required value={details.emergency_contact_relationship} onChange={setField('emergency_contact_relationship')} error={Boolean(errors.emergency_contact_relationship)} helperText={errors.emergency_contact_relationship} sx={{ gridColumn: { sm: '1 / -1' } }} />
+          </Box>
+        )}
+        {activeStep === 1 && <CapturePair title="Primary Government-Issued ID" description="Take live photos of the front and back. Keep every detail visible." frontField="primary_id_front" backField="primary_id_back" previews={previews} onCapture={onCapture} />}
+        {activeStep === 2 && <CapturePair title="Secondary ID" description="Take live photos of the front and back of your secondary ID." frontField="secondary_id_front" backField="secondary_id_back" previews={previews} onCapture={onCapture} />}
+        {activeStep === 3 && (
+          <FileUpload label="Proof of Billing" result={billingFile} onFile={(file) => { setBillingFile(file); setErrors({}); }} defaultTab="upload" facingMode="environment" hint="Upload an image or PDF dated within the last three months, showing your name and address." />
+        )}
+        {activeStep === 4 && (
+          <Box>
+            <Alert severity="info" sx={{ mb: 2 }}><strong>Selfie guidance:</strong> use good lighting, keep your face clear, and do not wear a mask, shades, cap, or any face obstruction.</Alert>
+            <CameraCapture label="Selfie Verification" facingMode="user" onCapture={(blob) => onCapture('selfie_verification_img', blob)} capturedUrl={previews.selfie_verification_img} hint="Center your full, unobstructed face in the frame." variant="lightVerification" />
+          </Box>
         )}
 
-        {imageError && <Alert severity="error" sx={{ mt: 2 }}>{imageError}</Alert>}
-        {submitError && (
-          <Alert
-            severity={submitError.startsWith('Step ') ? 'info' : 'error'}
-            sx={{ mt: 2, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}
-          >
-            {submitError}
-          </Alert>
-        )}
+        {stepError && <Alert severity="error" sx={{ mt: 2 }}>{stepError}</Alert>}
+        {submitError && <Alert severity="error" sx={{ mt: 2 }}>{submitError}</Alert>}
       </Paper>
 
-      {/* Navigation */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-        <Button
-          variant="outlined" startIcon={<ArrowBackIcon />}
-          onClick={handleBack} disabled={activeStep === 0 || submitting}
-          sx={{ minWidth: 120 }}
-        >
-          Back
-        </Button>
-        {activeStep < STEPS.length - 1 ? (
-          <Button variant="contained" endIcon={<ArrowForwardIcon />} onClick={handleNext} sx={{ minWidth: 160 }}>
-            Continue
-          </Button>
-        ) : (
-          <Button
-            variant="contained"
-            endIcon={submitting ? <CircularProgress size={16} sx={{ color: '#0A0F1E' }} /> : <CheckCircleIcon />}
-            onClick={handleReviewAndSubmit} disabled={submitting} sx={{ minWidth: 200 }}
-          >
-            {submitting ? 'Submitting…' : 'Complete Registration'}
-          </Button>
-        )}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 2, gap: 2 }}>
+        <Button variant="outlined" startIcon={<ArrowBackIcon />} disabled={activeStep === 0 || submitting} onClick={() => setActiveStep((step) => step - 1)}>Back</Button>
+        {activeStep < STEPS.length - 1
+          ? <Button variant="contained" endIcon={<ArrowForwardIcon />} onClick={() => { if (validateStep()) setActiveStep((step) => step + 1); }}>Continue</Button>
+          : <Button variant="contained" endIcon={<CheckCircleIcon />} onClick={openReview}>Review and Continue</Button>}
       </Box>
 
-      <Dialog
-        open={termsOpen}
-        onClose={() => setTermsOpen(false)}
-        fullWidth
-        maxWidth="md"
-      >
+      <Dialog open={termsOpen} onClose={() => !submitting && setTermsOpen(false)} maxWidth="md" fullWidth>
         <DialogTitle>Official Rental Contract Agreement</DialogTitle>
         <DialogContent dividers>
-          {termsLoading ? (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, py: 3 }}>
-              <CircularProgress size={18} />
-              <Typography variant="body2">Loading terms and conditions…</Typography>
-            </Box>
-          ) : termsError ? (
-            <Alert severity="error" sx={{ mb: 2 }}>{termsError}</Alert>
-          ) : termsContainsHtml ? (
-            <Box
-              sx={{ color: '#3A2A12', lineHeight: 1.7, mb: 2, '& p': { mt: 0, mb: 1.5 } }}
-              dangerouslySetInnerHTML={{ __html: termsContent }}
-            />
-          ) : (
-            <Typography
-              variant="body2"
-              sx={{ whiteSpace: 'pre-wrap', color: '#3A2A12', lineHeight: 1.7, mb: 2 }}
-            >
-              {termsContent}
-            </Typography>
+          {termsLoading ? <Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress /></Box> : (
+            <React.Suspense fallback={<Box sx={{ py: 4, textAlign: 'center' }}><CircularProgress size={28} /></Box>}>
+              <AgreementMarkdownViewer markdown={termsContent} />
+            </React.Suspense>
           )}
-          <FormControlLabel
-            control={(
-              <Checkbox
-                checked={acceptedTerms}
-                onChange={(e) => setAcceptedTerms(e.target.checked)}
-              />
-            )}
-            label="By checking this box, you acknowledge that you have read and agreed to all terms & will proceed to the collection of your data under DATA PRIVACY ACT of 2012 of the Republic of the Philippines with Krystal Gutierrez of Recap Buddies PH to facilitate your reservations."
-          />
+          <FormControlLabel sx={{ mt: 2 }} control={<Checkbox checked={acceptedTerms} onChange={(event) => setAcceptedTerms(event.target.checked)} />} label="I have read and agree to the rental contract." />
         </DialogContent>
         <DialogActions>
-          <Button onClick={() => setTermsOpen(false)} disabled={submitting}>
-            Cancel
-          </Button>
-          <Button
-            variant="contained"
-            onClick={handleConfirmSubmit}
-            disabled={!acceptedTerms || submitting || termsLoading || !!termsError}
-          >
-            Agree & Submit
+          <Button onClick={() => setTermsOpen(false)} disabled={submitting}>Cancel</Button>
+          <Button variant="contained" onClick={submit} disabled={!acceptedTerms || submitting} startIcon={submitting ? <CircularProgress size={16} color="inherit" /> : <CheckCircleIcon />}>
+            {submitting ? 'Saving…' : 'Accept and Continue'}
           </Button>
         </DialogActions>
       </Dialog>
-
-      <Dialog open={primaryGuideOpen} onClose={() => setPrimaryGuideOpen(false)} fullWidth maxWidth="md">
-        <DialogTitle sx={{ fontFamily: '"Playfair Display", serif', color: '#111111' }}>Primary ID</DialogTitle>
-        <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          <Box component="ul" sx={{ m: 0, pl: 2.5, color: '#3A2A12', display: 'grid', gap: 0.5 }}>
-            {PRIMARY_ID_LIST.map((item) => (
-              <Typography component="li" key={item} variant="body2">{item}</Typography>
-            ))}
-          </Box>
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, justifyContent: 'center', alignItems: 'center' }}>
-            {[{ label: 'Front Sample', src: PRIMARY_FRONT_SAMPLE }, { label: 'Back Sample', src: PRIMARY_BACK_SAMPLE }].map((sample) => (
-              <Box key={sample.label} sx={{ textAlign: 'center' }}>
-                <Typography sx={{ fontSize: '0.78rem', color: '#666666', mb: 0.75 }}>{sample.label}</Typography>
-                <Box component="img" src={sample.src} alt={sample.label} sx={{ width: '100%', maxWidth: 280, height: 'auto', borderRadius: 2, border: '1px solid rgba(201,151,58,0.25)', boxShadow: '0 6px 20px rgba(26,16,8,0.08)' }} />
-              </Box>
-            ))}
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button onClick={() => setPrimaryGuideOpen(false)} variant="contained">Got it</Button>
-        </DialogActions>
-      </Dialog>
-
-      <Dialog open={secondaryGuideOpen} onClose={() => setSecondaryGuideOpen(false)} fullWidth maxWidth="sm">
-        <DialogTitle sx={{ fontFamily: '"Playfair Display", serif', color: '#111111' }}>Secondary ID</DialogTitle>
-        <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
-          <Box component="ul" sx={{ m: 0, pl: 2.5, color: '#3A2A12', display: 'grid', gap: 0.5 }}>
-            {SECONDARY_ID_LIST.map((item) => (
-              <Typography component="li" key={item} variant="body2">{item}</Typography>
-            ))}
-          </Box>
-          <Box sx={{ display: 'flex', justifyContent: 'center' }}>
-            <Box component="img" src={SECONDARY_SAMPLE} alt="Secondary ID sample" sx={{ width: '100%', maxWidth: 300, height: 'auto', borderRadius: 2, border: '1px solid rgba(201,151,58,0.25)', boxShadow: '0 6px 20px rgba(26,16,8,0.08)' }} />
-          </Box>
-        </DialogContent>
-        <DialogActions sx={{ px: 3, pb: 2.5 }}>
-          <Button onClick={() => setSecondaryGuideOpen(false)} variant="contained">Got it</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Mobile step dots */}
-      <Box sx={{ display: { xs: 'flex', md: 'none' }, justifyContent: 'center', gap: 0.75, mt: 3 }}>
-        {STEPS.map((_, i) => (
-          <Box key={i} sx={{
-            width: i === activeStep ? 20 : 8, height: 8, borderRadius: 4,
-            background: i < activeStep ? '#69DB7C' : i === activeStep ? '#111111' : 'rgba(201,151,58,0.15)',
-            transition: 'all 0.3s ease',
-          }} />
-        ))}
-      </Box>
     </PageLayout>
   );
 };

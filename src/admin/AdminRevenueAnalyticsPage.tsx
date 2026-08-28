@@ -5,6 +5,7 @@ import dayjs from 'dayjs';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import type { RbBranch, RbDevice, RbItem, RbRentalForm } from '../service/supabaseClient';
+import { ADMIN_COLORS, adminSurfaceSx } from './adminDesignTokens';
 
 const AMBER = '#111111';
 const CREAM = '#FFFFFF';
@@ -26,6 +27,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [branches, setBranches] = useState<RbBranch[]>([]);
   const [rentals, setRentals] = useState<EnrichedRental[]>([]);
+  const [rentalHistory, setRentalHistory] = useState<RbRentalForm[]>([]);
 
   const selectedYear = Number(params.get('year')) || dayjs().year();
   const selectedMonth = Math.min(Math.max(Number(params.get('month')) || dayjs().month() + 1, 1), 12);
@@ -58,6 +60,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
       .map((r) => ({ ...r, item: r.cam_name_id_fk ? itemMap[r.cam_name_id_fk] : undefined }));
 
     setBranches((branchesRaw as RbBranch[]) ?? []);
+    setRentalHistory(allRentals);
     setRentals(monthRentals);
     setLoading(false);
   }, [navigate, selectedMonth, selectedYear]);
@@ -72,7 +75,15 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
 
     rentals.forEach((r) => {
       if (!r.renter_id_fk) return;
-      const isRepeatedRenter = rentals.some((rental) => rental.renter_id_fk === r.renter_id_fk && rental.status === 'completed' && rental.id !== r.id);
+      const isRepeatedRenter = r.renter_type === 'returnee' || (
+        r.renter_type == null
+        && rentalHistory.some((rental) => (
+          rental.renter_id_fk === r.renter_id_fk
+          && rental.status === 'completed'
+          && rental.id !== r.id
+          && dayjs(rental.created_at).isBefore(dayjs(r.created_at))
+        ))
+      );
       const type: 'new' | 'repeat' = isRepeatedRenter ? 'repeat' : 'new';
       const branch = branchLookup[r.item?.branch_id_fk ?? ''] ?? 'Unassigned';
       const revenue = Number(r.rent_price ?? 0) || 0;
@@ -89,7 +100,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
     const newRenter = toRows(grouped.new);
     const repeatRenter = toRows(grouped.repeat);
     return { newRenter, repeatRenter, overallUnits: newRenter.totalUnits + repeatRenter.totalUnits, overallRevenue: newRenter.totalRevenue + repeatRenter.totalRevenue };
-  }, [branches, rentals]);
+  }, [branches, rentalHistory, rentals]);
 
   if (loading) {
     return (
@@ -100,7 +111,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
   }
 
   return (
-    <Box sx={{ minHeight: '100vh', background: '#FFFFFF', px: { xs: 2, md: 4 }, py: 4 }}>
+    <Box sx={{ minHeight: '100vh', background: ADMIN_COLORS.canvas, px: { xs: 2, md: 4 }, py: 4 }}>
       <Box sx={{ maxWidth: 1200, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
           <IconButton onClick={() => navigate('/admin/dashboard')} sx={{ border: `1px solid ${BORDER}`, color: MUTED }}>
@@ -118,7 +129,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
           {(['New Renter', 'Repeat Renter'] as const).map((label) => {
             const dataset = label === 'New Renter' ? analytics.newRenter : analytics.repeatRenter;
             return (
-              <Paper key={label} elevation={0} sx={{ borderRadius: '20px', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', p: 3, border: `1px solid ${BORDER}` }}>
+              <Paper key={label} elevation={0} sx={{ ...adminSurfaceSx, p: 3 }}>
                 <Typography sx={{ fontWeight: 700, mb: 1.5 }}>{label}</Typography>
                 <TableContainer><Table size='small'><TableHead><TableRow sx={{ backgroundColor: '#fafafa' }}><TableCell sx={{ fontWeight: 700 }}>Branch</TableCell><TableCell sx={{ fontWeight: 700 }}>Total Units Rented</TableCell><TableCell sx={{ fontWeight: 700 }}>Total Revenue</TableCell></TableRow></TableHead><TableBody>
                 {dataset.rows.map((row) => <TableRow key={`${label}-${row.branch}`}><TableCell>{row.branch}</TableCell><TableCell>{row.units}</TableCell><TableCell>₱{row.revenue.toLocaleString()}</TableCell></TableRow>)}
@@ -127,7 +138,7 @@ const AdminRevenueAnalyticsPage: React.FC = () => {
               </Paper>
             );
           })}
-          <Paper elevation={0} sx={{ borderRadius: '20px', background: '#fff', boxShadow: '0 4px 20px rgba(0,0,0,0.05)', p: 3, border: `1px solid ${BORDER}` }}>
+          <Paper elevation={0} sx={{ ...adminSurfaceSx, p: 3, bgcolor: ADMIN_COLORS.softYellow }}>
             <Typography sx={{ fontWeight: 700 }}>Overall Total:</Typography>
             <Typography sx={{ color: MUTED }}>{analytics.overallUnits} Units | ₱{analytics.overallRevenue.toLocaleString()} Revenue</Typography>
           </Paper>

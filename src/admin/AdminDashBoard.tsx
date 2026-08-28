@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import {
   Box, Typography, Paper, Chip, Button, CircularProgress, Avatar,
   Divider, IconButton, Dialog, DialogTitle, DialogContent,
@@ -11,6 +11,7 @@ import { useTheme } from '@mui/material/styles';
 import { DataGrid, GridToolbar, type GridColDef, type GridRenderCellParams } from '@mui/x-data-grid';
 import { LocalizationProvider, TimePicker } from '@mui/x-date-pickers';
 import { AdapterDayjs } from '@mui/x-date-pickers/AdapterDayjs';
+import type { EventInput } from '@fullcalendar/react';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as ReTooltip,
   ResponsiveContainer, Cell,
@@ -22,7 +23,7 @@ import isSameOrAfter  from 'dayjs/plugin/isSameOrAfter';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../service/supabaseClient';
 import { sendRentalStatusEmail } from '../services/emailService';
-import { sendDueReminderEmailsIfNeeded } from '../services/rentalReminderService';
+import { V2_NEXT_STATUSES, V2_RENTAL_STATUS_META, V2_RENTAL_STATUSES, isV2RentalStatus } from '../constants/rentalStatus';
 import type {
   RbUser, RbBranch, RbDevice, RbItem, RbRenter,
   RbRentalForm, RbSelfieVerificationInst, ItemStatus, ItemCondition, RentalStatus,
@@ -31,6 +32,14 @@ import {
   formatCompactRentalItems, formatCompactRentalItemCodes, formatRentalItemsTooltip,
   calculateRentalItemsTotal, getPrimaryRentalItem, getRentalItemIds, getRentalItems, type RentalItemLink,
 } from '../utils/rentalItems';
+import { buildRentalCalendarEvent, prepareRentalCalendarEntries } from '../utils/rentalCalendarEvents';
+import RentalCalendar, { type CalendarVisibleRange } from './RentalCalendar';
+import LandingPageManager from './LandingPageManager';
+import { AdminPageIntro } from './adminDesign';
+import { ADMIN_COLORS, adminDataGridSx } from './adminDesignTokens';
+import recapWhiteText from '../assets/recap-white-text.svg';
+import recapBlackText from '../assets/recap-black-text.svg';
+import recapCharacterLogo from '../assets/recap-char-logo.png';
 
 import DashboardIcon          from '@mui/icons-material/Dashboard';
 import CalendarMonthIcon      from '@mui/icons-material/CalendarMonth';
@@ -39,8 +48,6 @@ import LogoutIcon             from '@mui/icons-material/Logout';
 import CameraAltIcon          from '@mui/icons-material/CameraAlt';
 import AddIcon                from '@mui/icons-material/Add';
 import EditIcon               from '@mui/icons-material/Edit';
-import ChevronLeftIcon        from '@mui/icons-material/ChevronLeft';
-import ChevronRightIcon       from '@mui/icons-material/ChevronRight';
 import LocalShippingIcon      from '@mui/icons-material/LocalShipping';
 import StorefrontIcon         from '@mui/icons-material/Storefront';
 import CalendarTodayIcon      from '@mui/icons-material/CalendarToday';
@@ -48,7 +55,6 @@ import UploadFileIcon         from '@mui/icons-material/UploadFile';
 import GpsFixedIcon           from '@mui/icons-material/GpsFixed';
 import SaveIcon               from '@mui/icons-material/Save';
 import CloseIcon              from '@mui/icons-material/Close';
-import AdminPanelSettingsIcon from '@mui/icons-material/AdminPanelSettings';
 import TrendingUpIcon         from '@mui/icons-material/TrendingUp';
 import ZoomInIcon             from '@mui/icons-material/ZoomIn';
 import InstagramIcon          from '@mui/icons-material/Instagram';
@@ -63,10 +69,13 @@ import SettingsSuggestIcon    from '@mui/icons-material/SettingsSuggest';
 import NotificationsIcon      from '@mui/icons-material/Notifications';
 import MenuIcon               from '@mui/icons-material/Menu';
 import RemoveCircleOutlineIcon from '@mui/icons-material/RemoveCircleOutline';
+import WebIcon                from '@mui/icons-material/Web';
 
 dayjs.extend(isBetween);
 dayjs.extend(isSameOrBefore);
 dayjs.extend(isSameOrAfter);
+
+const TermsAgreementEditor = React.lazy(() => import('./TermsAgreementEditor'));
 
 // ─── Warm palette (matches renter pages) ─────────────────────────────────────
 
@@ -123,37 +132,44 @@ const MOBILE_DATA_GRID_PAGINATION_SX = {
 // ─── Status tables ────────────────────────────────────────────────────────────
 
 const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  submitted:   { label: 'Submitted',  color: '#B8860B', bg: 'rgba(255,212,59,0.10)',  border: 'rgba(255,212,59,0.30)'  },
-  'in-review': { label: 'In Review',  color: '#1565C0', bg: 'rgba(100,149,237,0.10)', border: 'rgba(100,149,237,0.30)' },
+  ...V2_RENTAL_STATUS_META,
   'for-delivery': { label: 'For Delivery', color: '#1565C0', bg: 'rgba(100,149,237,0.12)', border: 'rgba(100,149,237,0.35)' },
   delivered:      { label: 'Delivered',    color: '#1A237E', bg: 'rgba(100,149,237,0.08)', border: 'rgba(100,149,237,0.25)' },
-  renting:     { label: 'Renting',    color: '#7A4F00', bg: 'rgba(201,151,58,0.12)',  border: 'rgba(201,151,58,0.40)'  },
   'for-return':   { label: 'For Return',   color: '#E65100', bg: 'rgba(255,165,0,0.12)', border: 'rgba(255,165,0,0.35)' },
   'for-refund':   { label: 'For Refund',   color: '#6A1B9A', bg: 'rgba(156,39,176,0.10)', border: 'rgba(156,39,176,0.30)' },
   'for-penalty':  { label: 'For Penalty',  color: '#B71C1C', bg: 'rgba(211,47,47,0.10)', border: 'rgba(211,47,47,0.30)' },
   extended:       { label: 'Extended',     color: '#7c3aed', bg: '#f3e8ff', border: '#d8b4fe' },
-  completed:   { label: 'Completed',  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)', border: 'rgba(105,219,124,0.30)' },
   canceled:    { label: 'Canceled',   color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
-  declined:    { label: 'Declined',   color: '#B71C1C', bg: 'rgba(211,47,47,0.08)',   border: 'rgba(211,47,47,0.25)'   },
 };
 
 const RENTAL_TO_ITEM_STATUS: Partial<Record<string, ItemStatus>> = {
   submitted: 'In Review',
   'in-review': 'In Review',
-  'for-delivery': 'For Delivery',
-  delivered: 'Delivered',
+  confirmed: 'In Review',
   renting: 'Renting',
-  'for-return': 'For Return',
-  'for-refund': 'For Refund',
-  'for-penalty': 'For Penalty',
-  extended: 'Renting',
   completed: 'Available',
+  declined: 'Available',
 };
 
 const MONTHS = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-const DAYS   = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
 const HIDDEN_DASHBOARD_STATUSES = ['declined', 'canceled'];
-const ACTIVE_RENTAL_STATUSES: RentalStatus[] = ['in-review', 'for-delivery', 'renting', 'delivered', 'for-return', 'extended'];
+const ACTIVE_RENTAL_STATUSES: RentalStatus[] = ['confirmed', 'renting'];
+
+const getVerificationBucketPath = (value: string | null | undefined) => {
+  if (!value) return null;
+  const marker = '/verification-images/';
+  const markerIndex = value.indexOf(marker);
+  if (markerIndex >= 0) return decodeURIComponent(value.slice(markerIndex + marker.length).split('?')[0]);
+  if (value.startsWith('verification-images/')) return value.slice('verification-images/'.length);
+  return value.startsWith('http://') || value.startsWith('https://') ? null : value;
+};
+
+const signDeviceImages = async (devices: RbDevice[]) => Promise.all(devices.map(async (device) => {
+  const path = getVerificationBucketPath(device.device_img);
+  if (!path) return device;
+  const { data, error } = await supabase.storage.from('verification-images').createSignedUrl(path, 60 * 60);
+  return { ...device, device_img: error ? null : data.signedUrl };
+}));
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -187,13 +203,25 @@ interface RenterTypeAnalytics {
 
 const pesoFormatter = new Intl.NumberFormat('en-PH', { maximumFractionDigits: 0 });
 
+const getRentalRenterType = (rental: EnrichedRental, rentals: EnrichedRental[]): 'new' | 'repeat' => {
+  if (rental.renter_type === 'returnee') return 'repeat';
+  if (rental.renter_type === 'new') return 'new';
+  const createdAt = dayjs(rental.created_at);
+  const hasPriorCompletedRental = rentals.some((candidate) => (
+    candidate.id !== rental.id
+    && candidate.renter?.id === rental.renter?.id
+    && candidate.status === 'completed'
+    && dayjs(candidate.created_at).isBefore(createdAt)
+  ));
+  return hasPriorCompletedRental ? 'repeat' : 'new';
+};
+
 const buildRenterAnalytics = (rentals: EnrichedRental[], branchLookup: Record<string, string>) => {
   const grouped: Record<'new' | 'repeat', Record<string, { units: number; revenue: number }>> = { new: {}, repeat: {} };
 
   rentals.forEach((r) => {
     if (!r.renter?.id) return;
-    const isRepeatedRenter = rentals.some((rental) => rental.renter?.id === r.renter?.id && rental.status === 'completed' && rental.id !== r.id);
-    const renterType: 'new' | 'repeat' = isRepeatedRenter ? 'repeat' : 'new';
+    const renterType = getRentalRenterType(r, rentals);
     const branchName = branchLookup[getPrimaryRentalItem(r)?.branch_id_fk ?? ''] ?? 'Unassigned';
     const units = 1;
     const revenue = Number(r.rent_price ?? 0) || 0;
@@ -226,8 +254,8 @@ const buildRenterAnalytics = (rentals: EnrichedRental[], branchLookup: Record<st
 };
 
 const InfoBox: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
-  <Box sx={{ p: 2, borderRadius: 2, background: 'rgba(201,151,58,0.05)', border: `1px solid ${BORDER}` }}>
-    <Typography sx={{ color: AMBER_DARK, fontSize: '0.65rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase', mb: 0.5 }}>
+  <Box sx={{ p: { xs: 2, sm: 2.5 }, borderRadius: 3, background: '#fff', border: `1px solid ${BORDER}` }}>
+    <Typography sx={{ color: MUTED, fontSize: '0.68rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', mb: 0.75 }}>
       {label}
     </Typography>
     {children}
@@ -248,6 +276,7 @@ interface RentalDetailDialogProps {
   open: boolean;
   onClose: () => void;
   onSave: (id: string, updates: RentalUpdatePayload) => Promise<void>;
+  allowVerificationLink?: boolean;
 }
 
 interface RentalUpdateDeviceRow {
@@ -325,7 +354,7 @@ const syncRentalItems = async (rentalId: string, previousLinks: RentalItemLink[]
   }
 };
 
-const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, onClose, onSave }) => {
+const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, onClose, onSave, allowVerificationLink = true }) => {
   const [status, setStatus] = useState<RentalStatus>(rental?.status ?? 'submitted');
   const [remarks, setRemarks] = useState('');
   const [messengerLink, setMessengerLink] = useState('');
@@ -412,18 +441,24 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
         return;
       }
 
+      if (rental.renter_type) {
+        setIsRepeatRenter(rental.renter_type === 'returnee');
+        return;
+      }
+
       const { count } = await supabase
         .from('RB_RENTAL_FORM')
         .select('id', { head: true, count: 'exact' })
         .eq('renter_id_fk', rental.renter_id_fk)
         .eq('status', 'completed')
+        .lt('created_at', rental.created_at)
         .neq('id', rental.id);
 
       setIsRepeatRenter((count ?? 0) > 0);
     };
 
     void loadDialogData();
-  }, [open, rental?.id, rental?.renter_id_fk, rental?.cam_name_id_fk, rental?.rent_price]);
+  }, [open, rental?.id, rental?.renter_id_fk, rental?.renter_type, rental?.created_at, rental?.cam_name_id_fk, rental?.rent_price]);
 
   useEffect(() => {
     if (!open) return;
@@ -432,12 +467,10 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
 
     const loadSelfieInstruction = async () => {
       const instructionId = rental?.renter?.selfie_verification_id;
-      console.log('Selfie verification ID:', instructionId);
 
       if (!instructionId) {
         setSelfieInstruction(null);
         setSelfieInstructionLoading(false);
-        console.log('Fetched selfie instruction:', null);
         return;
       }
 
@@ -454,11 +487,9 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
       if (error) {
         console.error('Failed to load selfie instruction:', error);
         setSelfieInstruction(null);
-        console.log('Fetched selfie instruction:', null);
       } else {
         const fetchedInstruction = data as RbSelfieVerificationInst | null;
         setSelfieInstruction(fetchedInstruction);
-        console.log('Fetched selfie instruction:', fetchedInstruction);
       }
 
       setSelfieInstructionLoading(false);
@@ -510,6 +541,9 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
   const selfieInstructionDescription = getSelfieInstructionDescription(selfieInstruction);
 
   const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META.submitted;
+  const editableStatusValues = rental.renter_type && isV2RentalStatus(rental.status)
+    ? [rental.status, ...V2_NEXT_STATUSES[rental.status]]
+    : [rental.status];
 
   const isDateRangeInvalid = !!startDate && !!endDate && dayjs(endDate).isBefore(dayjs(startDate), 'day');
   const selectedDeviceIds = deviceRows.map((row) => row.itemId).filter(Boolean);
@@ -550,19 +584,19 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
     }
   };
 
-  const isPending = rental.status === 'submitted' || rental.status === 'in-review';
+  const hasVerificationRecord = rental.renter_type != null || isV2RentalStatus(rental.status);
 
   return (
-    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth
-      PaperProps={{ sx: { background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 3, boxShadow: '0 8px 40px rgba(201,151,58,0.12)' } }}>
-      <DialogTitle sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1 }}>
-        Rental Details
+    <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth
+      PaperProps={{ sx: { background: '#fbfbf9', border: `1px solid ${BORDER}`, borderRadius: 4, maxHeight: '92vh' } }}>
+      <DialogTitle sx={{ color: ESPRESSO, display: 'flex', alignItems: 'center', justifyContent: 'space-between', pb: 1.5 }}>
+        <Box><Typography sx={{ fontSize: '1.3rem', fontWeight: 700 }}>Edit Rental Monitoring Details</Typography><Typography sx={{ color: MUTED, fontSize: '.78rem', mt: .25 }}>Rental schedule, assignment, pricing, and status</Typography></Box>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
           <Chip label={meta.label} size="small" sx={{ background: meta.bg, color: meta.color, border: `1px solid ${meta.border}`, fontFamily: '"Sora", sans-serif', fontWeight: 600, fontSize: '0.7rem' }} />
           <IconButton onClick={onClose} size="small" sx={{ color: MUTED }}><CloseIcon fontSize="small" /></IconButton>
         </Box>
       </DialogTitle>
-      <DialogContent sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 1 }}>
+      <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2.5 }}>
 
         {/* Camera */}
         <InfoBox label="Devices">
@@ -752,23 +786,13 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
             <Typography sx={{ color: AMBER_DARK, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.5 }}>
               Remarks
             </Typography>
-            <input
-              value={remarks}
-              onChange={(e) => setRemarks(e.target.value)}
-              placeholder="Add admin remarks"
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD_BG, color: ESPRESSO, fontFamily: '"DM Sans", sans-serif', fontSize: '0.85rem', boxSizing: 'border-box' }}
-            />
+            <TextField size="small" value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Add admin remarks" fullWidth multiline minRows={2} />
           </Box>
           <Box sx={{ flex: '1 1 220px' }}>
             <Typography sx={{ color: AMBER_DARK, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.5 }}>
               Messenger Link
             </Typography>
-            <input
-              value={messengerLink}
-              onChange={(e) => setMessengerLink(e.target.value)}
-              placeholder="https://m.me/..."
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD_BG, color: ESPRESSO, fontFamily: '"DM Sans", sans-serif', fontSize: '0.85rem', boxSizing: 'border-box' }}
-            />
+            <TextField size="small" type="url" value={messengerLink} onChange={(e) => setMessengerLink(e.target.value)} placeholder="https://m.me/..." fullWidth />
             {rental.messenger_link && (
               <Typography component="a" href={rental.messenger_link} target="_blank" rel="noreferrer" sx={{ mt: 0.6, display: 'inline-flex', alignItems: 'center', gap: 0.5, color: AMBER_DARK, fontSize: '0.74rem', textDecoration: 'none', '&:hover': { textDecoration: 'underline' } }}>
                 Open saved link <OpenInNewIcon sx={{ fontSize: 13 }} />
@@ -779,15 +803,7 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
             <Typography sx={{ color: AMBER_DARK, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', textTransform: 'uppercase', letterSpacing: '0.08em', mb: 0.5 }}>
               Rent Price
             </Typography>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={rentPrice}
-              onChange={(e) => setRentPrice(e.target.value)}
-              placeholder="0.00"
-              style={{ width: '100%', padding: '10px 12px', borderRadius: 8, border: `1px solid ${BORDER}`, background: CARD_BG, color: ESPRESSO, fontFamily: '"DM Sans", sans-serif', fontSize: '0.85rem', boxSizing: 'border-box' }}
-            />
+            <TextField size="small" type="number" value={rentPrice} onChange={(e) => setRentPrice(e.target.value)} placeholder="0.00" inputProps={{ min: 0, step: '0.01' }} fullWidth />
           </Box>
         </Box>
 
@@ -795,17 +811,20 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
         <FormControl fullWidth size="small">
           <InputLabel sx={{ color: MUTED }}>Update Status</InputLabel>
           <Select value={status} onChange={(e: SelectChangeEvent) => setStatus(e.target.value as RentalStatus)} label="Update Status">
-            {Object.entries(RENTAL_STATUS_META).map(([val, m]) => (
+            {editableStatusValues.map((val) => {
+              const m = RENTAL_STATUS_META[val] ?? { label: val, color: MUTED, bg: '#f5f5f5', border: BORDER };
+              return (
               <MenuItem key={val} value={val}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                   <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: m.color }} />
                   {m.label}
                 </Box>
               </MenuItem>
-            ))}
+              );
+            })}
           </Select>
         </FormControl>
-        {isPending && (
+        {allowVerificationLink && hasVerificationRecord && (
           <Button
             variant="outlined" fullWidth size="small"
             startIcon={<VerifiedUserIcon />}
@@ -817,7 +836,7 @@ const RentalDetailDialog: React.FC<RentalDetailDialogProps> = ({ rental, open, o
           </Button>
         )}
       </DialogContent>
-      <DialogActions sx={{ px: 3, pb: 3, gap: 1 }}>
+      <DialogActions sx={{ px: 3, gap: 1, bgcolor: '#fff' }}>
         <Button onClick={onClose} variant="outlined" size="small">Cancel</Button>
         <Button onClick={handleSave} variant="contained" size="small" disabled={isSaveDisabled}
           startIcon={saving ? <CircularProgress size={14} sx={{ color: '#fff' }} /> : <SaveIcon />}>
@@ -836,17 +855,15 @@ interface RentalListDialogProps {
   open: boolean;
   onClose: () => void;
   onSave: (id: string, updates: RentalUpdatePayload) => Promise<void>;
+  verificationMode?: boolean;
 }
 
-const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, open, onClose, onSave }) => {
+const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, open, onClose, onSave, verificationMode = false }) => {
   const [detail, setDetail] = useState<EnrichedRental | null>(null);
   const navigate = useNavigate();
 
-  // Pending rentals go straight to the full verification page
-  const isPending = (r: EnrichedRental) => r.status === 'submitted' || r.status === 'in-review';
-
   const handleRowClick = (r: EnrichedRental) => {
-    if (isPending(r)) {
+    if (verificationMode) {
       onClose();
       navigate(`/admin/verify/${r.id}`);
     } else {
@@ -927,7 +944,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
       flex: 0.8,
       renderCell: ({ row }: GridRenderCellParams<EnrichedRental>) => {
         const meta = RENTAL_STATUS_META[row.status] ?? RENTAL_STATUS_META.submitted;
-        const pending = isPending(row);
+        const pending = verificationMode;
         return (
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', gap: 0.75, py: 1 }}>
             <Chip
@@ -946,7 +963,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
       },
     },
   ];
-  }, []);
+  }, [verificationMode]);
 
   return (
     <>
@@ -1015,9 +1032,11 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
                       hideFooter={rentals.length <= 10}
                       initialState={{ pagination: { paginationModel: { pageSize: 10, page: 0 } } }}
                       pageSizeOptions={[10, 25, 50]}
+                      slots={{ noRowsOverlay: AdminNoRowsOverlay }}
                       disableRowSelectionOnClick
                       onRowClick={(params) => handleRowClick(params.row as EnrichedRental)}
                       sx={{
+                        ...adminDataGridSx,
                         minWidth: 900,
                         minHeight: 400,
                         height: { xs: 'calc(92dvh - 136px)', sm: 'min(620px, 68vh)', md: 'calc(88vh - 120px)' },
@@ -1033,7 +1052,7 @@ const RentalListDialog: React.FC<RentalListDialogProps> = ({ title, rentals, ope
           )}
         </DialogContent>
       </Dialog>
-      <RentalDetailDialog rental={detail} open={!!detail} onClose={() => setDetail(null)} onSave={onSave} />
+      <RentalDetailDialog rental={detail} open={!!detail} onClose={() => setDetail(null)} onSave={onSave} allowVerificationLink={false} />
     </>
   );
 };
@@ -1051,7 +1070,7 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
   );
   const today = dayjs();
   const navigate = useNavigate();
-  const [listDialog, setListDialog]         = useState<{ title: string; items: EnrichedRental[] } | null>(null);
+  const [listDialog, setListDialog] = useState<{ title: string; items: EnrichedRental[]; verificationMode?: boolean } | null>(null);
 
   const upcomingDates = [...new Set(
     dashboardRentals
@@ -1087,10 +1106,17 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
   const topDevices = Object.values(devMap).sort((a, b) => b.count - a.count).slice(0, 6);
 
   const statCards = [
-    { label: 'Total Rentals',    color: AMBER,       items: dashboardRentals },
-    { label: 'This Month',       color: AMBER_LIGHT, items: thisMonth },
-    { label: 'Active / Renting', color: '#2E7D32',   items: dashboardRentals.filter((r) => ACTIVE_RENTAL_STATUSES.includes(r.status)) },
-    { label: 'Pending Review',   color: '#1565C0',   items: dashboardRentals.filter((r) => r.status === 'submitted' || r.status === 'in-review') },
+    { label: 'Total Rentals', color: AMBER, icon: <DashboardIcon />, items: dashboardRentals, count: dashboardRentals.length, verificationMode: false },
+    { label: 'This Month', color: AMBER_LIGHT, icon: <CalendarMonthIcon />, items: thisMonth, count: thisMonth.length, verificationMode: false },
+    { label: 'Active / Renting', color: '#2E7D32', icon: <CameraAltIcon />, items: dashboardRentals.filter((r) => ACTIVE_RENTAL_STATUSES.includes(r.status)), count: dashboardRentals.filter((r) => ACTIVE_RENTAL_STATUSES.includes(r.status)).length, verificationMode: false },
+    {
+      label: 'Pending Review',
+      color: '#1565C0',
+      icon: <VerifiedUserIcon />,
+      items: rentals.filter((r) => Boolean(r.renter_id_fk)),
+      count: rentals.filter((r) => r.status === 'submitted' || r.status === 'in-review').length,
+      verificationMode: true,
+    },
   ];
 
 
@@ -1102,19 +1128,24 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
         {statCards.map((s) => (
           <Paper
             key={s.label} elevation={0}
-            onClick={() => setListDialog({ title: s.label, items: s.items })}
+            role="button"
+            tabIndex={0}
+            onClick={() => setListDialog({ title: s.label, items: s.items, verificationMode: s.verificationMode })}
+            onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') setListDialog({ title: s.label, items: s.items, verificationMode: s.verificationMode }); }}
             sx={{
-              flex: '1 1 130px', p: 2.5, borderRadius: 3, textAlign: 'center',
+              flex: '1 1 210px', p: 2.5, borderRadius: 4, textAlign: 'left', position: 'relative', overflow: 'hidden',
               background: CARD_BG, border: `1px solid ${BORDER}`,
-              cursor: 'pointer', transition: 'box-shadow 0.2s, transform 0.2s',
-              '&:hover': { boxShadow: '0 6px 24px rgba(201,151,58,0.14)', transform: 'translateY(-2px)' },
+              cursor: 'pointer', transition: 'box-shadow 0.2s, transform 0.2s, border-color .2s',
+              '&:before': { content: '""', position: 'absolute', inset: '0 auto 0 0', width: 4, bgcolor: s.color },
+              '&:hover': { boxShadow: '0 16px 34px rgba(16,16,16,0.09)', transform: 'translateY(-3px)', borderColor: 'rgba(16,16,16,.18)' },
+              '&:focus-visible': { outline: '3px solid rgba(255,194,28,.42)', outlineOffset: 2 },
             }}
           >
-            <Typography sx={{ fontSize: '2rem', fontWeight: 700, color: s.color, fontFamily: '"Sora", sans-serif', lineHeight: 1, mb: 0.5 }}>
-              {s.items.length}
-            </Typography>
-            <Typography sx={{ fontSize: '0.72rem', color: MUTED, fontFamily: '"Sora", sans-serif' }}>{s.label}</Typography>
-            <Typography sx={{ fontSize: '0.62rem', color: AMBER, fontFamily: '"Sora", sans-serif', mt: 0.5 }}>
+            <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 2 }}>
+              <Box><Typography sx={{ fontSize: '0.72rem', color: MUTED, fontWeight: 700, letterSpacing: '.06em', textTransform: 'uppercase' }}>{s.label}</Typography><Typography sx={{ fontSize: '2.3rem', fontWeight: 700, color: INK, lineHeight: 1.05, mt: 1 }}>{s.count}</Typography></Box>
+              <Box sx={{ width: 42, height: 42, borderRadius: 2.5, display: 'grid', placeItems: 'center', color: s.color, bgcolor: `${s.color}12`, '& .MuiSvgIcon-root': { fontSize: 21 } }}>{s.icon}</Box>
+            </Box>
+            <Typography sx={{ fontSize: '0.7rem', color: MUTED, fontWeight: 700, mt: 1.5 }}>
               {s.label === 'Pending Review' ? 'Review IDs →' : 'Click to view →'}
             </Typography>
           </Paper>
@@ -1303,6 +1334,7 @@ const OverviewTab: React.FC<{ rentals: EnrichedRental[]; onSave: (id: string, up
         <RentalListDialog
           title={listDialog.title} rentals={listDialog.items}
           open={!!listDialog} onClose={() => setListDialog(null)} onSave={onSave}
+          verificationMode={listDialog.verificationMode}
         />
       )}
     </Box>
@@ -1350,6 +1382,12 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
     setEditForm(null);
   };
 
+  const monitoringStatusValues = editingRental && isV2RentalStatus(editingRental.status) && editingRental.renter_type
+    ? [editingRental.status, ...V2_NEXT_STATUSES[editingRental.status]]
+    : editingRental
+      ? [editingRental.status]
+      : [];
+
   const saveMonitoringEdit = async () => {
     if (!editingRental || !editForm) return;
     if (!editForm.cam_name_id_fk || !editForm.rent_date_start || !editForm.rent_date_end) {
@@ -1371,12 +1409,13 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
 
     setSaving(true);
     try {
+      let emailFailed = false;
       const parsedRentPrice = editForm.rent_price.trim() === '' ? null : Number(editForm.rent_price);
       const payload = {
         rent_date_start: editForm.rent_date_start,
-        pickup_time: editForm.pickup_time?.format('hh:mm A') ?? null,
+        pickup_time: editForm.pickup_time?.format('HH:mm:ss') ?? null,
         rent_date_end: editForm.rent_date_end,
-        return_time: editForm.return_time?.format('hh:mm A') ?? null,
+        return_time: editForm.return_time?.format('HH:mm:ss') ?? null,
         cam_name_id_fk: editForm.cam_name_id_fk,
         branch_id_fk: editForm.branch_id_fk || null,
         hub_pick_up_addr: editForm.rentalType === 'pickup' ? editForm.branch_id_fk : null,
@@ -1394,17 +1433,19 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
         await Promise.all(itemIdsToUpdate.map((itemId) => supabase.from('RB_ITEM').update({ status: itemStatus }).eq('id', itemId)));
       }
 
-      try {
-        await sendDueReminderEmailsIfNeeded({
-          rental: { ...editingRental, ...payload },
-          renter: editingRental.renter,
-        });
-      } catch (reminderError) {
-        console.error('Due reminder email check failed:', reminderError);
+      if (editForm.status !== editingRental.status) {
+        try {
+          await sendRentalStatusEmail({ status: editForm.status, rental: editingRental });
+        } catch (emailError) {
+          console.error('Failed to send monitoring status email:', emailError);
+          emailFailed = true;
+        }
       }
 
       await onSaved();
-      setSnackbar({ open: true, msg: 'Rental monitoring details updated.', severity: 'success' });
+      setSnackbar(emailFailed
+        ? { open: true, msg: 'Rental updated, but the status email could not be sent.', severity: 'warning' }
+        : { open: true, msg: 'Rental monitoring details updated.', severity: 'success' });
       setEditingRental(null);
       setEditForm(null);
     } catch (e) {
@@ -1418,9 +1459,7 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
   const monitoringRows = rentals.map((r, index) => {
     const rentPrice = Number(r.rent_price ?? 0);
     const renterName = r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—';
-    const isRepeatedRenter = rentals.some(
-      (rental) => rental.renter?.id === r.renter?.id && rental.status === 'completed' && rental.id !== r.id,
-    );
+    const renterType = r.renter?.id ? getRentalRenterType(r, rentals) : null;
 
     return {
       id: r.id,
@@ -1431,7 +1470,7 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
       rd: r.rent_date_end,
       name: renterName,
       unit: formatCompactRentalItems(r),
-      renter: r.renter?.id ? (isRepeatedRenter ? 'Repeat' : 'New') : '—',
+      renter: renterType ? (renterType === 'repeat' ? 'Repeat' : 'New') : '—',
       type: r.delivery_addr == null ? 'Pick-up' : 'Deliver',
       hub: r.pickupBranch?.location_name ?? r.delivery_addr ?? '—',
       groupChat: Boolean(r.messenger_link),
@@ -1456,7 +1495,10 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
     { field: 'hub', headerName: 'Hub', minWidth: 160, flex: 1 },
     { field: 'groupChat', headerName: 'Group Chat', type: 'boolean', minWidth: 130, renderCell: (params: { value?: boolean }) => params.value ? <CheckCircleIcon sx={{ color: '#2E7D32' }} /> : <CancelIcon sx={{ color: '#B71C1C' }} /> },
     { field: 'rentalFee', headerName: 'Rental Fee', type: 'number', minWidth: 140, valueFormatter: (value: unknown) => `₱${Number(value ?? 0).toLocaleString()}` },
-    { field: 'status', headerName: 'Status', minWidth: 150 },
+    { field: 'status', headerName: 'Status', minWidth: 150, renderCell: (params) => {
+      const meta = RENTAL_STATUS_META[String(params.value)] ?? { label: String(params.value ?? '—'), color: MUTED, bg: '#f3f3f3', border: BORDER };
+      return <Chip label={meta.label} size="small" sx={{ color: meta.color, bgcolor: meta.bg, border: `1px solid ${meta.border}`, fontWeight: 700 }} />;
+    } },
     { field: 'availableUnit', headerName: 'Available Unit', minWidth: 150 },
   ];
 
@@ -1475,9 +1517,10 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
         pagination
         pageSizeOptions={[10, 25, 50]}
         initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
-        slots={{ toolbar: GridToolbar }}
+        slots={{ toolbar: GridToolbar, noRowsOverlay: AdminNoRowsOverlay }}
         onRowClick={(params) => openEditDialog(params.row.rental)}
         sx={{
+          ...adminDataGridSx,
           border: 0,
           '& .MuiDataGrid-columnHeaders': { backgroundColor: '#fafafa' },
           '& .MuiDataGrid-columnHeaderTitle': { fontWeight: 700 },
@@ -1487,13 +1530,27 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
         }}
       />
 
-      <Dialog open={!!editingRental && !!editForm} onClose={closeEditDialog} fullWidth maxWidth="sm">
-        <DialogTitle>Edit Rental Monitoring Details</DialogTitle>
+      <Dialog open={!!editingRental && !!editForm} onClose={closeEditDialog} fullWidth maxWidth="md" PaperProps={{ sx: { maxHeight: '92vh' } }}>
+        <DialogTitle sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 2 }}>
+          <Box>
+            <Typography component="span" sx={{ fontSize: '1.25rem', fontWeight: 700 }}>Edit Rental Monitoring Details</Typography>
+            <Typography sx={{ color: MUTED, fontSize: '.78rem', mt: .25 }}>Update operational details without changing renter identity.</Typography>
+          </Box>
+          <IconButton onClick={closeEditDialog} aria-label="Close rental editor"><CloseIcon /></IconButton>
+        </DialogTitle>
         {editingRental && editForm && (
-          <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2, pt: 2 }}>
-            <TextField label="Renter Name" value={editingRental.renter ? `${editingRental.renter.renter_fname} ${editingRental.renter.renter_lname}` : '—'} InputProps={{ readOnly: true }} fullWidth />
-            <TextField label="Renter Type" value={monitoringRows.find((row) => row.id === editingRental.id)?.renter ?? '—'} InputProps={{ readOnly: true }} fullWidth />
-            <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+          <DialogContent dividers sx={{ display: 'flex', flexDirection: 'column', gap: 2.5, pt: 2.5, bgcolor: '#fbfbf9' }}>
+            <Box sx={{ p: 2.5, bgcolor: '#fff', border: `1px solid ${BORDER}`, borderRadius: 3 }}>
+              <Typography sx={{ fontWeight: 700, mb: 1.75 }}>Renter</Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                <TextField label="Renter Name" value={editingRental.renter ? `${editingRental.renter.renter_fname} ${editingRental.renter.renter_lname}` : '—'} InputProps={{ readOnly: true }} fullWidth />
+                <TextField label="Renter Type" value={monitoringRows.find((row) => row.id === editingRental.id)?.renter ?? '—'} InputProps={{ readOnly: true }} fullWidth />
+              </Box>
+            </Box>
+            <Box sx={{ p: 2.5, bgcolor: '#fff', border: `1px solid ${BORDER}`, borderRadius: 3 }}>
+              <Typography sx={{ fontWeight: 700 }}>Rental Schedule</Typography>
+              <Typography sx={{ color: MUTED, fontSize: '.78rem', mb: 1.75 }}>Pickup and return date/time (PD, PT, RD, RT)</Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
               <TextField label="PD" type="date" required value={editForm.rent_date_start} onChange={(e) => setEditForm((f) => f && ({ ...f, rent_date_start: e.target.value }))} InputLabelProps={{ shrink: true }} />
               <TextField label="RD" type="date" required value={editForm.rent_date_end} onChange={(e) => setEditForm((f) => f && ({ ...f, rent_date_end: e.target.value }))} InputLabelProps={{ shrink: true }} />
               <LocalizationProvider dateAdapter={AdapterDayjs}>
@@ -1502,39 +1559,27 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
               <LocalizationProvider dateAdapter={AdapterDayjs}>
                 <TimePicker label="RT" value={editForm.return_time} onChange={(value) => setEditForm((f) => f && ({ ...f, return_time: value }))} slotProps={{ textField: { fullWidth: true } }} />
               </LocalizationProvider>
+              </Box>
             </Box>
-            <FormControl fullWidth required>
-              <InputLabel>Unit / Available Unit</InputLabel>
-              <Select value={editForm.cam_name_id_fk} label="Unit / Available Unit" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, cam_name_id_fk: e.target.value }))}>
-                {items.map((item) => <MenuItem key={item.id} value={item.id}>{item.device?.cam_name ?? 'Unknown camera'} · {item.code_name}</MenuItem>)}
-              </Select>
-            </FormControl>
-            <FormControl fullWidth>
-              <InputLabel>Type</InputLabel>
-              <Select value={editForm.rentalType} label="Type" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, rentalType: e.target.value as 'pickup' | 'delivery' }))}>
-                <MenuItem value="pickup">Pick-up</MenuItem>
-                <MenuItem value="delivery">Deliver</MenuItem>
-              </Select>
-            </FormControl>
-            <FormControl fullWidth required={editForm.rentalType === 'pickup'}>
-              <InputLabel>Hub</InputLabel>
-              <Select value={editForm.branch_id_fk} label="Hub" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, branch_id_fk: e.target.value }))}>
-                {branches.map((branch) => <MenuItem key={branch.id} value={branch.id}>{branch.location_name}</MenuItem>)}
-              </Select>
-            </FormControl>
-            {editForm.rentalType === 'delivery' && (
-              <TextField label="Delivery Address" required multiline minRows={2} value={editForm.delivery_addr} onChange={(e) => setEditForm((f) => f && ({ ...f, delivery_addr: e.target.value }))} fullWidth />
-            )}
-            <TextField label="Rental Fee" type="number" value={editForm.rent_price} onChange={(e) => setEditForm((f) => f && ({ ...f, rent_price: e.target.value }))} inputProps={{ min: 0, step: '0.01' }} fullWidth />
-            <FormControl fullWidth>
-              <InputLabel>Status</InputLabel>
-              <Select value={editForm.status} label="Status" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, status: e.target.value as RentalStatus }))}>
-                {Object.entries(RENTAL_STATUS_META).map(([value, meta]) => <MenuItem key={value} value={value}>{meta.label}</MenuItem>)}
-              </Select>
-            </FormControl>
+            <Box sx={{ p: 2.5, bgcolor: '#fff', border: `1px solid ${BORDER}`, borderRadius: 3 }}>
+              <Typography sx={{ fontWeight: 700, mb: 1.75 }}>Rental Assignment</Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                <FormControl fullWidth required><InputLabel>Unit / Available Unit</InputLabel><Select value={editForm.cam_name_id_fk} label="Unit / Available Unit" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, cam_name_id_fk: e.target.value }))}>{items.map((item) => <MenuItem key={item.id} value={item.id}>{item.device?.cam_name ?? 'Unknown camera'} · {item.code_name}</MenuItem>)}</Select></FormControl>
+                <FormControl fullWidth><InputLabel>Type</InputLabel><Select value={editForm.rentalType} label="Type" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, rentalType: e.target.value as 'pickup' | 'delivery' }))}><MenuItem value="pickup">Pick-up</MenuItem><MenuItem value="delivery">Deliver</MenuItem></Select></FormControl>
+                <FormControl fullWidth required={editForm.rentalType === 'pickup'}><InputLabel>Hub</InputLabel><Select value={editForm.branch_id_fk} label="Hub" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, branch_id_fk: e.target.value }))}>{branches.map((branch) => <MenuItem key={branch.id} value={branch.id}>{branch.location_name}</MenuItem>)}</Select></FormControl>
+                {editForm.rentalType === 'delivery' && <TextField label="Delivery Address" required multiline minRows={2} value={editForm.delivery_addr} onChange={(e) => setEditForm((f) => f && ({ ...f, delivery_addr: e.target.value }))} fullWidth />}
+              </Box>
+            </Box>
+            <Box sx={{ p: 2.5, bgcolor: '#fff', border: `1px solid ${BORDER}`, borderRadius: 3 }}>
+              <Typography sx={{ fontWeight: 700, mb: 1.75 }}>Rental Details</Typography>
+              <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+                <TextField label="Rental Fee" type="number" value={editForm.rent_price} onChange={(e) => setEditForm((f) => f && ({ ...f, rent_price: e.target.value }))} inputProps={{ min: 0, step: '0.01' }} fullWidth />
+                <FormControl fullWidth><InputLabel>Status</InputLabel><Select value={editForm.status} label="Status" onChange={(e: SelectChangeEvent) => setEditForm((f) => f && ({ ...f, status: e.target.value as RentalStatus }))}>{monitoringStatusValues.map((value) => <MenuItem key={value} value={value}>{RENTAL_STATUS_META[value]?.label ?? value}</MenuItem>)}</Select></FormControl>
+              </Box>
+            </Box>
           </DialogContent>
         )}
-        <DialogActions>
+        <DialogActions sx={{ px: 3 }}>
           <Button onClick={closeEditDialog} disabled={saving}>Cancel</Button>
           <Button variant="contained" onClick={saveMonitoringEdit} disabled={saving}>{saving ? 'Saving…' : 'Save Changes'}</Button>
         </DialogActions>
@@ -1552,238 +1597,80 @@ const MonitoringTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]
 // ═══════════════════════════════════════════════════════════════════════════════
 
 const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; onSave: (id: string, updates: RentalUpdatePayload) => Promise<void> }> = ({ rentals, items, onSave }) => {
-  const [currentMonth, setCurrentMonth] = useState(dayjs().startOf('month'));
   const [selectedCamera, setSelectedCamera] = useState('all');
   const [selectedRental, setSelectedRental] = useState<EnrichedRental | null>(null);
-  const [listDialog, setListDialog] = useState<{ date: Dayjs; rentals: EnrichedRental[] } | null>(null);
+  const [visibleRange, setVisibleRange] = useState<CalendarVisibleRange | null>(null);
 
-  const calStart = currentMonth.startOf('month').startOf('week');
-  const calEnd   = currentMonth.endOf('month').endOf('week');
+  const preparedCalendarRentals = useMemo(() => prepareRentalCalendarEntries(rentals, {
+    selectedCamera,
+    visibleRange,
+    getItemIds: getRentalItemIds,
+  }), [rentals, selectedCamera, visibleRange]);
 
-  const days: Dayjs[] = [];
-  let cur = calStart;
-  while (cur.isSameOrBefore(calEnd, 'day')) { days.push(cur); cur = cur.add(1, 'day'); }
+  const calendarEvents: EventInput[] = useMemo(() => preparedCalendarRentals.map((entry) => {
+    const { rental } = entry;
+    const primaryItem = getPrimaryRentalItem(rental);
+    const cameraName = primaryItem?.device?.cam_name ?? primaryItem?.code_name ?? 'Camera';
+    const firstName = rental.renter?.renter_fname?.trim() || 'Renter';
+    const lastInitial = rental.renter?.renter_lname?.trim().charAt(0);
+    const renterName = lastInitial ? `${firstName} ${lastInitial}.` : firstName;
+    const meta = RENTAL_STATUS_META[rental.status] ?? RENTAL_STATUS_META.submitted;
 
-  const weeks: Dayjs[][] = [];
-  for (let i = 0; i < days.length; i += 7) weeks.push(days.slice(i, i + 7));
+    return buildRentalCalendarEvent(entry, {
+      title: `${cameraName} — ${renterName}`,
+      color: meta.bg,
+      contrastColor: meta.color,
+      extendedProps: {
+        renterId: rental.renter_id_fk,
+        status: rental.status,
+        renterName,
+        cameraName,
+        unitCode: primaryItem?.code_name ?? null,
+        branchId: rental.branch_id_fk,
+      },
+    });
+  }), [preparedCalendarRentals]);
 
-  const visibleCalendarRentals = rentals.filter(
-    (rental) => !HIDDEN_DASHBOARD_STATUSES.includes(
-      String(rental.status ?? '').toLowerCase()
-    )
-  );
-  const filtered = selectedCamera === 'all' ? visibleCalendarRentals : visibleCalendarRentals.filter((r) => r.cam_name_id_fk === selectedCamera);
+  const handleVisibleRangeChange = useCallback((nextRange: CalendarVisibleRange) => {
+    setVisibleRange((current) => (
+      current?.start === nextRange.start && current.endExclusive === nextRange.endExclusive
+        ? current
+        : nextRange
+    ));
+  }, []);
 
   const openRentalById = (rentalId: string) => {
-    const clickedRental = visibleCalendarRentals.find((r) => r.id === rentalId);
-    if (clickedRental) setSelectedRental(clickedRental);
+    const rental = rentals.find((candidate) => candidate.id === rentalId);
+    if (rental) setSelectedRental(rental);
   };
 
   return (
     <Box>
-      {/* Controls */}
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-          <IconButton onClick={() => setCurrentMonth((m) => m.subtract(1, 'month'))} size="small" sx={{ color: AMBER, border: `1px solid ${BORDER}`, '&:hover': { background: 'rgba(201,151,58,0.08)' } }}>
-            <ChevronLeftIcon />
-          </IconButton>
-          <Typography sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', fontWeight: 700, fontSize: '1.2rem', minWidth: 180, textAlign: 'center' }}>
-            {currentMonth.format('MMMM YYYY')}
-          </Typography>
-          <IconButton onClick={() => setCurrentMonth((m) => m.add(1, 'month'))} size="small" sx={{ color: AMBER, border: `1px solid ${BORDER}`, '&:hover': { background: 'rgba(201,151,58,0.08)' } }}>
-            <ChevronRightIcon />
-          </IconButton>
-        </Box>
-
-        <FormControl size="small" sx={{ minWidth: 260 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'flex-end', mb: 2 }}>
+        <FormControl size="small" sx={{ width: { xs: '100%', sm: 300 } }}>
           <InputLabel sx={{ color: MUTED, fontSize: '0.82rem' }}>Filter by camera</InputLabel>
-          <Select value={selectedCamera} onChange={(e: SelectChangeEvent) => setSelectedCamera(e.target.value)} label="Filter by camera">
+          <Select value={selectedCamera} onChange={(event: SelectChangeEvent) => setSelectedCamera(event.target.value)} label="Filter by camera">
             <MenuItem value="all">All cameras</MenuItem>
-            {items.map((it) => (
-              <MenuItem key={it.id} value={it.id}>
-                <Typography sx={{ fontSize: '0.82rem' }}>{it.device?.cam_name ?? '—'} · {it.code_name}</Typography>
+            {items.map((item) => (
+              <MenuItem key={item.id} value={item.id}>
+                <Typography sx={{ fontSize: '0.82rem' }}>{item.device?.cam_name ?? '—'} · {item.code_name}</Typography>
               </MenuItem>
             ))}
           </Select>
         </FormControl>
       </Box>
 
-      {/* Day headers */}
-      <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', mb: 0.5 }}>
-        {DAYS.map((d) => (
-          <Box key={d} sx={{ textAlign: 'center', py: 0.75 }}>
-            <Typography sx={{ color: MUTED, fontFamily: '"Sora", sans-serif', fontSize: '0.68rem', letterSpacing: '0.1em', textTransform: 'uppercase' }}>{d}</Typography>
-          </Box>
-        ))}
-      </Box>
+      <RentalCalendar
+        events={calendarEvents}
+        onRentalClick={openRentalById}
+        onVisibleRangeChange={handleVisibleRangeChange}
+      />
 
-      {/* Weekly rows with spanning bars */}
-      <Box sx={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
-        {weeks.map((week, wi) => {
-          const weekStart = week[0];
-          const weekEnd   = week[6];
-          const weekRentals = filtered.filter((r) =>
-            dayjs(r.rent_date_start).isSameOrBefore(weekEnd, 'day') &&
-            dayjs(r.rent_date_end).isSameOrAfter(weekStart, 'day')
-          );
-          const sortedWeekRentals = [...weekRentals].sort((a, b) =>
-            dayjs(a.rent_date_start).valueOf() - dayjs(b.rent_date_start).valueOf()
-          );
-
-          const slotMap: Record<string, number> = {};
-          const slotEndCols: number[] = [];
-          sortedWeekRentals.forEach((r) => {
-            const rStart = dayjs(r.rent_date_start);
-            const rEnd = dayjs(r.rent_date_end);
-            const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
-            const colEnd = rEnd.isAfter(weekEnd, 'day') ? 6 : rEnd.day();
-
-            let assignedSlot = slotEndCols.findIndex((endCol) => colStart > endCol);
-            if (assignedSlot === -1) {
-              assignedSlot = slotEndCols.length;
-              slotEndCols.push(colEnd);
-            } else {
-              slotEndCols[assignedSlot] = colEnd;
-            }
-            slotMap[r.id] = assignedSlot;
-          });
-
-          const MAX_VISIBLE_ROWS = 3;
-          const hiddenByStartDay: Record<string, number> = {};
-          sortedWeekRentals.forEach((r) => {
-            const slot = slotMap[r.id] ?? 0;
-            if (slot < MAX_VISIBLE_ROWS) return;
-            const rentalStart = dayjs(r.rent_date_start);
-            if (!rentalStart.isSameOrAfter(weekStart, 'day') || !rentalStart.isSameOrBefore(weekEnd, 'day')) return;
-            const startKey = rentalStart.format('YYYY-MM-DD');
-            hiddenByStartDay[startKey] = (hiddenByStartDay[startKey] ?? 0) + 1;
-          });
-
-          const moreIndicators = week
-            .map((day) => {
-              const hiddenCount = hiddenByStartDay[day.format('YYYY-MM-DD')] ?? 0;
-              return hiddenCount > 0 ? { day, hiddenCount } : null;
-            })
-            .filter((entry): entry is { day: Dayjs; hiddenCount: number } => !!entry);
-
-          return (
-            <Box key={wi} sx={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: '2px', position: 'relative', mb: '2px' }}>
-              {/* Day cells */}
-              {week.map((day) => {
-                const isCurrentMonth = day.month() === currentMonth.month();
-                const isToday        = day.isSame(dayjs(), 'day');
-                return (
-                  <Box key={day.format('YYYY-MM-DD')} sx={{
-                    minHeight: 112,
-                    borderRadius: 1.5,
-                    border: isToday ? `2px solid ${AMBER}` : `1px solid ${BORDER}`,
-                    background: isCurrentMonth ? CARD_BG : 'rgba(201,151,58,0.015)',
-                    pt: 0.75, px: 0.75, pb: '44px',
-                  }}>
-                    <Typography sx={{ fontSize: '0.75rem', fontFamily: '"Sora", sans-serif', fontWeight: isToday ? 800 : 500, color: isToday ? AMBER : isCurrentMonth ? ESPRESSO : MUTED, lineHeight: 1 }}>
-                      {day.format('D')}
-                    </Typography>
-                  </Box>
-                );
-              })}
-
-              {/* Spanning rental bars */}
-              {sortedWeekRentals.filter((r) => (slotMap[r.id] ?? 0) < MAX_VISIBLE_ROWS).map((r) => {
-                const rStart   = dayjs(r.rent_date_start);
-                const rEnd     = dayjs(r.rent_date_end);
-                const colStart = rStart.isBefore(weekStart, 'day') ? 0 : rStart.day();
-                const colEnd   = rEnd.isAfter(weekEnd, 'day')      ? 6 : rEnd.day();
-                const isStart  = rStart.isSameOrAfter(weekStart, 'day') && rStart.isSameOrBefore(weekEnd, 'day');
-                const isEnd    = rEnd.isSameOrAfter(weekStart, 'day')   && rEnd.isSameOrBefore(weekEnd, 'day');
-                const slot     = slotMap[r.id] ?? 0;
-                const meta     = RENTAL_STATUS_META[r.status] ?? RENTAL_STATUS_META.submitted;
-                const firstName = r.renter?.renter_fname ?? getPrimaryRentalItem(r)?.code_name ?? '?';
-
-                return (
-                  <Box
-                    key={r.id}
-                    sx={{
-                      position: 'absolute',
-                      top: `${36 + slot * 19}px`,
-                      display: 'grid',
-                      gridTemplateColumns: 'repeat(7, 1fr)',
-                      left: 0,
-                      right: 0,
-                      px: '2px',
-                      height: 16,
-                      zIndex: 5,
-                      pointerEvents: 'none',
-                    }}
-                  >
-                    <Box
-                      onClick={() => openRentalById(r.id)}
-                      sx={{
-                        gridColumn: `${colStart + 1} / ${colEnd + 2}`,
-                        background: meta.bg,
-                        border: `1px solid ${meta.border}`,
-                        borderRadius: isStart && isEnd ? '5px' : isStart ? '5px 0 0 5px' : isEnd ? '0 5px 5px 0' : '0',
-                        display: 'flex',
-                        alignItems: 'center',
-                        px: 0.75,
-                        overflow: 'hidden',
-                        minWidth: 0,
-                        cursor: 'pointer',
-                        pointerEvents: 'auto',
-                        transition: 'filter 0.12s',
-                        '&:hover': { filter: 'brightness(0.9)' },
-                      }}
-                    >
-                      {isStart && (
-                        <Typography sx={{ fontSize: '0.6rem', color: meta.color, fontFamily: '"Sora", sans-serif', fontWeight: 700, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                          {firstName}
-                        </Typography>
-                      )}
-                    </Box>
-                  </Box>
-                );
-              })}
-
-              {moreIndicators.map(({ day, hiddenCount }) => (
-                <Button
-                  key={`more-${day.format('YYYY-MM-DD')}`}
-                  size="small"
-                  onClick={() => {
-                    const dayRentals = filtered.filter((r) => dayjs(r.rent_date_start).isSame(day, 'day'));
-                    setListDialog({ date: day, rentals: dayRentals });
-                  }}
-                  sx={{
-                    position: 'absolute',
-                    top: '92px',
-                    left: `calc(${(day.day() / 7) * 100}% + 6px)`,
-                    minWidth: 0,
-                    px: 0.8,
-                    py: 0.1,
-                    lineHeight: 1.2,
-                    fontSize: '0.65rem',
-                    fontFamily: '"Sora", sans-serif',
-                    textTransform: 'none',
-                    color: AMBER_DARK,
-                    border: `1px solid ${BORDER}`,
-                    borderRadius: 1.5,
-                    background: 'rgba(201,151,58,0.10)',
-                    zIndex: 8,
-                    '&:hover': { background: 'rgba(201,151,58,0.18)' },
-                  }}
-                >
-                  +{hiddenCount} more
-                </Button>
-              ))}
-            </Box>
-          );
-        })}
-      </Box>
-
-      {/* Legend — statuses relevant to calendar scheduling */}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, mt: 2.5 }}>
-        {(['in-review', 'for-delivery', 'delivered', 'renting', 'for-return', 'extended', 'for-refund', 'for-penalty', 'completed'] as const).map((key) => {
-          const meta = RENTAL_STATUS_META[key];
+        {V2_RENTAL_STATUSES.map((status) => {
+          const meta = RENTAL_STATUS_META[status];
           return (
-            <Box key={key} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
+            <Box key={status} sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
               <Box sx={{ width: 24, height: 10, borderRadius: 1, background: meta.bg, border: `1px solid ${meta.border}` }} />
               <Typography sx={{ color: MUTED, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif' }}>{meta.label}</Typography>
             </Box>
@@ -1791,55 +1678,25 @@ const CalendarTab: React.FC<{ rentals: EnrichedRental[]; items: EnrichedItem[]; 
         })}
       </Box>
 
-      {listDialog && (
-        <Dialog
-          open={!!listDialog}
-          onClose={() => setListDialog(null)}
-          maxWidth="sm"
-          fullWidth
-          PaperProps={{ sx: { background: CARD_BG, border: `1px solid ${BORDER}`, borderRadius: 3 } }}
-        >
-          <DialogTitle sx={{ color: ESPRESSO, fontFamily: '"Playfair Display", serif', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            Bookings — {listDialog.date.format('MMM D, YYYY')}
-            <IconButton onClick={() => setListDialog(null)} size="small" sx={{ color: MUTED }}>
-              <CloseIcon fontSize="small" />
-            </IconButton>
-          </DialogTitle>
-          <DialogContent sx={{ pt: 1 }}>
-            <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-              {listDialog.rentals.map((r) => (
-                <Box
-                  key={r.id}
-                  onClick={() => {
-                    openRentalById(r.id);
-                    setListDialog(null);
-                  }}
-                  sx={{ p: 1.4, borderRadius: 2, border: `1px solid ${BORDER}`, background: 'rgba(201,151,58,0.04)', cursor: 'pointer', '&:hover': { background: 'rgba(201,151,58,0.09)' } }}
-                >
-                  <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '0.86rem' }}>{formatCompactRentalItems(r)}</Typography>
-                  <Typography sx={{ color: INK, fontSize: '0.8rem' }}>{r.renter ? `${r.renter.renter_fname} ${r.renter.renter_lname}` : '—'}</Typography>
-                  <Typography sx={{ color: MUTED, fontSize: '0.76rem' }}>{r.renter?.mobile_no ?? 'No contact number'}</Typography>
-                </Box>
-              ))}
-            </Box>
-          </DialogContent>
-        </Dialog>
-      )}
-
-      {/* Rental detail — opens verification page if pending */}
       {selectedRental && (
         <RentalDetailDialog
           rental={selectedRental}
-          open={!!selectedRental}
+          open
           onClose={() => setSelectedRental(null)}
           onSave={onSave}
+          allowVerificationLink={false}
         />
       )}
     </Box>
   );
 };
 
-// ═══════════════════════════════════════════════════════════════════════════════
+const AdminNoRowsOverlay = () => (
+  <Box sx={{ height: '100%', minHeight: 180, display: 'grid', placeItems: 'center', p: 3, textAlign: 'center' }}>
+    <Box><Typography sx={{ color: INK, fontWeight: 700 }}>No records to display</Typography><Typography sx={{ color: MUTED, fontSize: '.8rem', mt: .35 }}>Try adjusting the current filters or check back later.</Typography></Box>
+  </Box>
+);
+
 // TAB 2 — INVENTORY
 // ═══════════════════════════════════════════════════════════════════════════════
 
@@ -1873,7 +1730,7 @@ const AddDeviceDialog: React.FC<{ open: boolean; onClose: () => void; onSaved: (
         const path = `devices/${Date.now()}_${imgFile.name}`;
         const { data, error: upErr } = await supabase.storage.from('verification-images').upload(path, imgFile, { upsert: true });
         if (upErr) throw new Error(upErr.message);
-        device_img = supabase.storage.from('verification-images').getPublicUrl(data.path).data.publicUrl;
+        device_img = data.path;
       }
       const { error: insErr } = await supabase.from('RB_DEVICES').insert({ cam_name: camName, device_img });
       if (insErr) throw new Error(insErr.message);
@@ -2099,8 +1956,7 @@ const EditItemDialog: React.FC<{ item: EnrichedItem | null; open: boolean; onClo
         const path = `devices/${Date.now()}_${imgFile.name}`;
         const { data, error } = await supabase.storage.from('verification-images').upload(path, imgFile, { upsert: true });
         if (!error) {
-          const url = supabase.storage.from('verification-images').getPublicUrl(data.path).data.publicUrl;
-          await supabase.from('RB_DEVICES').update({ device_img: url }).eq('id', item.device_id_fk);
+          await supabase.from('RB_DEVICES').update({ device_img: data.path }).eq('id', item.device_id_fk);
         }
       }
       await supabase.from('RB_ITEM').update({
@@ -2354,9 +2210,10 @@ const InventoryTab: React.FC<{ items: EnrichedItem[]; devices: RbDevice[]; branc
           pagination
           pageSizeOptions={[10, 25, 50, 100]}
           initialState={{ pagination: { paginationModel: { pageSize: 10 } } }}
-          slots={{ toolbar: GridToolbar }}
+          slots={{ toolbar: GridToolbar, noRowsOverlay: AdminNoRowsOverlay }}
           slotProps={{ toolbar: { showQuickFilter: true } }}
           sx={{
+            ...adminDataGridSx,
             border: 0,
             minHeight: 520,
             '& .MuiDataGrid-columnHeaders': {
@@ -2402,12 +2259,13 @@ const drawerWidth = 260;
 const collapsedDrawerWidth = 84;
 const appBarHeight = 64;
 
-const ADMIN_NAV_ITEMS: Array<{ label: string; icon: React.ReactNode }> = [
-  { label: 'Overview', icon: <DashboardIcon /> },
-  { label: 'Calendar', icon: <CalendarMonthIcon /> },
-  { label: 'Monitoring', icon: <MonitorHeartIcon /> },
-  { label: 'Inventory', icon: <InventoryIcon /> },
-  { label: 'Others', icon: <SettingsSuggestIcon /> },
+const ADMIN_NAV_ITEMS: Array<{ tab: number; label: string; icon: React.ReactNode; adminOnly?: boolean }> = [
+  { tab: 0, label: 'Overview', icon: <DashboardIcon /> },
+  { tab: 1, label: 'Calendar', icon: <CalendarMonthIcon /> },
+  { tab: 2, label: 'Monitoring', icon: <MonitorHeartIcon /> },
+  { tab: 3, label: 'Inventory', icon: <InventoryIcon /> },
+  { tab: 4, label: 'Landing Page', icon: <WebIcon />, adminOnly: true },
+  { tab: 5, label: 'Others', icon: <SettingsSuggestIcon /> },
 ];
 
 interface AdminHeaderProps {
@@ -2432,11 +2290,11 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ rbUser, onMenuToggle, onLogou
         zIndex: (theme) => theme.zIndex.drawer + 1,
         ml: { md: `${desktopDrawerWidth}px` },
         width: { md: `calc(100% - ${desktopDrawerWidth}px)` },
-        background: 'rgba(255,255,255,0.96)',
+        background: 'rgba(255,255,255,0.92)',
         color: INK,
         backdropFilter: 'blur(14px)',
         borderBottom: `1px solid ${BORDER}`,
-        boxShadow: '0 1px 10px rgba(17,17,17,0.05)',
+        boxShadow: '0 8px 28px rgba(17,17,17,0.045)',
         transition: (theme) => theme.transitions.create(['margin-left', 'width'], {
           easing: theme.transitions.easing.sharp,
           duration: theme.transitions.duration.shorter,
@@ -2461,12 +2319,10 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ rbUser, onMenuToggle, onLogou
           </IconButton>
         </Tooltip>
 
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
-          <AdminPanelSettingsIcon sx={{ color: AMBER, fontSize: 22, display: { xs: 'none', sm: 'block' } }} />
-          <Typography sx={{ fontFamily: '"Playfair Display", serif', color: ESPRESSO, fontWeight: 700, fontSize: { xs: '0.9rem', sm: '1rem' }, whiteSpace: 'nowrap' }}>
-            recap buddies
-          </Typography>
-          <Chip label={rbUser.role.toUpperCase()} size="small" sx={{ background: 'rgba(201,151,58,0.14)', color: AMBER_DARK, border: `1px solid ${BORDER}`, fontSize: '0.62rem', fontFamily: '"Sora", sans-serif', height: 20, display: { xs: 'none', sm: 'inline-flex' } }} />
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.15, minWidth: 0 }}>
+          <Box component="img" src={recapCharacterLogo} alt="" sx={{ width: 31, height: 31, objectFit: 'contain', display: { xs: 'none', sm: 'block' } }} />
+          <Box component="img" src={recapBlackText} alt="Recap Buddies" sx={{ width: { xs: 104, sm: 124 }, maxHeight: 25 }} />
+          <Chip label={rbUser.role.toUpperCase()} size="small" sx={{ background: ADMIN_COLORS.softYellow, color: INK, border: '1px solid rgba(255,194,28,.48)', fontSize: '0.62rem', fontWeight: 700, height: 22, display: { xs: 'none', sm: 'inline-flex' } }} />
         </Box>
 
         <Box sx={{ flexGrow: 1 }} />
@@ -2516,7 +2372,7 @@ const AdminHeader: React.FC<AdminHeaderProps> = ({ rbUser, onMenuToggle, onLogou
               </React.Fragment>
             ))}
           </Menu>
-          <Avatar sx={{ width: 32, height: 32, background: `linear-gradient(135deg, ${AMBER}, ${AMBER_LIGHT})`, fontSize: '0.85rem', fontWeight: 700, fontFamily: '"Sora", sans-serif', color: '#fff' }}>
+          <Avatar sx={{ width: 34, height: 34, background: ADMIN_COLORS.yellow, fontSize: '0.85rem', fontWeight: 700, color: INK, border: '1px solid rgba(16,16,16,.08)' }}>
             {rbUser.user_fname[0]?.toUpperCase()}
           </Avatar>
           <Typography sx={{ color: MUTED, fontSize: '0.8rem', fontFamily: '"Sora", sans-serif', display: { xs: 'none', md: 'block' } }}>{rbUser.user_fname}</Typography>
@@ -2536,44 +2392,44 @@ interface AdminDrawerProps {
   onMobileClose: () => void;
   collapsed: boolean;
   isMobile: boolean;
+  isAdmin: boolean;
 }
 
-const AdminDrawer: React.FC<AdminDrawerProps> = ({ tab, onTab, mobileOpen, onMobileClose, collapsed, isMobile }) => {
+const AdminDrawer: React.FC<AdminDrawerProps> = ({ tab, onTab, mobileOpen, onMobileClose, collapsed, isMobile, isAdmin }) => {
   const effectiveWidth = collapsed && !isMobile ? collapsedDrawerWidth : drawerWidth;
+  const visibleNavItems = ADMIN_NAV_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   const drawerContent = (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#fff' }}>
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column', background: '#111', color: '#fff' }}>
       <Toolbar sx={{ minHeight: appBarHeight, px: collapsed && !isMobile ? 1.5 : 2.5 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, overflow: 'hidden' }}>
-          <AdminPanelSettingsIcon sx={{ color: AMBER, fontSize: 24, flexShrink: 0 }} />
+          <Box component="img" src={recapCharacterLogo} alt="" sx={{ width: 34, height: 34, objectFit: 'contain', flexShrink: 0 }} />
           {(!collapsed || isMobile) && (
-            <Box>
-              <Typography sx={{ color: ESPRESSO, fontWeight: 800, fontSize: '0.95rem', fontFamily: '"Playfair Display", serif', whiteSpace: 'nowrap' }}>
+            <Box sx={{ minWidth: 0 }}>
+              <Box component="img" src={recapWhiteText} alt="Recap Buddies" sx={{ width: 122, maxHeight: 24, display: 'block' }} />
+              <Typography sx={{ color: '#999', fontSize: '0.68rem', letterSpacing: '.08em', textTransform: 'uppercase', whiteSpace: 'nowrap', mt: 0.25 }}>
                 Admin Console
-              </Typography>
-              <Typography sx={{ color: MUTED, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', whiteSpace: 'nowrap' }}>
-                Recap Buddies
               </Typography>
             </Box>
           )}
         </Box>
       </Toolbar>
-      <Divider />
+      <Divider sx={{ borderColor: 'rgba(255,255,255,.10)' }} />
       <Box sx={{ px: 1.5, py: 2 }}>
         {(!collapsed || isMobile) && (
-          <Typography sx={{ px: 1, mb: 1, color: MUTED, fontSize: '0.72rem', fontWeight: 700, fontFamily: '"Sora", sans-serif' }}>
-            Main items
+          <Typography sx={{ px: 1, mb: 1.25, color: '#777', fontSize: '0.68rem', fontWeight: 700, letterSpacing: '.12em', textTransform: 'uppercase' }}>
+            Workspace
           </Typography>
         )}
         <List disablePadding sx={{ display: 'flex', flexDirection: 'column', gap: 0.75 }}>
-          {ADMIN_NAV_ITEMS.map((item, index) => {
-            const selected = tab === index;
+          {visibleNavItems.map((item) => {
+            const selected = tab === item.tab;
             return (
               <ListItemButton
                 key={item.label}
                 selected={selected}
                 onClick={() => {
-                  onTab(index);
+                  onTab(item.tab);
                   if (isMobile) onMobileClose();
                 }}
                 sx={{
@@ -2581,14 +2437,15 @@ const AdminDrawer: React.FC<AdminDrawerProps> = ({ tab, onTab, mobileOpen, onMob
                   borderRadius: 2.5,
                   px: collapsed && !isMobile ? 1.5 : 1.75,
                   justifyContent: collapsed && !isMobile ? 'center' : 'flex-start',
-                  color: selected ? INK : MUTED,
+                  color: selected ? INK : '#bdbdbd',
                   '&.Mui-selected': {
-                    background: 'rgba(201,151,58,0.14)',
+                    background: ADMIN_COLORS.yellow,
                     color: INK,
-                    boxShadow: 'inset 0 0 0 1px rgba(201,151,58,0.18)',
+                    boxShadow: '0 8px 22px rgba(0,0,0,.25)',
                   },
                   '&.Mui-selected:hover, &:hover': {
-                    background: selected ? 'rgba(201,151,58,0.18)' : 'rgba(17,17,17,0.04)',
+                    background: selected ? '#ffd04d' : 'rgba(255,255,255,0.07)',
+                    color: selected ? INK : '#fff',
                   },
                 }}
               >
@@ -2623,8 +2480,8 @@ const AdminDrawer: React.FC<AdminDrawerProps> = ({ tab, onTab, mobileOpen, onMob
         '& .MuiDrawer-paper': {
           width: effectiveWidth,
           boxSizing: 'border-box',
-          borderRight: `1px solid ${BORDER}`,
-          background: '#fff',
+          borderRight: 0,
+          background: '#111',
           transition: (theme) => theme.transitions.create('width', {
             easing: theme.transitions.easing.sharp,
             duration: theme.transitions.duration.shorter,
@@ -2654,6 +2511,7 @@ const AdminDashboard: React.FC = () => {
   const [agreementMd, setAgreementMd] = useState('');
   const [agreementLoading, setAgreementLoading] = useState(false);
   const [agreementSaving, setAgreementSaving] = useState(false);
+  const [agreementLoadAttempted, setAgreementLoadAttempted] = useState(false);
   const [snackbar, setSnackbar] = useState<{ open: boolean; msg: string; severity: 'success' | 'error' | 'warning' }>({ open: false, msg: '', severity: 'success' });
 
   const fetchAll = useCallback(async () => {
@@ -2672,12 +2530,18 @@ const AdminDashboard: React.FC = () => {
       supabase.from('RB_RENTAL_FORM').select('*').order('created_at', { ascending: false }),
     ]);
 
-    setDevices(devsRaw ?? []);
+    const signedDevices = await signDeviceImages((devsRaw ?? []) as RbDevice[]);
+    const signedDeviceMap = new Map(signedDevices.map((device) => [device.id, device]));
+    const hydrateItemDevice = (item: EnrichedItem): EnrichedItem => ({
+      ...item,
+      device: item.device?.id ? signedDeviceMap.get(item.device.id) ?? item.device : item.device,
+    });
+    setDevices(signedDevices);
     setBranches(branchesRaw ?? []);
-    setItems((itemsRaw ?? []) as EnrichedItem[]);
+    setItems(((itemsRaw ?? []) as EnrichedItem[]).map(hydrateItemDevice));
 
     const devMap: Record<string, RbDevice> = {};
-    (devsRaw ?? []).forEach((d: RbDevice) => { devMap[d.id] = d; });
+    signedDevices.forEach((d) => { devMap[d.id] = d; });
 
     if (rentalsRaw && rentalsRaw.length > 0) {
       const rf = rentalsRaw as RbRentalForm[];
@@ -2698,7 +2562,7 @@ const AdminDashboard: React.FC = () => {
       const iMap: Record<string, EnrichedItem> = {};
       const rMap: Record<string, RbRenter>     = {};
       const bMap: Record<string, RbBranch>     = {};
-      (rentItemsRaw    ?? []).forEach((it: EnrichedItem) => { iMap[it.id] = it; });
+      (rentItemsRaw    ?? []).forEach((it: EnrichedItem) => { iMap[it.id] = hydrateItemDevice(it); });
       (rentersRaw      ?? []).forEach((r: RbRenter)      => { rMap[r.id]  = r; });
       (rentBranchesRaw ?? []).forEach((b: RbBranch)      => { bMap[b.id]  = b; });
 
@@ -2744,10 +2608,12 @@ const AdminDashboard: React.FC = () => {
 
   useEffect(() => { void Promise.resolve().then(fetchAll); }, [fetchAll]);
   const loadAgreement = useCallback(async () => {
+    setAgreementLoadAttempted(true);
     setAgreementLoading(true);
     const { data, error } = await supabase.storage.from('terms_and_condition').download('agreement.md');
     if (error || !data) {
-      setSnackbar({ open: true, msg: `Failed to load agreement: ${error?.message ?? 'Unknown error'}`, severity: 'error' });
+      console.error('Failed to load the canonical agreement.', error);
+      setSnackbar({ open: true, msg: 'Failed to load the saved agreement. Please try again.', severity: 'error' });
       setAgreementLoading(false);
       return;
     }
@@ -2755,51 +2621,8 @@ const AdminDashboard: React.FC = () => {
     setAgreementLoading(false);
   }, []);
   useEffect(() => {
-    if (tab === 4 && !agreementMd && !agreementLoading) void Promise.resolve().then(loadAgreement);
-  }, [tab, agreementMd, agreementLoading, loadAgreement]);
-
-  const markOverdueRentalsCompleted = useCallback(async () => {
-    const today = dayjs().startOf('day');
-    const overdueRentals = rentals.filter((r) => {
-      const endDate = dayjs(r.rent_date_end).startOf('day');
-      return (
-        endDate.isBefore(today) &&
-        !['completed', 'canceled', 'declined', 'for-penalty'].includes(r.status)
-      );
-    });
-
-    if (overdueRentals.length === 0) return;
-
-    const updates = overdueRentals.map((r) =>
-      supabase
-        .from('RB_RENTAL_FORM')
-        .update({
-          status: 'completed',
-          actual_return_date: today.format('YYYY-MM-DD'),
-        })
-        .eq('id', r.id)
-    );
-
-    await Promise.all(updates);
-
-    const itemUpdates = overdueRentals.flatMap((r) =>
-      getRentalItemIds(r).map((itemId) =>
-        supabase
-          .from('RB_ITEM')
-          .update({ status: 'Available' })
-          .eq('id', itemId)
-      )
-    );
-
-    if (itemUpdates.length > 0) await Promise.all(itemUpdates);
-    await fetchAll();
-  }, [fetchAll, rentals]);
-
-  useEffect(() => {
-    if (!loading && rentals.length > 0) {
-      void Promise.resolve().then(markOverdueRentalsCompleted);
-    }
-  }, [loading, rentals, markOverdueRentalsCompleted]);
+    if (tab === 5 && !agreementLoadAttempted && !agreementLoading) void Promise.resolve().then(loadAgreement);
+  }, [tab, agreementLoadAttempted, agreementLoading, loadAgreement]);
 
   const handleSaveStatus = useCallback(async (
     id: string,
@@ -2833,7 +2656,6 @@ const AdminDashboard: React.FC = () => {
       return_time: updates.return_time || null,
     };
     if (updates.status === 'completed') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
-    if (updates.status === 'for-penalty') payload.actual_return_date = dayjs().format('YYYY-MM-DD');
 
     const { error: updateError } = await supabase.from('RB_RENTAL_FORM').update(payload).eq('id', id);
     if (updateError) {
@@ -2855,7 +2677,7 @@ const AdminDashboard: React.FC = () => {
       await Promise.all(nextItemIds.map((itemId) => supabase.from('RB_ITEM').update({ status: itemStatus }).eq('id', itemId)));
     }
 
-    if (targetRental) {
+    if (targetRental && updates.status !== targetRental.status) {
       const updatedRental = {
         ...targetRental,
         ...payload,
@@ -2877,14 +2699,6 @@ const AdminDashboard: React.FC = () => {
         });
       }
 
-      try {
-        await sendDueReminderEmailsIfNeeded({
-          rental: updatedRental,
-          renter: targetRental.renter,
-        });
-      } catch (reminderError) {
-        console.error('Due reminder email check failed:', reminderError);
-      }
     }
 
     await fetchAll();
@@ -2894,6 +2708,28 @@ const AdminDashboard: React.FC = () => {
     await supabase.auth.signOut();
     navigate('/admin/login');
   };
+
+  const saveAgreement = useCallback(async (nextMarkdown: string) => {
+    if (agreementSaving || !nextMarkdown.trim()) return false;
+    setAgreementSaving(true);
+    try {
+      const blob = new Blob([nextMarkdown], { type: 'text/markdown;charset=utf-8' });
+      const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
+      if (error) {
+        console.error('Failed to save the canonical agreement.', error);
+        setSnackbar({ open: true, msg: 'Save failed. The currently stored agreement was not changed.', severity: 'error' });
+        return false;
+      }
+      setAgreementMd(nextMarkdown);
+      setSnackbar({ open: true, msg: 'Terms & Conditions saved successfully.', severity: 'success' });
+      return true;
+    } catch {
+      setSnackbar({ open: true, msg: 'Save failed. The currently stored agreement was not changed.', severity: 'error' });
+      return false;
+    } finally {
+      setAgreementSaving(false);
+    }
+  }, [agreementSaving]);
 
   if (loading) {
     return (
@@ -2909,7 +2745,7 @@ const AdminDashboard: React.FC = () => {
   const desktopDrawerWidth = desktopDrawerCollapsed ? collapsedDrawerWidth : drawerWidth;
 
   return (
-    <Box sx={{ minHeight: '100vh', background: '#FFFFFF', display: 'flex' }}>
+    <Box sx={{ minHeight: '100vh', background: ADMIN_COLORS.canvas, display: 'flex' }}>
       <AdminHeader
         rbUser={rbUser}
         onMenuToggle={() => {
@@ -2928,6 +2764,7 @@ const AdminDashboard: React.FC = () => {
         onMobileClose={() => setMobileDrawerOpen(false)}
         collapsed={desktopDrawerCollapsed}
         isMobile={isMobile}
+        isAdmin={rbUser.role === 'admin'}
       />
       <Box
         component="main"
@@ -2941,27 +2778,19 @@ const AdminDashboard: React.FC = () => {
           }),
         }}
       >
-        <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1400, mx: 'auto' }}>
+        <Box sx={{ px: { xs: 2, md: 3.5, xl: 5 }, py: { xs: 3, md: 4 }, maxWidth: 1480, mx: 'auto' }}>
+          {tab === 0 && <AdminPageIntro eyebrow="Admin workspace" title="Overview" description="A focused view of rental activity, upcoming handovers, renter reviews, and year-to-date performance." />}
+          {tab === 1 && <AdminPageIntro eyebrow="Rental operations" title="Calendar" description="View scheduled rentals by month, week, day, or list while keeping multi-day bookings easy to scan." />}
+          {tab === 2 && <AdminPageIntro eyebrow="Rental operations" title="Monitoring" description="Review and update the operational details used for pickup, delivery, return, and unit assignment." />}
           {tab === 0 && <OverviewTab  rentals={rentals} onSave={handleSaveStatus} />}
           {tab === 1 && <CalendarTab  rentals={rentals} items={items} onSave={handleSaveStatus} />}
           {tab === 2 && <MonitoringTab rentals={rentals} items={items} branches={branches} onSaved={fetchAll} />}
           {tab === 3 && <InventoryTab items={items} devices={devices} branches={branches} isAdmin={rbUser.role === 'admin'} createdBy={authUid} onRefresh={fetchAll} />}
-          {tab === 4 && (
-            <Paper sx={{ p: 3, borderRadius: 4, border: `1px solid ${BORDER}`, boxShadow: '0 8px 24px rgba(0,0,0,0.05)' }}>
-              <Typography sx={{ mb: 2, fontWeight: 700 }}>Terms & Conditions</Typography>
-              <TextField multiline minRows={14} fullWidth value={agreementMd} onChange={(e) => setAgreementMd(e.target.value)} placeholder="Write markdown content here..." />
-              <Box sx={{ mt: 2, display: 'flex', justifyContent: 'space-between', gap: 2 }}>
-                <Button variant="outlined" onClick={() => void loadAgreement()} disabled={agreementLoading}>Reload</Button>
-                <Button variant="contained" disabled={agreementSaving || !agreementMd.trim()} onClick={async () => {
-                  setAgreementSaving(true);
-                  const blob = new Blob([agreementMd], { type: 'text/markdown;charset=utf-8' });
-                  const { error } = await supabase.storage.from('terms_and_condition').upload('agreement.md', blob, { upsert: true, contentType: 'text/markdown' });
-                  setAgreementSaving(false);
-                  if (error) setSnackbar({ open: true, msg: `Save failed: ${error.message}`, severity: 'error' });
-                  else setSnackbar({ open: true, msg: 'Terms & Conditions updated successfully.', severity: 'success' });
-                }}>Save Changes</Button>
-              </Box>
-            </Paper>
+          {tab === 4 && rbUser.role === 'admin' && <LandingPageManager devices={devices} />}
+          {tab === 5 && (
+            <React.Suspense fallback={<Paper elevation={0} sx={{ minHeight: 440, display: 'grid', placeItems: 'center', border: `1px solid ${BORDER}` }}><CircularProgress color="inherit" /></Paper>}>
+              <TermsAgreementEditor markdown={agreementMd} loading={agreementLoading} saving={agreementSaving} onReload={() => void loadAgreement()} onSave={saveAgreement} />
+            </React.Suspense>
           )}
         </Box>
       </Box>

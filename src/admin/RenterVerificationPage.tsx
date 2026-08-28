@@ -26,6 +26,8 @@ import { supabase } from '../service/supabaseClient';
 import { sendRentalStatusEmail } from '../services/emailService';
 import type { RbRenter, RbRentalForm, RbItem, RbDevice, RbBranch, RbSelfieVerificationInst } from '../service/supabaseClient';
 import type { RentalItemLink } from '../utils/rentalItems';
+import { V2_NEXT_STATUSES, V2_RENTAL_STATUS_META, isV2RentalStatus, type V2RentalStatus } from '../constants/rentalStatus';
+import { ADMIN_COLORS } from './adminDesignTokens';
 
 // ─── Theme ────────────────────────────────────────────────────────────────────
 const AMBER      = '#111111';
@@ -37,18 +39,14 @@ const MUTED      = '#666666';
 const BORDER     = 'rgba(201,151,58,0.18)';
 
 const RENTAL_STATUS_META: Record<string, { label: string; color: string; bg: string; border: string }> = {
-  submitted:   { label: 'Submitted',  color: '#B8860B', bg: 'rgba(255,212,59,0.10)',  border: 'rgba(255,212,59,0.30)'  },
-  'in-review': { label: 'In Review',  color: '#1565C0', bg: 'rgba(100,149,237,0.10)', border: 'rgba(100,149,237,0.30)' },
+  ...V2_RENTAL_STATUS_META,
   'for-delivery': { label: 'For Delivery', color: '#1565C0', bg: 'rgba(100,149,237,0.12)', border: 'rgba(100,149,237,0.35)' },
   delivered:      { label: 'Delivered',    color: '#1A237E', bg: 'rgba(100,149,237,0.08)', border: 'rgba(100,149,237,0.25)' },
-  renting:     { label: 'Renting',    color: '#7A4F00', bg: 'rgba(201,151,58,0.12)',  border: 'rgba(201,151,58,0.40)'  },
   'for-return':   { label: 'For Return',   color: '#E65100', bg: 'rgba(255,165,0,0.12)', border: 'rgba(255,165,0,0.35)' },
   'for-refund':   { label: 'For Refund',   color: '#6A1B9A', bg: 'rgba(156,39,176,0.10)', border: 'rgba(156,39,176,0.30)' },
   'for-penalty':  { label: 'For Penalty',  color: '#B71C1C', bg: 'rgba(211,47,47,0.10)', border: 'rgba(211,47,47,0.30)' },
   extended:       { label: 'Extended',     color: '#7c3aed', bg: '#f3e8ff', border: '#d8b4fe' },
-  completed:   { label: 'Completed',  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)', border: 'rgba(105,219,124,0.30)' },
   canceled:    { label: 'Canceled',   color: '#555555', bg: 'rgba(120,120,120,0.10)', border: 'rgba(120,120,120,0.25)' },
-  declined:    { label: 'Declined',   color: '#B71C1C', bg: 'rgba(211,47,47,0.08)',   border: 'rgba(211,47,47,0.25)'   },
 };
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -78,6 +76,22 @@ const getSelfieInstructionDescription = (inst: RbSelfieVerificationInst | null) 
   inst?.instruction_desc ?? null;
 
 const getItemThumbnailUrl = (item?: EnrichedItem | null) => item?.image_url ?? item?.device?.device_img ?? null;
+
+const getVerificationStoragePath = (value: string | null) => {
+  if (!value) return null;
+  const marker = '/verification-images/';
+  const markerIndex = value.indexOf(marker);
+  if (markerIndex >= 0) return decodeURIComponent(value.slice(markerIndex + marker.length).split('?')[0]);
+  if (value.startsWith('verification-images/')) return value.slice('verification-images/'.length);
+  return value.startsWith('http://') || value.startsWith('https://') ? null : value;
+};
+
+const createVerificationSignedUrl = async (value: string | null) => {
+  const path = getVerificationStoragePath(value);
+  if (!path) return null;
+  const { data, error } = await supabase.storage.from('verification-images').createSignedUrl(path, 10 * 60);
+  return error ? null : data.signedUrl;
+};
 
 const DeviceThumbnail: React.FC<{ item?: EnrichedItem | null }> = ({ item }) => {
   const imageUrl = getItemThumbnailUrl(item);
@@ -122,13 +136,13 @@ const ImageCard: React.FC<{ label: string; src: string | null; onZoom: (src: str
   <Box sx={{ flex: '1 1 180px' }}>
     <Typography sx={{ color: AMBER_DARK, fontSize: '0.68rem', fontFamily: '"Sora", sans-serif', letterSpacing: '0.1em', textTransform: 'uppercase', mb: 0.75, fontWeight: 700 }}>{label}</Typography>
     {src
-      ? <Box sx={{ position: 'relative', borderRadius: 2, overflow: 'hidden', border: `1px solid ${BORDER}`, cursor: 'pointer' }} onClick={() => onZoom(src)}>
-          <img src={src} alt={label} style={{ width: '100%', height: 140, objectFit: 'cover', display: 'block' }} />
+      ? <Box role="button" tabIndex={0} aria-label={`Preview ${label}`} sx={{ position: 'relative', borderRadius: 3, overflow: 'hidden', border: `1px solid ${BORDER}`, cursor: 'pointer', bgcolor: '#f3f3f0', '&:focus-visible': { outline: '3px solid rgba(255,194,28,.45)', outlineOffset: 2 } }} onClick={() => onZoom(src)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') onZoom(src); }}>
+          <img src={src} alt={label} style={{ width: '100%', height: 190, objectFit: 'contain', display: 'block' }} />
           <Box sx={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0)', display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: 0, transition: 'all 0.15s', '&:hover': { background: 'rgba(0,0,0,0.3)', opacity: 1 } }}>
             <ZoomInIcon sx={{ color: '#fff', fontSize: 28 }} />
           </Box>
         </Box>
-      : <Box sx={{ height: 140, borderRadius: 2, border: `1.5px dashed ${BORDER}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.5, background: 'rgba(201,151,58,0.02)' }}>
+      : <Box sx={{ height: 190, borderRadius: 3, border: `1.5px dashed ${BORDER}`, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.5, background: '#fafaf8' }}>
           <CancelIcon sx={{ fontSize: 22, color: 'rgba(201,151,58,0.25)' }} />
           <Typography sx={{ color: MUTED, fontSize: '0.72rem', fontFamily: '"Sora", sans-serif' }}>Not uploaded</Typography>
         </Box>}
@@ -201,7 +215,6 @@ const RenterVerificationPage: React.FC = () => {
       // 5. Selfie instruction: rental form → renter → selfie verification instruction
       let selfieInst: RbSelfieVerificationInst | null = null;
       const selfieInstructionId = renter.selfie_verification_id;
-      console.log('Selfie verification ID:', selfieInstructionId);
       if (selfieInstructionId) {
         const { data: si, error: selfieInstructionError } = await supabase
           .from('RB_SELFIE_VERIFICATION_INST')
@@ -214,12 +227,31 @@ const RenterVerificationPage: React.FC = () => {
           selfieInst = si as RbSelfieVerificationInst | null;
         }
       }
-      console.log('Fetched selfie instruction:', selfieInst);
+      const renterDocumentKeys = [
+        'primary_id_front',
+        'primary_id_back',
+        'secondary_id_front',
+        'secondary_id_back',
+        'proof_of_billing',
+      ] as const;
+      const signedDocuments = await Promise.all(
+        renterDocumentKeys.map((key) => createVerificationSignedUrl(renter[key])),
+      );
+      const signedRenter = { ...renter } as RbRenter;
+      renterDocumentKeys.forEach((key, index) => { signedRenter[key] = signedDocuments[index]; });
+      const applicableSelfie = rental.renter_type === 'returnee'
+        ? rental.returnee_selfie_img
+        : renter.selfie_verification_img;
+      signedRenter.selfie_verification_img = await createVerificationSignedUrl(applicableSelfie);
+      const signedRental = {
+        ...rental,
+        proof_of_purpose_of_rental: await createVerificationSignedUrl(rental.proof_of_purpose_of_rental),
+      } as RbRentalForm;
 
       setStatus(rental.status);
       setData({
-        rental: rental as RbRentalForm,
-        renter: renter as RbRenter,
+        rental: signedRental,
+        renter: signedRenter,
         item,
         items,
         rentalItems,
@@ -243,6 +275,21 @@ const RenterVerificationPage: React.FC = () => {
     try {
       const { error: updateError } = await supabase.from('RB_RENTAL_FORM').update({ status: newStatus }).eq('id', rentalId);
       if (updateError) throw updateError;
+
+      const itemStatus = newStatus === 'renting'
+        ? 'Renting'
+        : ['completed', 'declined'].includes(newStatus)
+          ? 'Available'
+          : ['submitted', 'in-review', 'confirmed'].includes(newStatus)
+            ? 'In Review'
+            : null;
+      if (itemStatus) {
+        const updates = await Promise.all(
+          data.items.map((item) => supabase.from('RB_ITEM').update({ status: itemStatus }).eq('id', item.id)),
+        );
+        const itemUpdateError = updates.find((result) => result.error)?.error;
+        if (itemUpdateError) throw itemUpdateError;
+      }
 
       try {
         await sendRentalStatusEmail({ status: newStatus, rental: data.rental, renter: data.renter });
@@ -290,15 +337,22 @@ const RenterVerificationPage: React.FC = () => {
   const selfieInstructionTitle = getSelfieInstructionTitle(selfieInst);
   const selfieInstructionDescription = getSelfieInstructionDescription(selfieInst);
   const statusMeta = RENTAL_STATUS_META[status] ?? RENTAL_STATUS_META.submitted;
+  const currentStatus = rental.status;
+  const allowedNextStatuses = rental.renter_type && isV2RentalStatus(currentStatus)
+    ? V2_NEXT_STATUSES[currentStatus]
+    : [];
+  const editableStatusValues = rental.renter_type && isV2RentalStatus(currentStatus)
+    ? [currentStatus, ...allowedNextStatuses]
+    : [currentStatus];
 
   return (
-    <Box sx={{ minHeight: '100vh', background: '#FFFFFF' }}>
+    <Box sx={{ minHeight: '100vh', background: ADMIN_COLORS.canvas }}>
 
       {/* ── Sticky header ── */}
       <Box sx={{
         position: 'sticky', top: 0, zIndex: 100,
-        background: 'rgba(255,251,244,0.96)', backdropFilter: 'blur(14px)',
-        borderBottom: `1px solid ${BORDER}`, boxShadow: '0 1px 8px rgba(201,151,58,0.07)',
+        background: 'rgba(255,255,255,0.94)', backdropFilter: 'blur(14px)',
+        borderBottom: `1px solid ${BORDER}`, boxShadow: '0 8px 28px rgba(16,16,16,0.045)',
         px: { xs: 2, md: 4 }, py: 1.5,
         display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2,
       }}>
@@ -328,14 +382,17 @@ const RenterVerificationPage: React.FC = () => {
           <FormControl size="small" sx={{ minWidth: 160 }}>
             <InputLabel sx={{ color: MUTED }}>Change status</InputLabel>
             <Select value={status} onChange={(e: SelectChangeEvent) => setStatus(e.target.value)} label="Change status">
-              {Object.entries(RENTAL_STATUS_META).map(([val, m]) => (
+              {editableStatusValues.map((val) => {
+                const m = RENTAL_STATUS_META[val] ?? RENTAL_STATUS_META.submitted;
+                return (
                 <MenuItem key={val} value={val}>
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                     <Box sx={{ width: 8, height: 8, borderRadius: '50%', background: m.color }} />
                     {m.label}
                   </Box>
                 </MenuItem>
-              ))}
+                );
+              })}
             </Select>
           </FormControl>
           <Button
@@ -350,7 +407,7 @@ const RenterVerificationPage: React.FC = () => {
       </Box>
 
       {/* ── Page body ── */}
-      <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1200, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
+      <Box sx={{ px: { xs: 2, md: 4 }, py: 4, maxWidth: 1280, mx: 'auto', display: 'flex', flexDirection: 'column', gap: 3 }}>
 
         {/* ══ Row 1: Personal Info + Rental Info ══ */}
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3 }}>
@@ -360,19 +417,23 @@ const RenterVerificationPage: React.FC = () => {
             <SectionTitle icon={<PhoneIcon sx={{ fontSize: 17 }} />} title="Personal Information" />
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 2.5, p: 2, background: 'rgba(201,151,58,0.04)', borderRadius: 2, border: `1px solid ${BORDER}` }}>
               <Box sx={{ width: 52, height: 52, borderRadius: '50%', background: 'linear-gradient(135deg, #111111, #E5B85C)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontFamily: '"Sora", sans-serif', fontWeight: 800, fontSize: '1.3rem', color: '#fff', flexShrink: 0 }}>
-                {renter.renter_fname[0]?.toUpperCase()}
+                {renter.renter_fname?.[0]?.toUpperCase() ?? '?'}
               </Box>
               <Box>
                 <Typography sx={{ color: ESPRESSO, fontWeight: 700, fontSize: '1.05rem' }}>{renter.renter_fname} {renter.renter_lname}</Typography>
                 <Typography sx={{ color: MUTED, fontSize: '0.75rem', fontFamily: '"Sora", sans-serif' }}>Renter ID: {renter.id.slice(0, 8)}…</Typography>
               </Box>
             </Box>
-            <InfoRow label="Email"             value={renter.email} />
+            <InfoRow label="Email"             value={rental.notification_email ?? renter.email} />
             <InfoRow label="Mobile Number"     value={renter.mobile_no} />
             <InfoRow label="Emergency Contact" value={renter.emergency_contact_no} />
             <InfoRow label="Emergency Contact Person" value={renter.emergency_contact_person} />
             <InfoRow label="Emergency Relationship" value={renter.emergency_contact_relationship} />
             <InfoRow label="Registered"        value={dayjs(renter.created_at).format('MMMM D, YYYY')} />
+            <InfoRow label="Renter Type" value={rental.renter_type === 'returnee' ? 'Returnee' : rental.renter_type === 'new' ? 'New renter' : 'Historical record'} />
+            {rental.renter_type === 'returnee' && (
+              <InfoRow label="Returnee Match" value={rental.returnee_matched_existing ? 'Matched existing renter' : rental.legacy_returnee ? 'Legacy returnee (no exact match)' : 'Returnee'} />
+            )}
           </Paper>
 
           {/* Rental info */}
@@ -433,7 +494,7 @@ const RenterVerificationPage: React.FC = () => {
           {rental.proof_of_purpose_of_rental && (
             <Paper elevation={0} sx={{ flex: '1 1 260px', p: 3, border: `1px solid ${BORDER}`, borderRadius: 3, background: CARD_BG }}>
               <SectionTitle icon={<ReceiptIcon sx={{ fontSize: 17 }} />} title="Proof of Purpose" />
-              {rental.proof_of_purpose_of_rental.endsWith('.pdf')
+              {rental.proof_of_purpose_of_rental.toLowerCase().includes('.pdf')
                 ? <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 2, background: 'rgba(201,151,58,0.04)', borderRadius: 2, border: `1px solid ${BORDER}` }}>
                     <span style={{ fontSize: 36 }}>📄</span>
                     <Box>
@@ -514,14 +575,19 @@ const RenterVerificationPage: React.FC = () => {
         <Paper elevation={0} sx={{ p: 3, border: `1px solid ${BORDER}`, borderRadius: 3, background: CARD_BG }}>
           <Typography sx={{ color: ESPRESSO, fontFamily: '"Sora", sans-serif', fontWeight: 700, fontSize: '0.88rem', mb: 2 }}>Quick Actions</Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5 }}>
-            {[
-              { label: 'Approve → In Review',  val: 'in-review', icon: <HourglassTopIcon />, color: '#1565C0', bg: 'rgba(100,149,237,0.08)' },
-              { label: 'Mark as Renting',       val: 'renting',   icon: <CameraAltIcon />,   color: '#7A4F00', bg: 'rgba(201,151,58,0.10)' },
-              { label: 'Mark as Extended',      val: 'extended',  icon: <CameraAltIcon />,   color: '#7c3aed', bg: '#f3e8ff' },
-              { label: 'Mark as Completed',     val: 'completed', icon: <CheckCircleIcon />,  color: '#2E7D32', bg: 'rgba(105,219,124,0.10)' },
-              { label: 'Decline', val: 'declined',  icon: <CancelIcon />,       color: '#B71C1C', bg: 'rgba(211,47,47,0.08)'  },
-              { label: 'Return to Submitted',   val: 'submitted', icon: <PendingIcon />,      color: '#B8860B', bg: 'rgba(255,212,59,0.08)'  },
-            ].map((a) => (
+            {allowedNextStatuses.map((nextStatus: V2RentalStatus) => {
+              const meta = V2_RENTAL_STATUS_META[nextStatus];
+              const icon = nextStatus === 'declined'
+                ? <CancelIcon />
+                : nextStatus === 'completed'
+                  ? <CheckCircleIcon />
+                  : nextStatus === 'in-review'
+                    ? <HourglassTopIcon />
+                    : nextStatus === 'renting'
+                      ? <CameraAltIcon />
+                      : <PendingIcon />;
+              const a = { label: `Mark as ${meta.label}`, val: nextStatus, icon, color: meta.color, bg: meta.bg };
+              return (
               <Button
                 key={a.val}
                 variant="outlined"
@@ -543,7 +609,11 @@ const RenterVerificationPage: React.FC = () => {
               >
                 {a.label}
               </Button>
-            ))}
+              );
+            })}
+            {allowedNextStatuses.length === 0 && (
+              <Typography sx={{ color: MUTED, fontSize: '0.8rem' }}>No further status actions are available.</Typography>
+            )}
           </Box>
         </Paper>
 
