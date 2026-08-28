@@ -28,6 +28,85 @@ body {
   background-color: #ffffff;
 }
 
+.recap-agreement-editor {
+  min-height: 520px;
+  color: #202020;
+  font-family: 'GlacialIndifference', Arial, sans-serif;
+  font-size: 1rem;
+  line-height: 1.72;
+  outline: none;
+}
+
+.recap-agreement-editor > *:first-child {
+  margin-top: 0;
+}
+
+.recap-agreement-editor h1,
+.recap-agreement-editor h2,
+.recap-agreement-editor h3,
+.recap-agreement-editor h4 {
+  color: #101010;
+  line-height: 1.18;
+  letter-spacing: -0.025em;
+  margin: 1.4em 0 0.55em;
+}
+
+.recap-agreement-editor h1 { font-size: 2rem; }
+.recap-agreement-editor h2 { font-size: 1.55rem; }
+.recap-agreement-editor h3 { font-size: 1.25rem; }
+.recap-agreement-editor h4 { font-size: 1.08rem; }
+
+.recap-agreement-editor p {
+  margin: 0 0 1em;
+}
+
+.recap-agreement-editor ul,
+.recap-agreement-editor ol {
+  margin: 0 0 1em;
+  padding-left: 1.6rem;
+}
+
+.recap-agreement-editor li {
+  margin: 0.35em 0;
+  padding-left: 0.25rem;
+}
+
+.recap-agreement-editor li p {
+  margin: 0;
+}
+
+.recap-agreement-editor blockquote {
+  margin: 1.25rem 0;
+  padding: 0.25rem 0 0.25rem 1.25rem;
+  border-left: 3px solid #ffc21c;
+  color: #555;
+}
+
+.recap-agreement-editor hr {
+  margin: 2rem 0;
+  border: 0;
+  border-top: 1px solid rgba(16, 16, 16, 0.16);
+}
+
+.recap-agreement-editor a {
+  color: #245aa5;
+  text-decoration-thickness: 1px;
+  text-underline-offset: 2px;
+}
+
+.recap-agreement-editor:focus-visible {
+  border-radius: 8px;
+  box-shadow: 0 0 0 3px rgba(255, 194, 28, 0.28);
+}
+
+.agreement-preview .recap-agreement-editor {
+  min-height: 0;
+}
+
+.recap-agreement-viewer {
+  min-height: 0;
+}
+
 
 .page-root {
   display: flex;
